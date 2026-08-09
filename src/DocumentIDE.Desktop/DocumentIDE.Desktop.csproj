@@ -1,8 +1,13 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\DocumentIDE.Core\DocumentIDE.Core.csproj" />
     <ProjectReference Include="..\DocumentIDE.Infrastructure\DocumentIDE.Infrastructure.csproj" />
+    <ProjectReference Include="..\DocumentIDE.Api\DocumentIDE.Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <ItemGroup>

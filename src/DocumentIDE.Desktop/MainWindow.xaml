@@ -9,5 +9,12 @@
         Title="Document IDE" Height="768" Width="1024">
     <Grid>
         <wv2:WebView2 x:Name="WebView" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+
+        <Border x:Name="ErrorPanel" Visibility="Collapsed" Background="#1E1E2E" Padding="40" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                <TextBlock Text="Initialization Error" FontSize="24" FontWeight="Bold" Foreground="#F38BA8" Margin="0,0,0,16"/>
+                <TextBlock x:Name="ErrorText" Text="WebView2 runtime failed to initialize." FontSize="14" Foreground="#CDD6F4" TextWrapping="Wrap" MaxWidth="600"/>
+            </StackPanel>
+        </Border>
     </Grid>
 </Window>

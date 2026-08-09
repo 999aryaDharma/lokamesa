@@ -27,7 +27,7 @@ Rules:
 | FND-05 | Settings & Secret Storage | DONE | FND-02, FND-03 | security/fnd-05-settings-secret-storage (87de9be) | docs/sprints/handoffs/FND-05-HANDOFF.md |
 | FND-06 | Structured Logging & Diagnostics | READY | FND-01, FND-03 |  |  |
 | SHR-01 | Share Domain & Sanitized Manifest | READY | FND-03 |  |  |
-| FND-07 | Desktop/WebView Production Host | READY | FND-02, FND-05 |  |  |
+| FND-07 | Desktop/WebView Production Host | REVIEW | FND-02, FND-05 | feat/fnd-07-desktop-webview-production-host | docs/sprints/handoffs/FND-07-HANDOFF.md |
 | CAN-01 | Canvas Foundation | BLOCKED | FND-07, FND-03 |  |  |
 | FND-08 | Build, Verify & Artifact Scripts | BLOCKED | FND-01, FND-07 |  |  |
 | FS-01 | Folder Source Attachment | BLOCKED | FND-03, FND-07 |  |  |
