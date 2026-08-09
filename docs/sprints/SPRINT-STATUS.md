@@ -19,7 +19,7 @@ Rules:
 
 | ID | Sprint | Status | Dependencies | Branch/Commit | Handoff |
 |---|---|---|---|---|---|
-| FND-01 | Repository Bootstrap | READY | — |  |  |
+| FND-01 | Repository Bootstrap | REVIEW | — | feat/fnd-01-repository-bootstrap | docs/sprints/handoffs/FND-01-HANDOFF.md |
 | FND-02 | Privileged Local API Security | BLOCKED | FND-01 |  |  |
 | FND-03 | SQLite Persistence Foundation | BLOCKED | FND-01 |  |  |
 | QA-03 | Privileged Local API Security Audit | BLOCKED | FND-02 |  |  |
