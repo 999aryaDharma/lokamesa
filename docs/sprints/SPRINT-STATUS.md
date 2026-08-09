@@ -24,7 +24,7 @@ Rules:
 | FND-03 | SQLite Persistence Foundation | DONE | FND-01 | feat/fnd-03-sqlite-persistence-foundation (29b8d3f) | docs/sprints/handoffs/FND-03-HANDOFF.md |
 | QA-03 | Privileged Local API Security Audit | READY | FND-02 |  |  |
 | FND-04 | Background Job Runtime | DONE | FND-03 | feat/fnd-04-background-job-runtime (065e335) | docs/sprints/handoffs/FND-04-HANDOFF.md |
-| FND-05 | Settings & Secret Storage | READY | FND-02, FND-03 |  |  |
+| FND-05 | Settings & Secret Storage | REVIEW | FND-02, FND-03 | security/fnd-05-settings-secret-storage | docs/sprints/handoffs/FND-05-HANDOFF.md |
 | FND-06 | Structured Logging & Diagnostics | READY | FND-01, FND-03 |  |  |
 | SHR-01 | Share Domain & Sanitized Manifest | READY | FND-03 |  |  |
 | FND-07 | Desktop/WebView Production Host | BLOCKED | FND-02, FND-05 |  |  |
