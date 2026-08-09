@@ -1,0 +1,3794 @@
+{
+  "project": "Document IDE",
+  "version": 1,
+  "total_sprints": 98,
+  "topological_order": [
+    "FND-01",
+    "FND-02",
+    "FND-03",
+    "QA-03",
+    "FND-04",
+    "FND-05",
+    "FND-06",
+    "SHR-01",
+    "FND-07",
+    "CAN-01",
+    "FND-08",
+    "FS-01",
+    "REL-01",
+    "SHR-02",
+    "CAN-02",
+    "FS-02",
+    "SHR-03",
+    "SHR-09",
+    "SHR-10",
+    "FS-03",
+    "FS-07",
+    "HIST-01",
+    "IDX-01",
+    "IDX-03",
+    "WORD-01",
+    "FS-04",
+    "FS-05",
+    "FS-08",
+    "IDX-02",
+    "MD-01",
+    "WORD-02",
+    "WORD-03",
+    "FS-06",
+    "DOCX-01",
+    "IDX-04",
+    "MD-02",
+    "MD-03",
+    "PDF-01",
+    "DOCX-02",
+    "CAN-03",
+    "DOCX-04",
+    "IDX-05",
+    "SHR-08",
+    "GR-01",
+    "MD-04",
+    "PDF-02",
+    "DOCX-03",
+    "CAN-04",
+    "WORD-04",
+    "IDX-06",
+    "SRCH-01",
+    "QA-05",
+    "GR-02",
+    "PDF-03",
+    "BAT-01",
+    "QA-01",
+    "CAN-05",
+    "SHR-04",
+    "AI-01",
+    "QA-02",
+    "SRCH-02",
+    "CTX-01",
+    "GR-03",
+    "CAN-06",
+    "SHR-05",
+    "SHR-07",
+    "AI-02",
+    "SRCH-03",
+    "SRCH-04",
+    "CTX-02",
+    "CTX-03",
+    "GR-04",
+    "GR-05",
+    "CAN-07",
+    "SHR-06",
+    "SHR-11",
+    "SRCH-05",
+    "CTX-04",
+    "AI-04",
+    "AI-03",
+    "BAT-02",
+    "CAN-08",
+    "QA-06",
+    "BAT-03",
+    "PDF-04",
+    "BAT-04",
+    "BAT-05",
+    "BAT-08",
+    "BAT-09",
+    "BAT-10",
+    "HIST-02",
+    "BAT-06",
+    "BAT-11",
+    "QA-04",
+    "QA-07",
+    "BAT-07",
+    "REL-02",
+    "REL-03"
+  ],
+  "sprints": [
+    {
+      "id": "FND-01",
+      "title": "Repository Bootstrap",
+      "goal": "Create the greenfield repository/solution structure so backend, desktop shell, frontend, tests, and docs build from one checkout.",
+      "deps": [],
+      "specs": [
+        "01-system-architecture.md",
+        "12-implementation-plan.md"
+      ],
+      "tests": [
+        "`dotnet build` succeeds from repository root.",
+        "Backend smoke test passes.",
+        "Frontend unit smoke test and production build pass."
+      ],
+      "acceptance": [
+        "One checkout can build backend + frontend.",
+        "Desktop shell opens the React surface.",
+        "No business feature is implemented yet."
+      ],
+      "artifacts": [
+        "DocumentIDE.sln",
+        "src/DocumentIDE.Desktop/App.xaml",
+        "src/DocumentIDE.Web/package.json",
+        "scripts/verify.ps1"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/foundation/FND-01-repository-bootstrap.md",
+      "tasks": [
+        "Create `DocumentIDE.sln` and projects for Core, Infrastructure, Api, Desktop, ShareHost, and tests.",
+        "Create `src/DocumentIDE.Web` using React + TypeScript + Vite + Tailwind.",
+        "Wire WebView2 desktop shell to a development URL and a production static-asset mode.",
+        "Add formatting/linting/editorconfig and deterministic restore commands.",
+        "Add backend/frontend smoke tests and a repository-level verification script."
+      ],
+      "depth": 0
+    },
+    {
+      "id": "FND-02",
+      "title": "Privileged Local API Security",
+      "goal": "Protect the loopback privileged API from foreign browser origins and unauthenticated localhost requests.",
+      "deps": [
+        "FND-01"
+      ],
+      "specs": [
+        "01-system-architecture.md",
+        "10-sharing-security-ngrok.md",
+        "11-testing-strategy.md"
+      ],
+      "tests": [
+        "Foreign Origin is rejected.",
+        "DNS-rebinding-style Host mismatch is rejected.",
+        "Missing/invalid startup secret is rejected.",
+        "Valid WebView origin + secret succeeds."
+      ],
+      "acceptance": [
+        "Loopback alone is never treated as authentication.",
+        "Secret is not persisted to disk/localStorage.",
+        "Security middleware runs before privileged controllers."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Api/Security/PrivilegedRequestGuard.cs",
+        "src/DocumentIDE.Desktop/WebView/LocalSessionBridge.cs",
+        "tests/DocumentIDE.IntegrationTests/Security/PrivilegedApiSecurityTests.cs"
+      ],
+      "failures": [
+        "Browser omits Fetch Metadata headers.",
+        "Origin is malformed.",
+        "Host header contains unexpected name/port."
+      ],
+      "kind": "security",
+      "priority": "P0",
+      "path": "docs/sprints/foundation/FND-02-privileged-local-api-security.md",
+      "tasks": [
+        "Bind the privileged API to loopback on a runtime-selected port.",
+        "Generate a 256-bit per-startup session secret in native host memory.",
+        "Implement strict Host + dedicated WebView2 Origin validation and reject `Origin: null`.",
+        "Require the startup secret on every privileged request through a native/WebView request bridge.",
+        "Disallow wildcard CORS and state-changing GET endpoints.",
+        "Add Fetch-Metadata checks as defense-in-depth."
+      ],
+      "depth": 1
+    },
+    {
+      "id": "FND-03",
+      "title": "SQLite Persistence Foundation",
+      "goal": "Create the authoritative application metadata database, migrations, repositories, and concurrency baseline.",
+      "deps": [
+        "FND-01"
+      ],
+      "specs": [
+        "02-domain-data-model.md",
+        "05-search-indexing-spec.md"
+      ],
+      "tests": [
+        "Migrations apply on empty database.",
+        "Foreign-key violations fail.",
+        "FTS-like read can continue during unrelated short write transaction."
+      ],
+      "acceptance": [
+        "Database lives under application-controlled local state.",
+        "No document contents become source-of-truth database blobs.",
+        "WAL is verified at runtime."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Infrastructure/Persistence/AppDb.cs",
+        "src/DocumentIDE.Infrastructure/Persistence/Migrations/001_Initial.cs",
+        "tests/DocumentIDE.IntegrationTests/Persistence/SqliteConcurrencyTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/foundation/FND-03-sqlite-persistence-foundation.md",
+      "tasks": [
+        "Create migration runner and initial tables for Workspace, FolderSource, Document, and WorkspaceDocument.",
+        "Configure `journal_mode=WAL`, `foreign_keys=ON`, and `busy_timeout=5000`.",
+        "Create transaction/repository abstractions with short write transactions.",
+        "Add database versioning and startup migration flow.",
+        "Add integration tests for concurrent reader/writer behavior."
+      ],
+      "depth": 1
+    },
+    {
+      "id": "FND-04",
+      "title": "Background Job Runtime",
+      "goal": "Provide cancellable, deduplicated, bounded background jobs for indexing, previews, exports, reconciliation, and other expensive work.",
+      "deps": [
+        "FND-03"
+      ],
+      "specs": [
+        "01-system-architecture.md",
+        "11-testing-strategy.md"
+      ],
+      "tests": [
+        "Duplicate indexing jobs collapse.",
+        "Cancellation stops before the next safe boundary.",
+        "Two mutation jobs for the same document never execute concurrently."
+      ],
+      "acceptance": [
+        "UI thread is not used for expensive jobs.",
+        "Retry is limited to safe/idempotent jobs.",
+        "Failures expose typed diagnostics."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Jobs/JobContracts.cs",
+        "src/DocumentIDE.Infrastructure/Jobs/LocalJobScheduler.cs",
+        "tests/DocumentIDE.Core.Tests/Jobs/JobSchedulerTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/foundation/FND-04-background-job-runtime.md",
+      "tasks": [
+        "Define job identity, type, state, progress, cancellation, and retry contract.",
+        "Implement bounded worker queues with per-document serialization support.",
+        "Implement deduplication by job type + document + fingerprint.",
+        "Persist/recover only job state that materially needs crash recovery.",
+        "Expose observable progress to local UI."
+      ],
+      "depth": 2
+    },
+    {
+      "id": "FND-05",
+      "title": "Settings & Secret Storage",
+      "goal": "Persist non-sensitive settings and protect ngrok/external-AI secrets using Windows-protected storage.",
+      "deps": [
+        "FND-02",
+        "FND-03"
+      ],
+      "specs": [
+        "01-system-architecture.md",
+        "02-domain-data-model.md",
+        "10-sharing-security-ngrok.md"
+      ],
+      "tests": [
+        "Round-trip normal settings.",
+        "Secret can be stored/read by current user context.",
+        "Secret never appears in structured logs."
+      ],
+      "acceptance": [
+        "No plaintext long-lived API/ngrok credential in app database.",
+        "Startup session secret is not persisted here."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Settings/AppSettings.cs",
+        "src/DocumentIDE.Infrastructure/Security/WindowsSecretStore.cs",
+        "tests/DocumentIDE.IntegrationTests/Security/SecretStoreTests.cs"
+      ],
+      "failures": [],
+      "kind": "security",
+      "priority": "P1",
+      "path": "docs/sprints/foundation/FND-05-settings-secret-storage.md",
+      "tasks": [
+        "Create typed settings model with defaults from specs.",
+        "Separate secret references from normal SQLite settings.",
+        "Implement Windows-protected secret storage adapter.",
+        "Add settings validation and migration/versioning.",
+        "Ensure logs and exception messages redact secrets."
+      ],
+      "depth": 2
+    },
+    {
+      "id": "FND-06",
+      "title": "Structured Logging & Diagnostics",
+      "goal": "Add local structured diagnostics that help debug indexing, Word, filesystem, batch, and share failures without leaking document contents.",
+      "deps": [
+        "FND-01",
+        "FND-03"
+      ],
+      "specs": [
+        "01-system-architecture.md",
+        "11-testing-strategy.md"
+      ],
+      "tests": [
+        "Secret redaction tests pass.",
+        "Batch operation can be traced by correlation ID.",
+        "Log rotation does not delete source/history data."
+      ],
+      "acceptance": [
+        "Logs are local only.",
+        "No arbitrary document body logging.",
+        "Errors retain document ID/path only where appropriate in privileged local logs."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Infrastructure/Diagnostics/LoggingConfiguration.cs",
+        "tests/DocumentIDE.Core.Tests/Diagnostics/LogRedactionTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/foundation/FND-06-structured-logging-diagnostics.md",
+      "tasks": [
+        "Define event IDs/categories for core subsystems.",
+        "Create rolling local logs under `%LOCALAPPDATA%\\DocumentIDE\\logs`.",
+        "Redact tokens, API keys, and full document bodies.",
+        "Add correlation IDs for jobs and batch operations.",
+        "Add an owner-only diagnostics export that excludes source documents by default."
+      ],
+      "depth": 2
+    },
+    {
+      "id": "FND-07",
+      "title": "Desktop/WebView Production Host",
+      "goal": "Make the WPF + WebView2 application run the production React bundle and local privileged API without terminal processes.",
+      "deps": [
+        "FND-02",
+        "FND-05"
+      ],
+      "specs": [
+        "01-system-architecture.md",
+        "03-workspace-canvas-spec.md"
+      ],
+      "tests": [
+        "Production build opens without Vite dev server.",
+        "Foreign navigation loses privileged bridge capability.",
+        "Closing desktop stops privileged local host cleanly."
+      ],
+      "acceptance": [
+        "User launches one Windows app.",
+        "React static assets are local in production.",
+        "WebView origin remains deterministic for Origin validation."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Desktop/MainWindow.xaml",
+        "src/DocumentIDE.Desktop/WebView/WebAppHost.cs",
+        "tests/DocumentIDE.IntegrationTests/Desktop/WebAppHostTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/foundation/FND-07-desktop-webview-production-host.md",
+      "tasks": [
+        "Host the built React bundle via a dedicated application origin/virtual host mapping.",
+        "Start/stop privileged local backend with desktop lifecycle.",
+        "Inject runtime API endpoint/session authorization through native bridge.",
+        "Implement development Vite URL mode and production static mode.",
+        "Handle WebView2 missing/runtime failure with a useful local error."
+      ],
+      "depth": 3
+    },
+    {
+      "id": "FND-08",
+      "title": "Build, Verify & Artifact Scripts",
+      "goal": "Create repeatable developer and release commands that agents can run from VS Code/PowerShell.",
+      "deps": [
+        "FND-01",
+        "FND-07"
+      ],
+      "specs": [
+        "12-implementation-plan.md",
+        "11-testing-strategy.md"
+      ],
+      "tests": [
+        "Fresh clone bootstrap succeeds with prerequisites installed.",
+        "Verify script returns nonzero on failing test.",
+        "Release build embeds production web assets."
+      ],
+      "acceptance": [
+        "One command verifies repository health.",
+        "No manual copy of frontend assets required."
+      ],
+      "artifacts": [
+        "scripts/bootstrap.ps1",
+        "scripts/verify.ps1",
+        "scripts/build-release.ps1",
+        ".vscode/tasks.json"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/foundation/FND-08-build-verify-artifact-scripts.md",
+      "tasks": [
+        "Create `scripts/bootstrap.ps1`, `scripts/verify.ps1`, and `scripts/build-release.ps1`.",
+        "Make frontend build feed desktop publish automatically.",
+        "Fail scripts on test/lint/build failure.",
+        "Emit artifacts into deterministic `artifacts/` paths.",
+        "Document Windows prerequisites and VS Code launch tasks."
+      ],
+      "depth": 4
+    },
+    {
+      "id": "FS-01",
+      "title": "Folder Source Attachment",
+      "goal": "Let a workspace attach one or more local folders without importing/copying documents.",
+      "deps": [
+        "FND-03",
+        "FND-07"
+      ],
+      "specs": [
+        "02-domain-data-model.md",
+        "03-workspace-canvas-spec.md",
+        "04-filesystem-sync-spec.md"
+      ],
+      "tests": [
+        "Attach valid folder.",
+        "Reject nonexistent/inaccessible path with typed error.",
+        "Reopening workspace restores source reference."
+      ],
+      "acceptance": [
+        "No `.documentide` metadata is written into source folder.",
+        "Attaching a folder does not mutate contents."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Workspaces/FolderSourceService.cs",
+        "src/DocumentIDE.Web/src/features/workspace/AddFolderSource.tsx",
+        "tests/DocumentIDE.IntegrationTests/Filesystem/FolderSourceTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/filesystem/FS-01-folder-source-attachment.md",
+      "tasks": [
+        "Implement native folder picker.",
+        "Canonicalize and validate selected path.",
+        "Persist FolderSource and availability.",
+        "Enumerate supported `.docx`/`.md` documents recursively with containment rules.",
+        "Expose supported file count to UI."
+      ],
+      "depth": 4
+    },
+    {
+      "id": "FS-02",
+      "title": "Stable Document Identity",
+      "goal": "Track physical documents by stable application identity rather than mutable path.",
+      "deps": [
+        "FND-03",
+        "FS-01"
+      ],
+      "specs": [
+        "02-domain-data-model.md",
+        "04-filesystem-sync-spec.md"
+      ],
+      "tests": [
+        "Rename keeps DocumentId.",
+        "Two distinct duplicate files receive distinct DocumentIds.",
+        "Path casing change does not duplicate record."
+      ],
+      "acceptance": [
+        "Path is an attribute, never identity.",
+        "Ambiguous duplicate content is not auto-merged."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Filesystem/DocumentIdentityService.cs",
+        "src/DocumentIDE.Infrastructure/Filesystem/WindowsFileIdentityProvider.cs",
+        "tests/DocumentIDE.IntegrationTests/Filesystem/DocumentIdentityTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/filesystem/FS-02-stable-document-identity.md",
+      "tasks": [
+        "Implement `DocumentId` creation and Windows volume/file-ID probe.",
+        "Persist current path, last-known path, size, mtime, fingerprint.",
+        "Resolve a filesystem object to existing/new Document record.",
+        "Preserve identity across same-volume rename.",
+        "Add fallback identity evidence structure for non-NTFS cases."
+      ],
+      "depth": 5
+    },
+    {
+      "id": "FS-03",
+      "title": "Runtime File Watcher",
+      "goal": "Detect external create/modify/rename/delete changes while the app runs and convert noisy events into verified logical changes.",
+      "deps": [
+        "FND-04",
+        "FS-02"
+      ],
+      "specs": [
+        "04-filesystem-sync-spec.md",
+        "05-search-indexing-spec.md"
+      ],
+      "tests": [
+        "One Word-like burst becomes one logical modification.",
+        "Duplicate events do not duplicate Document records.",
+        "Overflow schedules source reconciliation."
+      ],
+      "acceptance": [
+        "Watcher events are hints only.",
+        "Expensive parse does not happen inside raw watcher callback."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Infrastructure/Filesystem/SourceWatcher.cs",
+        "src/DocumentIDE.Core/Filesystem/FileChangeCoordinator.cs",
+        "tests/DocumentIDE.IntegrationTests/Filesystem/SourceWatcherTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/filesystem/FS-03-runtime-file-watcher.md",
+      "tasks": [
+        "Create watcher per active FolderSource.",
+        "Debounce/coalesce repeated Word save events.",
+        "Verify final filesystem state before emitting logical event.",
+        "Publish typed create/modify/rename/delete changes.",
+        "Trigger reconciliation fallback on watcher overflow."
+      ],
+      "depth": 6
+    },
+    {
+      "id": "FS-04",
+      "title": "Hybrid Startup Reconciliation",
+      "goal": "Show cached workspace immediately, then reconcile all configured sources against disk and queue only changed documents.",
+      "deps": [
+        "FS-02",
+        "FS-03"
+      ],
+      "specs": [
+        "04-filesystem-sync-spec.md",
+        "03-workspace-canvas-spec.md"
+      ],
+      "tests": [
+        "Changes made while app was closed are detected.",
+        "Unchanged files are not reparsed.",
+        "Cached canvas appears before reconciliation completes."
+      ],
+      "acceptance": [
+        "Filesystem wins over stale cache.",
+        "Reconciliation never rewrites source files."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Filesystem/StartupReconciler.cs",
+        "src/DocumentIDE.Web/src/features/workspace/ReconciliationStatus.tsx",
+        "tests/DocumentIDE.IntegrationTests/Filesystem/StartupReconciliationTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/filesystem/FS-04-hybrid-startup-reconciliation.md",
+      "tasks": [
+        "Load cached workspace presentation before deep scan.",
+        "Enumerate light path/identity/size/mtime metadata.",
+        "Classify unchanged/new/modified/renamed/missing.",
+        "Queue deep work only for stale/new files.",
+        "Expose temporary verification state to UI without blocking interaction."
+      ],
+      "depth": 7
+    },
+    {
+      "id": "FS-05",
+      "title": "Rename & Move Correlation",
+      "goal": "Preserve DocumentId/workspace metadata through rename and move while refusing ambiguous cross-volume auto-correlation.",
+      "deps": [
+        "FS-02",
+        "FS-03"
+      ],
+      "specs": [
+        "04-filesystem-sync-spec.md"
+      ],
+      "tests": [
+        "Same-volume move preserves DocumentId.",
+        "Two identical candidate copies require confirmation.",
+        "App-originated move correlates watcher delete/create sequence."
+      ],
+      "acceptance": [
+        "Identical content does not automatically mean same identity.",
+        "No silent merge of ambiguous records."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Filesystem/MoveCorrelationService.cs",
+        "src/DocumentIDE.Web/src/features/files/LocateMovedFileDialog.tsx",
+        "tests/DocumentIDE.Core.Tests/Filesystem/MoveCorrelationTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/filesystem/FS-05-rename-move-correlation.md",
+      "tasks": [
+        "Correlate stable-ID same-volume rename/move.",
+        "Add short-lived operation journal for app-originated physical moves.",
+        "Implement cross-volume candidate scoring by fingerprint/name/size/mtime.",
+        "Mark multiple plausible candidates ambiguous.",
+        "Expose confirmation flow for ambiguous rebind."
+      ],
+      "depth": 7
+    },
+    {
+      "id": "FS-06",
+      "title": "Missing File & Folder Recovery",
+      "goal": "Keep missing documents/sources visible with last-known metadata and explicit locate/remove actions.",
+      "deps": [
+        "FS-04"
+      ],
+      "specs": [
+        "03-workspace-canvas-spec.md",
+        "04-filesystem-sync-spec.md"
+      ],
+      "tests": [
+        "Deleted file shows missing.",
+        "Locate same file rebinds prior DocumentId.",
+        "Remove reference never deletes physical file."
+      ],
+      "acceptance": [
+        "Permission-denied is distinct from missing.",
+        "Unavailable drive does not destroy workspace layout."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Filesystem/MissingResourceService.cs",
+        "src/DocumentIDE.Web/src/features/files/MissingResourceCard.tsx",
+        "tests/DocumentIDE.IntegrationTests/Filesystem/MissingResourceTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/filesystem/FS-06-missing-file-folder-recovery.md",
+      "tasks": [
+        "Persist missing state instead of deleting workspace metadata.",
+        "Render missing file/folder objects.",
+        "Implement Locate file/source with identity/fingerprint verification.",
+        "Implement Remove reference without deleting physical data.",
+        "Restore prior canvas/group state after successful locate."
+      ],
+      "depth": 8
+    },
+    {
+      "id": "FS-07",
+      "title": "Explicit Physical File Operations",
+      "goal": "Implement safe explicit rename, move, duplicate, create-folder/create-file, and Recycle-Bin delete operations.",
+      "deps": [
+        "FS-02",
+        "FND-02"
+      ],
+      "specs": [
+        "04-filesystem-sync-spec.md",
+        "07-batch-operation-engine.md"
+      ],
+      "tests": [
+        "Rename rejects separators, `..`, rooted path, reserved names, ADS syntax.",
+        "Delete enters Recycle Bin.",
+        "Canvas drag code path never calls this service."
+      ],
+      "acceptance": [
+        "No arbitrary path write endpoint.",
+        "Destination collision is explicit."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Filesystem/PhysicalFileOperations.cs",
+        "src/DocumentIDE.Infrastructure/Filesystem/WindowsRecycleBin.cs",
+        "tests/DocumentIDE.Core.Tests/Filesystem/PhysicalFileOperationsTests.cs"
+      ],
+      "failures": [],
+      "kind": "security",
+      "priority": "P0",
+      "path": "docs/sprints/filesystem/FS-07-explicit-physical-file-operations.md",
+      "tasks": [
+        "Implement basename-only rename validation.",
+        "Implement explicit `MovePhysicalFile` separate from canvas movement.",
+        "Implement duplicate/create folder/create Markdown and template-DOCX hooks.",
+        "Implement Windows Recycle Bin delete.",
+        "Journal app-originated operations for watcher correlation."
+      ],
+      "depth": 6
+    },
+    {
+      "id": "FS-08",
+      "title": "Reparse Point & Source Containment",
+      "goal": "Prevent source traversal/index/share/batch operations from escaping configured roots through junctions or symlinks.",
+      "deps": [
+        "FS-01",
+        "FS-07"
+      ],
+      "specs": [
+        "04-filesystem-sync-spec.md",
+        "11-testing-strategy.md"
+      ],
+      "tests": [
+        "Escaping junction is not indexed.",
+        "Escaping junction is not included in batch scope.",
+        "Escaping junction content cannot enter Share artifacts."
+      ],
+      "acceptance": [
+        "No silent traversal outside explicit root.",
+        "Error is inspectable rather than crashing scan."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Filesystem/SourceContainmentPolicy.cs",
+        "tests/DocumentIDE.IntegrationTests/Filesystem/ReparsePointContainmentTests.cs"
+      ],
+      "failures": [],
+      "kind": "security",
+      "priority": "P0",
+      "path": "docs/sprints/filesystem/FS-08-reparse-point-source-containment.md",
+      "tasks": [
+        "Detect Windows reparse points during traversal.",
+        "Resolve canonical targets and verify containment.",
+        "Prevent recursion cycles.",
+        "Share common root-containment validator across indexing, batch scope, and share preparation.",
+        "Add regression fixture linking source path to an outside secret directory."
+      ],
+      "depth": 7
+    },
+    {
+      "id": "IDX-01",
+      "title": "DOCX Package Resource Preflight",
+      "goal": "Reject hostile/oversized DOCX ZIP/XML packages before deep OpenXML parsing.",
+      "deps": [
+        "FND-04",
+        "FS-02"
+      ],
+      "specs": [
+        "06-docx-openxml-word-integration.md",
+        "11-testing-strategy.md"
+      ],
+      "tests": [
+        "Entry-count bomb is rejected.",
+        "Oversized single part is rejected.",
+        "Highly compressed hostile fixture does not exhaust process."
+      ],
+      "acceptance": [
+        "Source remains untouched.",
+        "Rejected file remains visible with indexing warning."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Infrastructure/Docx/DocxPackagePreflight.cs",
+        "tests/DocumentIDE.IntegrationTests/Docx/DocxResourceBudgetTests.cs"
+      ],
+      "failures": [],
+      "kind": "security",
+      "priority": "P0",
+      "path": "docs/sprints/indexing/IDX-01-docx-package-resource-preflight.md",
+      "tasks": [
+        "Inspect compressed size, ZIP entry count, declared uncompressed sizes, and per-part size.",
+        "Enforce V1 limits from spec.",
+        "Prohibit DTD/external entity behavior in XML readers.",
+        "Return typed `ResourceBudgetExceeded` warning.",
+        "Benchmark/decide whether hostile parsing needs worker-process isolation."
+      ],
+      "depth": 6
+    },
+    {
+      "id": "IDX-02",
+      "title": "DOCX Structural Parser",
+      "goal": "Extract searchable text and document structure from safe DOCX packages without modifying them.",
+      "deps": [
+        "IDX-01"
+      ],
+      "specs": [
+        "06-docx-openxml-word-integration.md",
+        "05-search-indexing-spec.md"
+      ],
+      "tests": [
+        "Simple/multi-section fixtures parse.",
+        "Headers/tables are separated by origin.",
+        "No-op parse leaves byte fingerprint unchanged."
+      ],
+      "acceptance": [
+        "Field instructions are not treated as ordinary destructive text.",
+        "Malformed package gives typed error."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Infrastructure/Docx/DocxStructureParser.cs",
+        "tests/DocumentIDE.Core.Tests/Docx/DocxStructureParserTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/indexing/IDX-02-docx-structural-parser.md",
+      "tasks": [
+        "Parse body paragraphs, tables, headers, footers, sections, and relationships needed by metadata.",
+        "Extract structured text without raw XML search hacks.",
+        "Record table/header/footer origin.",
+        "Return parser version and diagnostics.",
+        "Verify source fingerprint unchanged."
+      ],
+      "depth": 7
+    },
+    {
+      "id": "IDX-03",
+      "title": "Markdown Structural Parser",
+      "goal": "Parse Markdown headings, frontmatter, links, wikilinks, and searchable body while preserving source text.",
+      "deps": [
+        "FND-04",
+        "FS-02"
+      ],
+      "specs": [
+        "08-markdown-graph-spec.md",
+        "05-search-indexing-spec.md"
+      ],
+      "tests": [
+        "Frontmatter fixture parses.",
+        "Relative link/wikilink fixture parses.",
+        "Malformed frontmatter does not destroy body indexing."
+      ],
+      "acceptance": [
+        "Parser never rewrites Markdown.",
+        "Ambiguous link resolution is deferred to relation service."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Markdown/MarkdownStructureParser.cs",
+        "tests/DocumentIDE.Core.Tests/Markdown/MarkdownStructureParserTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/indexing/IDX-03-markdown-structural-parser.md",
+      "tasks": [
+        "Parse YAML frontmatter into structured metadata.",
+        "Extract headings and normal links.",
+        "Extract `[[wikilinks]]` and aliases.",
+        "Preserve raw source separately from derived parse result.",
+        "Version parser output."
+      ],
+      "depth": 6
+    },
+    {
+      "id": "IDX-04",
+      "title": "Metadata Persistence",
+      "goal": "Persist derived DOCX/Markdown metadata and expose a stable query model to inspector/search.",
+      "deps": [
+        "IDX-02",
+        "IDX-03",
+        "FND-03"
+      ],
+      "specs": [
+        "02-domain-data-model.md",
+        "05-search-indexing-spec.md"
+      ],
+      "tests": [
+        "Metadata survives restart.",
+        "Parser version mismatch marks derived data rebuildable.",
+        "Mixed margin summary is deterministic."
+      ],
+      "acceptance": [
+        "Derived metadata can be deleted/rebuilt.",
+        "Null means not applicable, not fabricated defaults."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Infrastructure/Persistence/Repositories/DocumentMetadataRepository.cs",
+        "tests/DocumentIDE.IntegrationTests/Persistence/DocumentMetadataRepositoryTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/indexing/IDX-04-metadata-persistence.md",
+      "tasks": [
+        "Create DocumentMetadata and MarkdownMetadata migrations/repositories.",
+        "Normalize paper/margin/font summaries deterministically.",
+        "Store headings and parser version.",
+        "Mark metadata stale/ready/error.",
+        "Expose metadata DTOs without source binary data."
+      ],
+      "depth": 8
+    },
+    {
+      "id": "IDX-05",
+      "title": "FTS5 Search Index",
+      "goal": "Create the persistent local FTS5 index for filename/body/headings/tables/headers/footers/frontmatter.",
+      "deps": [
+        "IDX-04"
+      ],
+      "specs": [
+        "05-search-indexing-spec.md",
+        "02-domain-data-model.md"
+      ],
+      "tests": [
+        "Exact token lookup returns expected document.",
+        "Deleting/rebuilding index does not touch source files.",
+        "Concurrent search while update remains responsive."
+      ],
+      "acceptance": [
+        "No external search server.",
+        "Index is rebuildable from source."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Infrastructure/Search/FtsIndex.cs",
+        "src/DocumentIDE.Infrastructure/Persistence/Migrations/004_Fts.cs",
+        "tests/DocumentIDE.IntegrationTests/Search/FtsIndexTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/indexing/IDX-05-fts5-search-index.md",
+      "tasks": [
+        "Create FTS5 migration and content synchronization API.",
+        "Index structured fields by DocumentId.",
+        "Implement delete/rebuild for derived index.",
+        "Use short WAL write transactions.",
+        "Expose index status/diagnostics."
+      ],
+      "depth": 9
+    },
+    {
+      "id": "IDX-06",
+      "title": "Incremental Index Scheduler",
+      "goal": "Connect filesystem changes to minimal parse/index/cache invalidation work.",
+      "deps": [
+        "IDX-05",
+        "FS-03"
+      ],
+      "specs": [
+        "05-search-indexing-spec.md",
+        "04-filesystem-sync-spec.md"
+      ],
+      "tests": [
+        "One modified file reindexes only itself.",
+        "Repeated event for same fingerprint does not duplicate work.",
+        "Deleted file is removed from active index but retained as missing metadata."
+      ],
+      "acceptance": [
+        "No DB writer transaction wraps expensive parsing.",
+        "Index failure does not break other search results."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Indexing/IncrementalIndexCoordinator.cs",
+        "tests/DocumentIDE.Core.Tests/Indexing/IncrementalIndexCoordinatorTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/indexing/IDX-06-incremental-index-scheduler.md",
+      "tasks": [
+        "Map verified file changes to parse jobs.",
+        "Skip deep parse when fingerprint unchanged.",
+        "Invalidate relevant metadata/preview/embedding cache when changed.",
+        "Deduplicate repeated indexing requests.",
+        "Publish ready/error index state."
+      ],
+      "depth": 10
+    },
+    {
+      "id": "SRCH-01",
+      "title": "Structured Query Parser",
+      "goal": "Parse user search syntax into a typed query instead of ad-hoc SQL/string logic.",
+      "deps": [
+        "IDX-05"
+      ],
+      "specs": [
+        "05-search-indexing-spec.md"
+      ],
+      "tests": [
+        "Quoted phrase parses.",
+        "Negative term parses.",
+        "Unknown filter returns controlled diagnostic.",
+        "Raw query cannot inject SQL."
+      ],
+      "acceptance": [
+        "Parser output is independent from storage query language."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Search/SearchQueryParser.cs",
+        "tests/DocumentIDE.Core.Tests/Search/SearchQueryParserTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/search/SRCH-01-structured-query-parser.md",
+      "tasks": [
+        "Parse terms, quoted phrases, exclusions, filters, scope, and mode.",
+        "Support initial fields: folder/type/font/paper/margin/modified/name/heading.",
+        "Return syntax diagnostics for malformed filters.",
+        "Normalize aliases such as `md`/`markdown`.",
+        "Add escaping tests against SQL/FTS syntax injection."
+      ],
+      "depth": 10
+    },
+    {
+      "id": "SRCH-02",
+      "title": "Exact Ranked Search",
+      "goal": "Provide real-time lexical search with deterministic ranking and origin-aware snippets.",
+      "deps": [
+        "SRCH-01"
+      ],
+      "specs": [
+        "05-search-indexing-spec.md"
+      ],
+      "tests": [
+        "Filename exact outranks body match.",
+        "Table/header source is identified.",
+        "Search only returns documents in requested scope."
+      ],
+      "acceptance": [
+        "No semantic matching in exact mode.",
+        "No reparse on keystroke."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Search/DocumentSearchService.cs",
+        "tests/DocumentIDE.IntegrationTests/Search/ExactSearchTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/search/SRCH-02-exact-ranked-search.md",
+      "tasks": [
+        "Implement workspace-scoped exact/lexical query execution.",
+        "Rank exact filename > filename partial > heading > body > table > header/footer.",
+        "Return snippets with match-source labels.",
+        "Enforce explicit document scope at backend.",
+        "Measure warm-query latency."
+      ],
+      "depth": 11
+    },
+    {
+      "id": "SRCH-03",
+      "title": "Metadata Filters",
+      "goal": "Make derived document metadata queryable and clickable as search filters.",
+      "deps": [
+        "SRCH-02"
+      ],
+      "specs": [
+        "05-search-indexing-spec.md",
+        "03-workspace-canvas-spec.md"
+      ],
+      "tests": [
+        "`font:\"Arial\"` works.",
+        "`paper:Letter` works.",
+        "Inspector click produces equivalent filter query."
+      ],
+      "acceptance": [
+        "Metadata filter never mutates documents."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Search/MetadataFilterCompiler.cs",
+        "src/DocumentIDE.Web/src/features/search/MetadataFilterChips.tsx",
+        "tests/DocumentIDE.Core.Tests/Search/MetadataFilterTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/search/SRCH-03-metadata-filters.md",
+      "tasks": [
+        "Implement font/paper/margin/type/folder/modified filters.",
+        "Combine text + metadata filters predictably.",
+        "Expose metadata filter chips/counts to frontend.",
+        "Allow inspector metadata click to build query.",
+        "Test mixed metadata values."
+      ],
+      "depth": 12
+    },
+    {
+      "id": "SRCH-04",
+      "title": "Fuzzy Exploratory Search",
+      "goal": "Add typo-tolerant exploratory matching while keeping exact results higher and destructive operations isolated.",
+      "deps": [
+        "SRCH-02"
+      ],
+      "specs": [
+        "05-search-indexing-spec.md",
+        "07-batch-operation-engine.md"
+      ],
+      "tests": [
+        "Small typo finds expected document.",
+        "Exact result outranks fuzzy result.",
+        "Batch/SearchReplace module has no dependency on fuzzy matcher."
+      ],
+      "acceptance": [
+        "Fuzzy never becomes implicit destructive matching."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Search/FuzzySearchService.cs",
+        "tests/DocumentIDE.Core.Tests/Search/FuzzySearchTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/search/SRCH-04-fuzzy-exploratory-search.md",
+      "tasks": [
+        "Choose/implement bounded fuzzy matcher suitable for <1,000 docs.",
+        "Blend fuzzy score below exact lexical score.",
+        "Label fuzzy match source.",
+        "Cap candidate set before expensive distance scoring.",
+        "Expose fuzzy on/off mode."
+      ],
+      "depth": 12
+    },
+    {
+      "id": "SRCH-05",
+      "title": "Realtime Search UI & Selection",
+      "goal": "Integrate indexed search into the workspace without destroying canvas positions and allow results to become a batch target.",
+      "deps": [
+        "SRCH-03",
+        "SRCH-04",
+        "FND-07"
+      ],
+      "specs": [
+        "03-workspace-canvas-spec.md",
+        "05-search-indexing-spec.md"
+      ],
+      "tests": [
+        "Search UI updates without page navigation.",
+        "Exit search restores exact canvas state.",
+        "Selected result IDs match backend result set."
+      ],
+      "acceptance": [
+        "Search never reflows persisted canvas coordinates."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Web/src/features/search/SearchPanel.tsx",
+        "src/DocumentIDE.Web/src/features/search/searchStore.ts",
+        "tests/frontend/search/SearchPanel.test.tsx"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/search/SRCH-05-realtime-search-ui-selection.md",
+      "tasks": [
+        "Implement debounced query-as-you-type frontend.",
+        "Render snippets/match origins.",
+        "Highlight/fade canvas objects without persisting layout changes.",
+        "Support select-all current result DocumentIds.",
+        "Preserve search scope when invoking batch operations."
+      ],
+      "depth": 13
+    },
+    {
+      "id": "CAN-01",
+      "title": "Canvas Foundation",
+      "goal": "Build the clean white spatial workspace with pan/zoom, persisted viewport, and object-layer architecture.",
+      "deps": [
+        "FND-07",
+        "FND-03"
+      ],
+      "specs": [
+        "03-workspace-canvas-spec.md"
+      ],
+      "tests": [
+        "Viewport persists.",
+        "100 objects can render/pan smoothly in baseline test.",
+        "No dashboard cards appear in default canvas."
+      ],
+      "acceptance": [
+        "Canvas state is workspace metadata only."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Web/src/features/canvas/DocumentCanvas.tsx",
+        "src/DocumentIDE.Web/src/features/canvas/canvasStore.ts",
+        "tests/frontend/canvas/DocumentCanvas.test.tsx"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/canvas/CAN-01-canvas-foundation.md",
+      "tasks": [
+        "Implement canvas viewport and transform state.",
+        "Render minimal white surface and selection layer.",
+        "Persist workspace viewport.",
+        "Support pan/zoom keyboard/mouse basics.",
+        "Select canvas/graph library only after recorded spike benchmark."
+      ],
+      "depth": 4
+    },
+    {
+      "id": "CAN-02",
+      "title": "Folder Canvas Object",
+      "goal": "Represent each attached physical folder as a simple folder object with name and supported-file count.",
+      "deps": [
+        "FS-01",
+        "CAN-01"
+      ],
+      "specs": [
+        "03-workspace-canvas-spec.md"
+      ],
+      "tests": [
+        "Folder renders after attachment.",
+        "Count updates after source changes.",
+        "Unavailable folder retains position."
+      ],
+      "acceptance": [
+        "Folder object does not contain/import file bytes."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Web/src/features/canvas/nodes/FolderNode.tsx",
+        "tests/frontend/canvas/FolderNode.test.tsx"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/canvas/CAN-02-folder-canvas-object.md",
+      "tasks": [
+        "Render folder object visual.",
+        "Bind exact display name/count.",
+        "Persist folder canvas position.",
+        "Render missing/unavailable state.",
+        "Add selection/context menu hooks."
+      ],
+      "depth": 5
+    },
+    {
+      "id": "CAN-03",
+      "title": "Document Paper Object & Thumbnail Shell",
+      "goal": "Render DOCX/Markdown as paper-sheet objects with exact filename and cached low-detail preview.",
+      "deps": [
+        "IDX-04",
+        "CAN-01"
+      ],
+      "specs": [
+        "03-workspace-canvas-spec.md",
+        "06-docx-openxml-word-integration.md"
+      ],
+      "tests": [
+        "Filename is readable at normal zoom.",
+        "Missing doc is visibly distinct.",
+        "Thumbnail failure falls back without breaking canvas."
+      ],
+      "acceptance": [
+        "Thumbnail is derived/cache data only."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Web/src/features/canvas/nodes/DocumentNode.tsx",
+        "src/DocumentIDE.Core/Preview/ThumbnailContracts.cs",
+        "tests/frontend/canvas/DocumentNode.test.tsx"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/canvas/CAN-03-document-paper-object-thumbnail-shell.md",
+      "tasks": [
+        "Render paper object + filename.",
+        "Define thumbnail cache API contract.",
+        "Show loading/stale/missing states.",
+        "Use recognizable but intentionally low-detail document image.",
+        "Keep type/status decoration visually restrained."
+      ],
+      "depth": 9
+    },
+    {
+      "id": "CAN-04",
+      "title": "Folder Picker & File Release",
+      "goal": "Implement single-click folder picker, multi-select, Open Selected, and double-click Open All behavior.",
+      "deps": [
+        "CAN-02",
+        "CAN-03"
+      ],
+      "specs": [
+        "03-workspace-canvas-spec.md"
+      ],
+      "tests": [
+        "Single click does not dump all files.",
+        "Double click opens all supported files.",
+        "Open Selected releases only selected DocumentIds."
+      ],
+      "acceptance": [
+        "No physical move occurs."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Web/src/features/canvas/FolderPicker.tsx",
+        "src/DocumentIDE.Core/Workspaces/CanvasDocumentService.cs",
+        "tests/frontend/canvas/FolderPicker.test.tsx"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/canvas/CAN-04-folder-picker-file-release.md",
+      "tasks": [
+        "Open lightweight picker on single click.",
+        "List supported folder contents and allow multi-select.",
+        "Implement Open Selected.",
+        "Implement double-click/Open All shortcut.",
+        "Create/activate WorkspaceDocument objects without physical file movement."
+      ],
+      "depth": 10
+    },
+    {
+      "id": "CAN-05",
+      "title": "Spatially Indexed Assisted Placement",
+      "goal": "Place newly released documents near origin using local collision avoidance without O(n\u00b2) full-canvas scanning.",
+      "deps": [
+        "CAN-04"
+      ],
+      "specs": [
+        "03-workspace-canvas-spec.md",
+        "11-testing-strategy.md"
+      ],
+      "tests": [
+        "New files appear near origin.",
+        "Pinned objects never move.",
+        "Placement uses nearby candidates instead of full scan.",
+        "1,000-object benchmark meets recorded usability target."
+      ],
+      "acceptance": [
+        "No global reshuffle on local insert."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Web/src/features/canvas/layout/SpatialIndex.ts",
+        "src/DocumentIDE.Web/src/features/canvas/layout/AssistedPlacement.ts",
+        "tests/frontend/canvas/AssistedPlacement.test.ts"
+      ],
+      "failures": [],
+      "kind": "performance",
+      "priority": "P0",
+      "path": "docs/sprints/canvas/CAN-05-spatially-indexed-assisted-placement.md",
+      "tasks": [
+        "Implement spatial hash/grid, R-tree, or quadtree selected by benchmark.",
+        "Insert/update object bounds in spatial index.",
+        "Find candidate positions near source folder.",
+        "Respect pinned/manual objects.",
+        "Perform only local reflow of eligible auto objects.",
+        "Benchmark 100/500/1,000 objects."
+      ],
+      "depth": 11
+    },
+    {
+      "id": "CAN-06",
+      "title": "Position Persistence & Pinning",
+      "goal": "Persist auto/manual/pinned positions and preserve spatial memory across restart, rename, and reconciliation.",
+      "deps": [
+        "CAN-05",
+        "FS-05"
+      ],
+      "specs": [
+        "02-domain-data-model.md",
+        "03-workspace-canvas-spec.md"
+      ],
+      "tests": [
+        "Manual position survives restart.",
+        "Rename preserves position.",
+        "Pinned node never moves during local reflow."
+      ],
+      "acceptance": [
+        "Canvas coordinates remain independent from filesystem paths."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Workspaces/CanvasPositionService.cs",
+        "src/DocumentIDE.Web/src/features/canvas/usePersistedPosition.ts",
+        "tests/DocumentIDE.IntegrationTests/Workspace/CanvasPositionTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/canvas/CAN-06-position-persistence-pinning.md",
+      "tasks": [
+        "Persist WorkspaceDocument position mode and coordinates.",
+        "Switch to manual after user drag.",
+        "Implement pin/unpin.",
+        "Restore last positions after restart/reopen.",
+        "Resolve occupied restore location with nearest-safe fallback."
+      ],
+      "depth": 12
+    },
+    {
+      "id": "CAN-07",
+      "title": "Multi-Select, Group Drag & Tidy",
+      "goal": "Provide selection rectangle, Ctrl-select, group drag, Tidy Selection, and Tidy Canvas while respecting pins/spatial regions.",
+      "deps": [
+        "CAN-06"
+      ],
+      "specs": [
+        "03-workspace-canvas-spec.md"
+      ],
+      "tests": [
+        "Pinned object excluded from tidy.",
+        "Tidy selection stays in approximate region.",
+        "Multi-drag does not stack objects."
+      ],
+      "acceptance": [
+        "Tidy is organizational only; no filesystem mutation."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Web/src/features/canvas/selection/SelectionController.ts",
+        "src/DocumentIDE.Web/src/features/canvas/layout/TidyLayout.ts",
+        "tests/frontend/canvas/TidyLayout.test.ts"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/canvas/CAN-07-multi-select-group-drag-tidy.md",
+      "tasks": [
+        "Implement rectangular multi-select.",
+        "Implement Ctrl-click additive selection.",
+        "Preserve relative positions for existing multi-drag.",
+        "Implement Tidy Selection.",
+        "Implement Tidy Canvas for unpinned objects.",
+        "Use spatial index for collision resolution."
+      ],
+      "depth": 13
+    },
+    {
+      "id": "CAN-08",
+      "title": "List View & View Switch",
+      "goal": "Add Canvas | List | Graph switch foundation and a dense List view for sorting/filtering/bulk selection.",
+      "deps": [
+        "CAN-03",
+        "SRCH-05"
+      ],
+      "specs": [
+        "03-workspace-canvas-spec.md"
+      ],
+      "tests": [
+        "Switching view does not lose workspace.",
+        "List selection can feed existing selection model.",
+        "Returning to Canvas preserves coordinates."
+      ],
+      "acceptance": [
+        "List is another view of same DocumentIds, not imported copies."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Web/src/features/workspace/ViewSwitcher.tsx",
+        "src/DocumentIDE.Web/src/features/list/DocumentList.tsx",
+        "tests/frontend/list/DocumentList.test.tsx"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/canvas/CAN-08-list-view-view-switch.md",
+      "tasks": [
+        "Add persisted active-view switch.",
+        "Implement List view columns for key metadata.",
+        "Support sort/filter and bulk selection.",
+        "Preserve shared selection when practical.",
+        "Keep graph placeholder routed for later sprint."
+      ],
+      "depth": 14
+    },
+    {
+      "id": "DOCX-01",
+      "title": "Logical DOCX Text/Run Map",
+      "goal": "Create a logical text model that maps visible paragraph ranges back to OOXML runs/text nodes.",
+      "deps": [
+        "IDX-02"
+      ],
+      "specs": [
+        "06-docx-openxml-word-integration.md"
+      ],
+      "tests": [
+        "Visible text reconstructed correctly.",
+        "Offset map spans split runs.",
+        "Field-code instructions are distinguishable."
+      ],
+      "acceptance": [
+        "No source mutation in mapping stage."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Docx/LogicalTextMap.cs",
+        "src/DocumentIDE.Infrastructure/Docx/LogicalTextMapBuilder.cs",
+        "tests/DocumentIDE.Core.Tests/Docx/LogicalTextMapTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/docx/DOCX-01-logical-docx-text-run-map.md",
+      "tasks": [
+        "Define logical paragraph/run segment model.",
+        "Map logical character offsets to package part/paragraph/run/text node.",
+        "Handle preserved spaces and split runs.",
+        "Exclude unsafe field instruction text by default.",
+        "Add mixed-format fixture coverage."
+      ],
+      "depth": 8
+    },
+    {
+      "id": "DOCX-02",
+      "title": "Logical Search Across Runs",
+      "goal": "Find deterministic exact text matches even when Word splits visible text across OOXML runs.",
+      "deps": [
+        "DOCX-01"
+      ],
+      "specs": [
+        "06-docx-openxml-word-integration.md",
+        "07-batch-operation-engine.md"
+      ],
+      "tests": [
+        "`NUSA-DUA-1` split across runs is one match.",
+        "Header/table matches carry correct origin.",
+        "Repeated text yields stable occurrence IDs."
+      ],
+      "acceptance": [
+        "No fuzzy/semantic dependency."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Docx/LogicalTextMatcher.cs",
+        "tests/DocumentIDE.Core.Tests/Docx/LogicalTextMatcherTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/docx/DOCX-02-logical-search-across-runs.md",
+      "tasks": [
+        "Implement exact logical-range matcher.",
+        "Return structural references for every match.",
+        "Search body/table/header/footer logical text.",
+        "Exclude field instructions unless explicitly supported.",
+        "Return preview context around each match."
+      ],
+      "depth": 9
+    },
+    {
+      "id": "DOCX-03",
+      "title": "Strict DOCX Text Mutation",
+      "goal": "Replace a selected logical match while changing the minimum OOXML text structures and preserving unrelated formatting.",
+      "deps": [
+        "DOCX-02"
+      ],
+      "specs": [
+        "06-docx-openxml-word-integration.md",
+        "11-testing-strategy.md"
+      ],
+      "tests": [
+        "Split-run replacement produces correct visible text.",
+        "Unrelated paragraph formatting unchanged.",
+        "Invalid result never replaces original."
+      ],
+      "acceptance": [
+        "Never raw-string replace XML.",
+        "No whole-document HTML regeneration."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Infrastructure/Docx/StrictTextMutator.cs",
+        "tests/DocumentIDE.Core.Tests/Docx/StrictTextMutatorTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/docx/DOCX-03-strict-docx-text-mutation.md",
+      "tasks": [
+        "Copy working DOCX to temp fixture.",
+        "Apply replacement to mapped runs.",
+        "Preserve appropriate anchor formatting.",
+        "Remove only safely redundant emptied text/run structures.",
+        "Reopen/validate resulting package.",
+        "Compare unrelated formatting fixture invariants."
+      ],
+      "depth": 10
+    },
+    {
+      "id": "DOCX-04",
+      "title": "Document Lens Metadata",
+      "goal": "Expose useful DOCX structure and format metadata without opening Word.",
+      "deps": [
+        "IDX-04"
+      ],
+      "specs": [
+        "06-docx-openxml-word-integration.md",
+        "03-workspace-canvas-spec.md"
+      ],
+      "tests": [
+        "Inspector displays fixture metadata.",
+        "Mixed sections show mixed summaries.",
+        "Metadata click can invoke search filter where supported."
+      ],
+      "acceptance": [
+        "Derived heuristic is labeled as summary, not source fact."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Documents/DocumentLensService.cs",
+        "src/DocumentIDE.Web/src/features/inspector/DocxInspector.tsx",
+        "tests/DocumentIDE.Core.Tests/Documents/DocumentLensTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/docx/DOCX-04-document-lens-metadata.md",
+      "tasks": [
+        "Compute page/section/table/image counts where reliable.",
+        "Compute paper/orientation/margin summaries.",
+        "Compute deterministic primary font/font-size summaries.",
+        "Expose heading list and header/footer presence.",
+        "Render right-side Inspector."
+      ],
+      "depth": 9
+    },
+    {
+      "id": "WORD-01",
+      "title": "Open DOCX in Microsoft Word",
+      "goal": "Open the original local DOCX in Microsoft Word Desktop from double-click/context action.",
+      "deps": [
+        "FND-07",
+        "FS-02"
+      ],
+      "specs": [
+        "06-docx-openxml-word-integration.md"
+      ],
+      "tests": [
+        "Double-click opens original path.",
+        "Missing Word yields clean message.",
+        "Open action does not alter source fingerprint."
+      ],
+      "acceptance": [
+        "Word is external window, never embedded."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Infrastructure/Word/WordDesktopLauncher.cs",
+        "src/DocumentIDE.Web/src/features/files/OpenInWordAction.ts",
+        "tests/DocumentIDE.IntegrationTests/Word/WordDesktopLauncherTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/word/WORD-01-open-docx-in-microsoft-word.md",
+      "tasks": [
+        "Implement Word availability detection.",
+        "Resolve DocumentId to canonical available path.",
+        "Open original document in Word using adapter/shell.",
+        "Handle Word missing with typed feature-unavailable UI.",
+        "Do not create an editable proprietary copy."
+      ],
+      "depth": 6
+    },
+    {
+      "id": "WORD-02",
+      "title": "Word Editing/Lock Detection",
+      "goal": "Detect likely Word editing state and block unsafe app-originated mutation of open/changed DOCX files.",
+      "deps": [
+        "WORD-01",
+        "FS-03"
+      ],
+      "specs": [
+        "04-filesystem-sync-spec.md",
+        "06-docx-openxml-word-integration.md"
+      ],
+      "tests": [
+        "Open Word doc shows editing state.",
+        "Closed Word doc clears state.",
+        "Batch preflight can block/skip open doc."
+      ],
+      "acceptance": [
+        "No single heuristic is treated as infallible."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Infrastructure/Word/WordEditingStateDetector.cs",
+        "src/DocumentIDE.Web/src/features/inspector/EditingInWordBadge.tsx",
+        "tests/DocumentIDE.IntegrationTests/Word/WordEditingStateTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/word/WORD-02-word-editing-lock-detection.md",
+      "tasks": [
+        "Combine Word document-list probe, lock/access signal, and Word temp-file hints.",
+        "Expose `Editing in Word` state.",
+        "Refresh state on relevant filesystem/process changes.",
+        "Define safe false-positive/false-negative handling.",
+        "Integrate state into mutation preflight."
+      ],
+      "depth": 7
+    },
+    {
+      "id": "WORD-03",
+      "title": "Dedicated STA Word Automation Queue",
+      "goal": "Serialize all Word COM automation on one dedicated STA worker with concurrency exactly one.",
+      "deps": [
+        "FND-04",
+        "WORD-01"
+      ],
+      "specs": [
+        "01-system-architecture.md",
+        "06-docx-openxml-word-integration.md",
+        "11-testing-strategy.md"
+      ],
+      "tests": [
+        "Max observed COM operations = 1.",
+        "Worker is STA.",
+        "No repeated orphan Word process in integration run."
+      ],
+      "acceptance": [
+        "Indexing/OpenXML remains independently concurrent."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Infrastructure/Word/WordAutomationQueue.cs",
+        "tests/DocumentIDE.IntegrationTests/Word/WordAutomationQueueTests.cs"
+      ],
+      "failures": [],
+      "kind": "performance",
+      "priority": "P0",
+      "path": "docs/sprints/word/WORD-03-dedicated-sta-word-automation-queue.md",
+      "tasks": [
+        "Create dedicated STA worker thread/process boundary for Word automation adapter.",
+        "Queue ExportPdf/RenderPreview/etc.",
+        "Guarantee max COM concurrency `1`.",
+        "Implement cancellation between documents, not mid-unsafe COM write.",
+        "Release COM references deterministically.",
+        "Test concurrent callers are serialized."
+      ],
+      "depth": 7
+    },
+    {
+      "id": "WORD-04",
+      "title": "High-Fidelity Quick Look",
+      "goal": "Provide Space/Preview read-only multi-page Quick Look using lazy Word-rendered PDF/image artifacts.",
+      "deps": [
+        "WORD-03",
+        "DOCX-04"
+      ],
+      "specs": [
+        "06-docx-openxml-word-integration.md",
+        "03-workspace-canvas-spec.md"
+      ],
+      "tests": [
+        "Preview never edits source.",
+        "Cache invalidates on fingerprint change.",
+        "Public viewer does not directly call Word queue."
+      ],
+      "acceptance": [
+        "No eager Word render for all files at startup."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Preview/QuickLookService.cs",
+        "src/DocumentIDE.Web/src/features/quick-look/QuickLook.tsx",
+        "tests/DocumentIDE.IntegrationTests/Preview/QuickLookTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/word/WORD-04-high-fidelity-quick-look.md",
+      "tasks": [
+        "Define preview cache key by DocumentId/fingerprint/renderer version.",
+        "Queue Word-to-temp-PDF render lazily.",
+        "Render pages for Quick Look and cache safely.",
+        "Invalidate cache after source change.",
+        "Implement Space open/Escape close UI."
+      ],
+      "depth": 10
+    },
+    {
+      "id": "BAT-01",
+      "title": "Batch Operation Plan Domain",
+      "goal": "Define typed previewable operation plans with file fingerprints, occurrence/change IDs, lifecycle, and idempotency.",
+      "deps": [
+        "FND-03",
+        "DOCX-03"
+      ],
+      "specs": [
+        "07-batch-operation-engine.md",
+        "02-domain-data-model.md"
+      ],
+      "tests": [
+        "Plan can be created/read.",
+        "Completed plan cannot apply twice.",
+        "Plan records expected fingerprint per file."
+      ],
+      "acceptance": [
+        "Apply endpoint references reviewed plan, not arbitrary mutation payload."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Batch/OperationPlan.cs",
+        "src/DocumentIDE.Infrastructure/Persistence/Repositories/BatchPlanRepository.cs",
+        "tests/DocumentIDE.Core.Tests/Batch/OperationPlanTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/batch/BAT-01-batch-operation-plan-domain.md",
+      "tasks": [
+        "Define operation types/statuses.",
+        "Create BatchOperationPlan + per-file plan persistence.",
+        "Store expected fingerprint and selected change IDs.",
+        "Implement plan expiry/idempotency.",
+        "Disallow apply parameters that were not previewed."
+      ],
+      "depth": 11
+    },
+    {
+      "id": "BAT-02",
+      "title": "Batch Scope Resolver",
+      "goal": "Resolve Selection/Folder/Workspace/Collection scopes deterministically with recursive folder inclusion and branch exclusions.",
+      "deps": [
+        "FS-01",
+        "SRCH-05",
+        "BAT-01"
+      ],
+      "specs": [
+        "07-batch-operation-engine.md"
+      ],
+      "tests": [
+        "Folder scope recursively includes nested files.",
+        "Excluded Archive branch is absent.",
+        "Selection never silently expands."
+      ],
+      "acceptance": [
+        "Containment policy from FS-08 is reused."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Batch/BatchScopeResolver.cs",
+        "tests/DocumentIDE.Core.Tests/Batch/BatchScopeResolverTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/batch/BAT-02-batch-scope-resolver.md",
+      "tasks": [
+        "Implement Selection scope by explicit DocumentIds.",
+        "Implement Folder scope with subfolders ON by default.",
+        "Apply excluded branches.",
+        "Implement Workspace/Collection scopes.",
+        "Return scanned file counts before content matching."
+      ],
+      "depth": 14
+    },
+    {
+      "id": "BAT-03",
+      "title": "Batch Preview API & Review Shell",
+      "goal": "Create preview API/UI that shows blast radius before any destructive change.",
+      "deps": [
+        "BAT-01",
+        "BAT-02"
+      ],
+      "specs": [
+        "07-batch-operation-engine.md",
+        "03-workspace-canvas-spec.md"
+      ],
+      "tests": [
+        "Preview performs no source mutation.",
+        "Counts match fixture corpus.",
+        "Apply button is unavailable until preview completes."
+      ],
+      "acceptance": [
+        "No direct destructive 'Replace All' path bypasses plan."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Api/Controllers/BatchPreviewController.cs",
+        "src/DocumentIDE.Web/src/features/batch/BatchPreviewPanel.tsx",
+        "tests/DocumentIDE.IntegrationTests/Batch/BatchPreviewTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/batch/BAT-03-batch-preview-api-review-shell.md",
+      "tasks": [
+        "Add preview endpoint and progress job.",
+        "Render files scanned/affected/occurrence counts.",
+        "Render body/table/header/footer breakdown.",
+        "Allow file/occurrence selection.",
+        "Persist selection in reviewed plan."
+      ],
+      "depth": 15
+    },
+    {
+      "id": "HIST-01",
+      "title": "Recovery Snapshot Storage",
+      "goal": "Create 30-day per-operation snapshots with 5 GiB budget, 80% warning, and fail-closed capacity preflight.",
+      "deps": [
+        "FND-03",
+        "FS-02"
+      ],
+      "specs": [
+        "07-batch-operation-engine.md",
+        "02-domain-data-model.md"
+      ],
+      "tests": [
+        "Snapshot created before mutation.",
+        "Insufficient capacity blocks operation.",
+        "Unexpired snapshot not silently evicted."
+      ],
+      "acceptance": [
+        "Retention target remains 30 days.",
+        "Failure to snapshot means failure to mutate."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/History/RecoverySnapshotService.cs",
+        "src/DocumentIDE.Infrastructure/History/HistoryStorage.cs",
+        "tests/DocumentIDE.IntegrationTests/History/RecoveryStorageTests.cs"
+      ],
+      "failures": [],
+      "kind": "safety",
+      "priority": "P0",
+      "path": "docs/sprints/history/HIST-01-recovery-snapshot-storage.md",
+      "tasks": [
+        "Persist snapshot metadata including size/fingerprints/expiry.",
+        "Copy only files affected by approved operation.",
+        "Implement history budget/free-disk preflight.",
+        "Warn at 80% and block destructive apply if complete snapshots cannot fit.",
+        "Clean only expired snapshots unless owner explicitly clears history."
+      ],
+      "depth": 6
+    },
+    {
+      "id": "BAT-04",
+      "title": "Transactional Safe Apply Engine",
+      "goal": "Apply a reviewed operation plan with stale/lock checks, recovery snapshot, temp mutation, validation, and atomic replace.",
+      "deps": [
+        "BAT-03",
+        "HIST-01",
+        "FS-07"
+      ],
+      "specs": [
+        "07-batch-operation-engine.md",
+        "04-filesystem-sync-spec.md"
+      ],
+      "tests": [
+        "Injected mutation failure leaves original unchanged.",
+        "Stale file is rejected.",
+        "Open Word doc is safely skipped/blocked.",
+        "Successful file gets history record."
+      ],
+      "acceptance": [
+        "Cancellation never leaves half-written original."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Batch/BatchApplyEngine.cs",
+        "src/DocumentIDE.Infrastructure/Filesystem/AtomicFileReplacer.cs",
+        "tests/DocumentIDE.IntegrationTests/Batch/SafeApplyTests.cs"
+      ],
+      "failures": [],
+      "kind": "safety",
+      "priority": "P0",
+      "path": "docs/sprints/batch/BAT-04-transactional-safe-apply-engine.md",
+      "tasks": [
+        "Acquire document-level application lock.",
+        "Verify current fingerprint equals preview fingerprint.",
+        "Check external Word/editing state.",
+        "Create recovery snapshot.",
+        "Copy original to same-volume temp, mutate temp, validate, atomically replace.",
+        "Record per-file success/skipped/failure and trigger reindex."
+      ],
+      "depth": 16
+    },
+    {
+      "id": "BAT-05",
+      "title": "Exact Search & Replace Operation",
+      "goal": "Implement deterministic exact Search & Replace over DOCX logical body/table/header/footer text and Markdown text.",
+      "deps": [
+        "BAT-04",
+        "DOCX-03"
+      ],
+      "specs": [
+        "07-batch-operation-engine.md",
+        "08-markdown-graph-spec.md"
+      ],
+      "tests": [
+        "Split-run DOCX replacement works.",
+        "Fuzzy/semantic provider is never called.",
+        "Deselected occurrence remains unchanged."
+      ],
+      "acceptance": [
+        "Default matching is exact/deterministic."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Batch/Operations/SearchReplaceOperation.cs",
+        "tests/DocumentIDE.IntegrationTests/Batch/SearchReplaceOperationTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/batch/BAT-05-exact-search-replace-operation.md",
+      "tasks": [
+        "Define exact query/replacement parameters.",
+        "Build DOCX logical matches across runs.",
+        "Build Markdown exact matches.",
+        "Generate occurrence IDs/context/origin.",
+        "Apply only selected reviewed occurrences."
+      ],
+      "depth": 17
+    },
+    {
+      "id": "BAT-06",
+      "title": "Occurrence Review UX",
+      "goal": "Make per-occurrence inclusion/exclusion practical across many files before apply.",
+      "deps": [
+        "BAT-05"
+      ],
+      "specs": [
+        "07-batch-operation-engine.md"
+      ],
+      "tests": [
+        "Unchecked occurrence is not applied.",
+        "Header/table labels are visible.",
+        "Scope tree matches resolver."
+      ],
+      "acceptance": [
+        "Review UI never expands scope itself."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Web/src/features/batch/SearchReplaceReview.tsx",
+        "tests/frontend/batch/SearchReplaceReview.test.tsx"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/batch/BAT-06-occurrence-review-ux.md",
+      "tasks": [
+        "Group matches by file and origin.",
+        "Provide context snippet and old\u2192new preview.",
+        "Support select/deselect file or occurrence.",
+        "Show recursive folder scope/exclusions clearly.",
+        "Persist final selection to plan."
+      ],
+      "depth": 18
+    },
+    {
+      "id": "BAT-07",
+      "title": "Regex Advanced Replace",
+      "goal": "Add opt-in regex Search & Replace with deterministic preview, timeout, and bounded execution.",
+      "deps": [
+        "BAT-06"
+      ],
+      "specs": [
+        "07-batch-operation-engine.md"
+      ],
+      "tests": [
+        "Regex is OFF by default.",
+        "Catastrophic-pattern fixture times out safely.",
+        "Capture-group replacement preview matches apply."
+      ],
+      "acceptance": [
+        "Regex never bypasses preview."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Batch/Operations/RegexReplaceOperation.cs",
+        "tests/DocumentIDE.Core.Tests/Batch/RegexReplaceTests.cs"
+      ],
+      "failures": [],
+      "kind": "safety",
+      "priority": "P1",
+      "path": "docs/sprints/batch/BAT-07-regex-advanced-replace.md",
+      "tasks": [
+        "Add explicit Advanced/Regex toggle.",
+        "Compile regex with timeout/non-backtracking option where compatible.",
+        "Preview captures/replacement output.",
+        "Reject invalid/pathological expressions cleanly.",
+        "Apply only reviewed match IDs."
+      ],
+      "depth": 19
+    },
+    {
+      "id": "BAT-08",
+      "title": "Strict Font & Font-Size Operations",
+      "goal": "Change only requested font family or size on reviewed DOCX targets without changing unrelated paragraph/page formatting.",
+      "deps": [
+        "BAT-04",
+        "DOCX-03"
+      ],
+      "specs": [
+        "07-batch-operation-engine.md",
+        "06-docx-openxml-word-integration.md"
+      ],
+      "tests": [
+        "Font change leaves size/margins unchanged.",
+        "Size change leaves family/margins unchanged.",
+        "Mixed formatting preview identifies affected text."
+      ],
+      "acceptance": [
+        "No normalize-to-template behavior."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Batch/Operations/SetFontOperation.cs",
+        "src/DocumentIDE.Core/Batch/Operations/SetFontSizeOperation.cs",
+        "tests/DocumentIDE.IntegrationTests/Batch/FontOperationsTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/batch/BAT-08-strict-font-font-size-operations.md",
+      "tasks": [
+        "Define explicit font operation target semantics.",
+        "Preview effective current\u2192new formatting.",
+        "Implement minimal OOXML run/font mutation.",
+        "Implement font-size operation separately.",
+        "Add invariant comparisons for margins/spacing/styles."
+      ],
+      "depth": 17
+    },
+    {
+      "id": "BAT-09",
+      "title": "Strict Page-Layout Operations",
+      "goal": "Implement margins, paper size, orientation, and paragraph alignment as independent strict operations.",
+      "deps": [
+        "BAT-04",
+        "DOCX-03"
+      ],
+      "specs": [
+        "07-batch-operation-engine.md",
+        "06-docx-openxml-word-integration.md"
+      ],
+      "tests": [
+        "A4 operation does not alter margins.",
+        "Margin operation does not alter font.",
+        "Alignment operation does not alter section properties."
+      ],
+      "acceptance": [
+        "Every operation has separate type/preview semantics."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Batch/Operations/SetPageLayoutOperations.cs",
+        "tests/DocumentIDE.IntegrationTests/Batch/PageLayoutOperationsTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/batch/BAT-09-strict-page-layout-operations.md",
+      "tasks": [
+        "Implement SetMargins by section.",
+        "Implement SetPaperSize without altering margins.",
+        "Implement SetOrientation.",
+        "Implement SetAlignment only on targeted paragraphs.",
+        "Preview per-section/per-target old\u2192new values."
+      ],
+      "depth": 17
+    },
+    {
+      "id": "BAT-10",
+      "title": "Strict Batch Rename",
+      "goal": "Batch-rename files using basename-only reviewed plans and the explicit physical-operation service.",
+      "deps": [
+        "BAT-04",
+        "FS-07"
+      ],
+      "specs": [
+        "07-batch-operation-engine.md",
+        "04-filesystem-sync-spec.md"
+      ],
+      "tests": [
+        "`..\\evil.docx` is rejected.",
+        "Internal batch target collisions are detected before apply.",
+        "Successful rename keeps DocumentId."
+      ],
+      "acceptance": [
+        "Rename cannot become move."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Batch/Operations/BatchRenameOperation.cs",
+        "tests/DocumentIDE.IntegrationTests/Batch/BatchRenameTests.cs"
+      ],
+      "failures": [],
+      "kind": "security",
+      "priority": "P0",
+      "path": "docs/sprints/batch/BAT-10-strict-batch-rename.md",
+      "tasks": [
+        "Generate old/new basename preview for every file.",
+        "Validate every target using FS-07 basename rules.",
+        "Detect collisions across the batch before changing first file.",
+        "Apply through physical operation journal.",
+        "Preserve DocumentId/canvas metadata."
+      ],
+      "depth": 17
+    },
+    {
+      "id": "HIST-02",
+      "title": "Conflict-Aware Undo",
+      "goal": "Undo completed operations from snapshots only when current files have not changed incompatibly since the operation.",
+      "deps": [
+        "HIST-01",
+        "BAT-04",
+        "FS-03"
+      ],
+      "specs": [
+        "07-batch-operation-engine.md",
+        "11-testing-strategy.md"
+      ],
+      "tests": [
+        "Unchanged changed file restores.",
+        "Externally edited file is not blindly overwritten.",
+        "Undo batch reports partial/conflict outcomes."
+      ],
+      "acceptance": [
+        "Undo uses same safe-write discipline."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/History/UndoService.cs",
+        "src/DocumentIDE.Web/src/features/history/UndoConflictDialog.tsx",
+        "tests/DocumentIDE.IntegrationTests/History/UndoTests.cs"
+      ],
+      "failures": [],
+      "kind": "safety",
+      "priority": "P0",
+      "path": "docs/sprints/history/HIST-02-conflict-aware-undo.md",
+      "tasks": [
+        "Compare current fingerprint with post-operation fingerprint.",
+        "Restore safely when unchanged.",
+        "Mark conflict when externally edited later.",
+        "Support per-file conflict review.",
+        "Record undone status and trigger reindex."
+      ],
+      "depth": 17
+    },
+    {
+      "id": "BAT-11",
+      "title": "Batch Results & History UI",
+      "goal": "Provide inspectable operation history, per-file outcomes, storage status, and retry/review navigation.",
+      "deps": [
+        "BAT-10",
+        "HIST-02"
+      ],
+      "specs": [
+        "07-batch-operation-engine.md",
+        "03-workspace-canvas-spec.md"
+      ],
+      "tests": [
+        "Partial result is visible.",
+        "History usage warning appears at threshold.",
+        "Undo action follows conflict policy."
+      ],
+      "acceptance": [
+        "UI never claims complete success for partial operation."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Web/src/features/history/HistoryPanel.tsx",
+        "tests/frontend/history/HistoryPanel.test.tsx"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/batch/BAT-11-batch-results-history-ui.md",
+      "tasks": [
+        "Render history timeline.",
+        "Show succeeded/skipped/failed counts.",
+        "Expose inspect/undo actions.",
+        "Show history storage usage/warning.",
+        "Link failures back to affected documents."
+      ],
+      "depth": 18
+    },
+    {
+      "id": "MD-01",
+      "title": "Source-First Markdown Editor",
+      "goal": "Open `.md` internally with Edit/Preview/Split shell while the physical Markdown file remains authoritative.",
+      "deps": [
+        "FND-07",
+        "IDX-03"
+      ],
+      "specs": [
+        "08-markdown-graph-spec.md"
+      ],
+      "tests": [
+        "Double-click Markdown opens internal editor.",
+        "Ctrl+S changes local file.",
+        "Editor never creates proprietary hidden source."
+      ],
+      "acceptance": [
+        "External changes are reconciled."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Web/src/features/markdown/MarkdownEditor.tsx",
+        "src/DocumentIDE.Core/Markdown/MarkdownDocumentService.cs",
+        "tests/frontend/markdown/MarkdownEditor.test.tsx"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/markdown/MD-01-source-first-markdown-editor.md",
+      "tasks": [
+        "Integrate CodeMirror 6 or chosen editor.",
+        "Implement Edit/Preview/Split modes.",
+        "Load source by DocumentId.",
+        "Implement `Ctrl+S` safe-save request.",
+        "Track dirty/external-change state."
+      ],
+      "depth": 7
+    },
+    {
+      "id": "MD-02",
+      "title": "Markdown Preview & Sanitization",
+      "goal": "Render Markdown, code, tables, tasks, Mermaid, and math safely without arbitrary script/code execution.",
+      "deps": [
+        "MD-01"
+      ],
+      "specs": [
+        "08-markdown-graph-spec.md",
+        "10-sharing-security-ngrok.md"
+      ],
+      "tests": [
+        "Script payload is neutralized.",
+        "Mermaid/math render expected fixture.",
+        "Preview cannot read arbitrary local file."
+      ],
+      "acceptance": [
+        "Sanitization also reusable by Share viewer."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Web/src/features/markdown/renderMarkdown.ts",
+        "src/DocumentIDE.Web/src/features/markdown/sanitizeHtml.ts",
+        "tests/frontend/markdown/MarkdownSecurity.test.ts"
+      ],
+      "failures": [],
+      "kind": "security",
+      "priority": "P0",
+      "path": "docs/sprints/markdown/MD-02-markdown-preview-sanitization.md",
+      "tasks": [
+        "Select maintained Markdown renderer.",
+        "Add code syntax highlighting, tables/tasks, Mermaid, and math.",
+        "Sanitize rendered HTML using DOMPurify/equivalent.",
+        "Disable arbitrary code-fence execution and unsafe HTML/script behavior.",
+        "Add XSS fixture tests."
+      ],
+      "depth": 8
+    },
+    {
+      "id": "MD-03",
+      "title": "Frontmatter & Explicit Link Index",
+      "goal": "Persist Markdown frontmatter and explicit relative-link/wikilink relation candidates after each save.",
+      "deps": [
+        "IDX-03",
+        "MD-01"
+      ],
+      "specs": [
+        "08-markdown-graph-spec.md",
+        "02-domain-data-model.md"
+      ],
+      "tests": [
+        "Frontmatter fields searchable.",
+        "Relative link target resolves when unique.",
+        "Save updates link candidates."
+      ],
+      "acceptance": [
+        "Derived relations never rewrite Markdown automatically."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Markdown/MarkdownLinkIndexer.cs",
+        "tests/DocumentIDE.Core.Tests/Markdown/MarkdownLinkIndexerTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/markdown/MD-03-frontmatter-explicit-link-index.md",
+      "tasks": [
+        "Persist frontmatter fields for search.",
+        "Normalize relative links against physical path.",
+        "Emit explicit relation candidates.",
+        "Update derived link index on save/reindex.",
+        "Do not mutate source to normalize metadata."
+      ],
+      "depth": 8
+    },
+    {
+      "id": "MD-04",
+      "title": "Wikilink Resolution & Backlink Inputs",
+      "goal": "Resolve `[[wikilinks]]` deterministically and surface ambiguity rather than silently picking a duplicate filename.",
+      "deps": [
+        "MD-03"
+      ],
+      "specs": [
+        "08-markdown-graph-spec.md"
+      ],
+      "tests": [
+        "Unique stem resolves.",
+        "Two same-stem docs are ambiguous.",
+        "Alias preserves target identity."
+      ],
+      "acceptance": [
+        "No silent arbitrary candidate choice."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Markdown/WikilinkResolver.cs",
+        "tests/DocumentIDE.Core.Tests/Markdown/WikilinkResolverTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/markdown/MD-04-wikilink-resolution-backlink-inputs.md",
+      "tasks": [
+        "Implement relative exact-path resolution first.",
+        "Implement unique filename-stem fallback.",
+        "Return ambiguity list when multiple candidates.",
+        "Support wikilink alias syntax.",
+        "Expose unresolved/ambiguous diagnostics."
+      ],
+      "depth": 9
+    },
+    {
+      "id": "GR-01",
+      "title": "Relation Store & Extraction",
+      "goal": "Persist explicit/manual/semantic relation records with origin/type/confidence separated.",
+      "deps": [
+        "MD-03",
+        "FND-03"
+      ],
+      "specs": [
+        "02-domain-data-model.md",
+        "08-markdown-graph-spec.md"
+      ],
+      "tests": [
+        "Reparse updates derived links.",
+        "Manual relation survives parser refresh.",
+        "Origin/type remain distinct."
+      ],
+      "acceptance": [
+        "Semantic relation cannot masquerade as explicit."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Infrastructure/Persistence/Repositories/RelationRepository.cs",
+        "tests/DocumentIDE.IntegrationTests/Graph/RelationRepositoryTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/graph/GR-01-relation-store-extraction.md",
+      "tasks": [
+        "Create Relation migration/repository.",
+        "Upsert Markdown link/frontmatter relations.",
+        "Track relation origin separately from type.",
+        "Remove stale derived relations after reparse.",
+        "Keep manual relations stable."
+      ],
+      "depth": 9
+    },
+    {
+      "id": "GR-02",
+      "title": "Backlinks & Reference Inspector",
+      "goal": "Expose References, Referenced By, and Potentially Related sections using relation store.",
+      "deps": [
+        "GR-01",
+        "MD-04"
+      ],
+      "specs": [
+        "08-markdown-graph-spec.md",
+        "03-workspace-canvas-spec.md"
+      ],
+      "tests": [
+        "Backlinks update after save.",
+        "Explicit and inferred sections are separate.",
+        "Missing target is shown without crash."
+      ],
+      "acceptance": [
+        "Backlinks are deterministic."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Graph/BacklinkService.cs",
+        "src/DocumentIDE.Web/src/features/inspector/RelationsInspector.tsx",
+        "tests/DocumentIDE.Core.Tests/Graph/BacklinkServiceTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/graph/GR-02-backlinks-reference-inspector.md",
+      "tasks": [
+        "Query outbound/inbound explicit relations.",
+        "Render backlinks in Markdown inspector.",
+        "Show unresolved/ambiguous links.",
+        "Reserve separate section for inferred relations.",
+        "Navigate by DocumentId."
+      ],
+      "depth": 10
+    },
+    {
+      "id": "GR-03",
+      "title": "Graph View",
+      "goal": "Implement the Graph main view with independent persisted node coordinates and truthful edge styling.",
+      "deps": [
+        "GR-02",
+        "CAN-01"
+      ],
+      "specs": [
+        "08-markdown-graph-spec.md",
+        "03-workspace-canvas-spec.md"
+      ],
+      "tests": [
+        "Moving graph node does not move canvas node.",
+        "Explicit edge is solid.",
+        "Double-click Markdown node opens editor."
+      ],
+      "acceptance": [
+        "Graph is a view, not source-of-truth relation store."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Web/src/features/graph/DocumentGraph.tsx",
+        "src/DocumentIDE.Core/Graph/GraphStateService.cs",
+        "tests/frontend/graph/DocumentGraph.test.tsx"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/graph/GR-03-graph-view.md",
+      "tasks": [
+        "Implement graph node/edge rendering.",
+        "Persist GraphNodeState separately from canvas coordinates.",
+        "Render solid explicit edges and reserved dashed semantic style.",
+        "Support select/navigate/open document.",
+        "Add relation/filter controls foundation."
+      ],
+      "depth": 11
+    },
+    {
+      "id": "GR-04",
+      "title": "Manual Relations",
+      "goal": "Allow owner to create/edit/delete explicit workspace-level manual relations without modifying Markdown source.",
+      "deps": [
+        "GR-01",
+        "GR-03"
+      ],
+      "specs": [
+        "08-markdown-graph-spec.md"
+      ],
+      "tests": [
+        "Manual relation survives Markdown reparse.",
+        "Deleting manual relation does not edit Markdown.",
+        "Manual edge styled explicit."
+      ],
+      "acceptance": [
+        "No automatic source insertion."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Graph/ManualRelationService.cs",
+        "src/DocumentIDE.Web/src/features/graph/RelationEditor.tsx",
+        "tests/DocumentIDE.Core.Tests/Graph/ManualRelationTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/graph/GR-04-manual-relations.md",
+      "tasks": [
+        "Add relation creation interaction.",
+        "Select relation type from controlled vocabulary.",
+        "Persist origin=`manual`.",
+        "Edit/delete manual relation.",
+        "Render immediately in graph/inspector."
+      ],
+      "depth": 12
+    },
+    {
+      "id": "GR-05",
+      "title": "Bounded Graph Rendering",
+      "goal": "Keep graph usable for large workspaces through neighborhood/filter default, top-K semantic edges, and off-UI-thread layout.",
+      "deps": [
+        "GR-03"
+      ],
+      "specs": [
+        "08-markdown-graph-spec.md",
+        "11-testing-strategy.md"
+      ],
+      "tests": [
+        "Large graph does not freeze UI.",
+        "Default mode is bounded above threshold.",
+        "Full graph remains explicit user action."
+      ],
+      "acceptance": [
+        "No all-to-all semantic rendering."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Web/src/features/graph/graphLayout.worker.ts",
+        "src/DocumentIDE.Web/src/features/graph/GraphScopeControls.tsx",
+        "tests/frontend/graph/GraphPerformance.test.ts"
+      ],
+      "failures": [],
+      "kind": "performance",
+      "priority": "P1",
+      "path": "docs/sprints/graph/GR-05-bounded-graph-rendering.md",
+      "tasks": [
+        "Move layout computation off interactive UI thread/worker.",
+        "Default >250 visible nodes to selected-neighborhood/filter mode.",
+        "Add explicit Full Graph action.",
+        "Prepare API for top-K semantic edges (`K=5` default).",
+        "Benchmark representative 1,000-document graph."
+      ],
+      "depth": 12
+    },
+    {
+      "id": "AI-01",
+      "title": "Embedding Provider Abstraction",
+      "goal": "Define local-first semantic provider contracts without coupling core search/graph to a specific model or external API.",
+      "deps": [
+        "FND-05",
+        "IDX-06"
+      ],
+      "specs": [
+        "05-search-indexing-spec.md",
+        "08-markdown-graph-spec.md"
+      ],
+      "tests": [
+        "Mock provider round-trip.",
+        "Changing content/model invalidates embedding.",
+        "Core exact search works with no provider configured."
+      ],
+      "acceptance": [
+        "External AI is optional."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Semantic/IEmbeddingProvider.cs",
+        "src/DocumentIDE.Core/Semantic/EmbeddingCoordinator.cs",
+        "tests/DocumentIDE.Core.Tests/Semantic/EmbeddingCoordinatorTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/semantic/AI-01-embedding-provider-abstraction.md",
+      "tasks": [
+        "Define EmbeddingProvider interface and model identity.",
+        "Define normalized input preparation.",
+        "Persist provider/model/content fingerprint with vectors.",
+        "Add cancellation/bounded batch generation.",
+        "Define optional external provider boundary with explicit opt-in."
+      ],
+      "depth": 11
+    },
+    {
+      "id": "AI-02",
+      "title": "Local Embedding Provider",
+      "goal": "Implement a local embedding model path suitable for under-1,000-document workspaces.",
+      "deps": [
+        "AI-01"
+      ],
+      "specs": [
+        "05-search-indexing-spec.md"
+      ],
+      "tests": [
+        "Embedding generation works offline.",
+        "Index rebuilds from documents.",
+        "Resource use is bounded during batch embedding."
+      ],
+      "acceptance": [
+        "No source document leaves machine."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Infrastructure/Semantic/LocalEmbeddingProvider.cs",
+        "tests/DocumentIDE.IntegrationTests/Semantic/LocalEmbeddingProviderTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/semantic/AI-02-local-embedding-provider.md",
+      "tasks": [
+        "Select benchmarked lightweight local model/runtime.",
+        "Bundle/download model according to explicit packaging policy.",
+        "Generate document-level embeddings in background.",
+        "Bound CPU/memory/concurrency.",
+        "Persist rebuildable vector index."
+      ],
+      "depth": 12
+    },
+    {
+      "id": "AI-03",
+      "title": "Semantic Search Mode",
+      "goal": "Add clearly labeled semantic search as an optional exploratory mode independent from Exact.",
+      "deps": [
+        "AI-02",
+        "SRCH-05"
+      ],
+      "specs": [
+        "05-search-indexing-spec.md"
+      ],
+      "tests": [
+        "Semantic mode finds conceptually related fixture.",
+        "Exact mode results unchanged.",
+        "SearchReplace does not depend on semantic service."
+      ],
+      "acceptance": [
+        "No invisible semantic contamination of destructive actions."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Search/SemanticSearchService.cs",
+        "src/DocumentIDE.Web/src/features/search/SearchModeSwitch.tsx",
+        "tests/DocumentIDE.Core.Tests/Search/SemanticSearchTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/semantic/AI-03-semantic-search-mode.md",
+      "tasks": [
+        "Implement semantic query embedding and nearest-neighbor lookup.",
+        "Render Semantic/Smart mode separately.",
+        "Label result source/score.",
+        "Keep Exact mode deterministic and unchanged.",
+        "Handle missing/stale embeddings gracefully."
+      ],
+      "depth": 14
+    },
+    {
+      "id": "AI-04",
+      "title": "Semantic Graph Suggestions",
+      "goal": "Generate inferred graph edges with top-K/confidence limits and dashed truthful presentation.",
+      "deps": [
+        "AI-02",
+        "GR-05"
+      ],
+      "specs": [
+        "08-markdown-graph-spec.md"
+      ],
+      "tests": [
+        "No document gets >K default semantic edges.",
+        "Inferred edge is dashed.",
+        "Low-confidence edge is omitted."
+      ],
+      "acceptance": [
+        "Semantic edge is never treated as explicit dependency."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Graph/SemanticRelationService.cs",
+        "tests/DocumentIDE.Core.Tests/Graph/SemanticRelationTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/semantic/AI-04-semantic-graph-suggestions.md",
+      "tasks": [
+        "Compute top-K (`K=5` default) neighbors per document.",
+        "Apply minimum configurable confidence threshold.",
+        "Persist origin=`semantic` and confidence.",
+        "Render dashed edges.",
+        "Allow inferred-edge filter/off mode."
+      ],
+      "depth": 13
+    },
+    {
+      "id": "CTX-01",
+      "title": "Context Pack Core",
+      "goal": "Create a deterministic context pack from explicit selected/collection documents for AI coding-agent use.",
+      "deps": [
+        "MD-03",
+        "GR-02"
+      ],
+      "specs": [
+        "08-markdown-graph-spec.md"
+      ],
+      "tests": [
+        "Selected source order preserved.",
+        "Source filenames/IDs represented.",
+        "No implicit semantic expansion by default."
+      ],
+      "acceptance": [
+        "Context pack generation does not modify source files."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Context/ContextPackService.cs",
+        "tests/DocumentIDE.Core.Tests/Context/ContextPackTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/context-packs/CTX-01-context-pack-core.md",
+      "tasks": [
+        "Define ContextPack model/order.",
+        "Accept explicit DocumentIds/Collection order.",
+        "Represent Markdown sources with source headings.",
+        "Store pack definition as workspace metadata if saved.",
+        "Generate combined Markdown in memory."
+      ],
+      "depth": 11
+    },
+    {
+      "id": "CTX-02",
+      "title": "Explicit Dependency Expansion",
+      "goal": "Optionally expand a context pack using explicit backlinks/dependencies while remaining deterministic and bounded.",
+      "deps": [
+        "CTX-01",
+        "GR-02"
+      ],
+      "specs": [
+        "08-markdown-graph-spec.md"
+      ],
+      "tests": [
+        "Cycle terminates.",
+        "Semantic edge is not traversed by default.",
+        "Expanded source list is reviewable."
+      ],
+      "acceptance": [
+        "No hidden infinite graph expansion."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Context/ContextDependencyExpander.cs",
+        "tests/DocumentIDE.Core.Tests/Context/ContextDependencyExpanderTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/context-packs/CTX-02-explicit-dependency-expansion.md",
+      "tasks": [
+        "Add Include Explicit Dependencies option.",
+        "Traverse only explicit relation origins by default.",
+        "Detect cycles and deduplicate documents.",
+        "Set maximum relation depth.",
+        "Show added-by-dependency documents before export."
+      ],
+      "depth": 12
+    },
+    {
+      "id": "CTX-03",
+      "title": "DOCX Context Representation",
+      "goal": "Include DOCX in context packs through extracted structured text/Markdown-like representation without modifying DOCX.",
+      "deps": [
+        "CTX-01",
+        "IDX-02"
+      ],
+      "specs": [
+        "08-markdown-graph-spec.md"
+      ],
+      "tests": [
+        "DOCX fixture becomes readable context.",
+        "Table content preserved meaningfully.",
+        "Source fingerprint unchanged."
+      ],
+      "acceptance": [
+        "Representation is derived, not round-tripped back to DOCX."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Context/DocxContextFormatter.cs",
+        "tests/DocumentIDE.Core.Tests/Context/DocxContextFormatterTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/context-packs/CTX-03-docx-context-representation.md",
+      "tasks": [
+        "Convert headings/paragraphs/tables into stable Markdown-like text.",
+        "Label origin and sections.",
+        "Bound extremely large extracted content.",
+        "Reuse indexed structure where current.",
+        "Never invoke destructive mutation."
+      ],
+      "depth": 12
+    },
+    {
+      "id": "CTX-04",
+      "title": "Token Estimate & Context Export",
+      "goal": "Estimate context size and export/copy an agent-ready `context.md`.",
+      "deps": [
+        "CTX-02",
+        "CTX-03"
+      ],
+      "specs": [
+        "08-markdown-graph-spec.md"
+      ],
+      "tests": [
+        "Token estimate is labeled by tokenizer/model.",
+        "Export matches reviewed pack order.",
+        "Original documents unchanged."
+      ],
+      "acceptance": [
+        "No external AI call required."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Context/ContextExportService.cs",
+        "src/DocumentIDE.Web/src/features/context/ContextPackDialog.tsx",
+        "tests/DocumentIDE.Core.Tests/Context/ContextExportTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/context-packs/CTX-04-token-estimate-context-export.md",
+      "tasks": [
+        "Integrate tokenizer/approximation with model label.",
+        "Show source contribution sizes.",
+        "Export combined `context.md` using safe file write.",
+        "Copy combined Markdown.",
+        "Warn when target budget is exceeded."
+      ],
+      "depth": 13
+    },
+    {
+      "id": "PDF-01",
+      "title": "Single DOCX PDF Export",
+      "goal": "Export one DOCX to PDF through the serialized Word automation queue without modifying source.",
+      "deps": [
+        "WORD-03"
+      ],
+      "specs": [
+        "09-pdf-finalization.md"
+      ],
+      "tests": [
+        "Generated PDF exists.",
+        "DOCX fingerprint unchanged.",
+        "Existing PDF is not silently overwritten."
+      ],
+      "acceptance": [
+        "Word COM only via queue."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Pdf/PdfExportService.cs",
+        "tests/DocumentIDE.IntegrationTests/Pdf/SinglePdfExportTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/pdf/PDF-01-single-docx-pdf-export.md",
+      "tasks": [
+        "Implement output path/name selection.",
+        "Queue Word ExportAsFixedFormat.",
+        "Handle output collision explicitly.",
+        "Fingerprint source before/after.",
+        "Return typed export result."
+      ],
+      "depth": 8
+    },
+    {
+      "id": "PDF-02",
+      "title": "Batch Separate PDF Export",
+      "goal": "Export multiple DOCX files as separate PDFs with progress, cancellation between files, and partial results.",
+      "deps": [
+        "PDF-01",
+        "FND-04"
+      ],
+      "specs": [
+        "09-pdf-finalization.md"
+      ],
+      "tests": [
+        "Multiple exports remain Word-concurrency=1.",
+        "Cancellation stops before next file.",
+        "Partial failures are visible."
+      ],
+      "acceptance": [
+        "Completed outputs are not deleted on unrelated later failure."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Pdf/BatchPdfExportService.cs",
+        "src/DocumentIDE.Web/src/features/pdf/BatchExportProgress.tsx",
+        "tests/DocumentIDE.IntegrationTests/Pdf/BatchPdfExportTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/pdf/PDF-02-batch-separate-pdf-export.md",
+      "tasks": [
+        "Create ordered export job.",
+        "Serialize Word renders through WORD-03.",
+        "Expose progress/current filename.",
+        "Apply collision policy per file.",
+        "Return succeeded/skipped/failed result list."
+      ],
+      "depth": 9
+    },
+    {
+      "id": "PDF-03",
+      "title": "Streaming Ordered PDF Merge",
+      "goal": "Merge user-ordered PDFs using sequential file/stream processing without rasterization or loading the whole corpus into RAM.",
+      "deps": [
+        "PDF-02"
+      ],
+      "specs": [
+        "09-pdf-finalization.md",
+        "11-testing-strategy.md"
+      ],
+      "tests": [
+        "Output page order matches user order.",
+        "Pages are not rasterized.",
+        "Peak memory does not scale linearly with total source bytes."
+      ],
+      "acceptance": [
+        "No silent inferred merge order."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Pdf/PdfMergeService.cs",
+        "src/DocumentIDE.Web/src/features/pdf/MergeOrderDialog.tsx",
+        "tests/DocumentIDE.IntegrationTests/Pdf/PdfMergeMemoryTests.cs"
+      ],
+      "failures": [],
+      "kind": "performance",
+      "priority": "P1",
+      "path": "docs/sprints/pdf/PDF-03-streaming-ordered-pdf-merge.md",
+      "tasks": [
+        "Implement explicit drag-order model.",
+        "Render intermediate DOCX PDFs first.",
+        "Select license-compatible streaming merge library.",
+        "Append inputs sequentially with bounded buffers.",
+        "Clean temp job directory on success/failure."
+      ],
+      "depth": 10
+    },
+    {
+      "id": "PDF-04",
+      "title": "PDF Finalization UX",
+      "goal": "Expose single/batch/merge PDF finalization coherently from selection, inspector, command palette, and error results.",
+      "deps": [
+        "CAN-08",
+        "PDF-03"
+      ],
+      "specs": [
+        "09-pdf-finalization.md",
+        "03-workspace-canvas-spec.md"
+      ],
+      "tests": [
+        "One selected DOCX defaults to single export.",
+        "Multiple docs offer separate/merge choices.",
+        "Failures identify affected source."
+      ],
+      "acceptance": [
+        "PDF remains output-only."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Web/src/features/pdf/PdfActions.tsx",
+        "tests/frontend/pdf/PdfActions.test.tsx"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/pdf/PDF-04-pdf-finalization-ux.md",
+      "tasks": [
+        "Add Export PDF actions/context rules.",
+        "Show merge ordering UI.",
+        "Show output collision decisions.",
+        "Show progress/results.",
+        "Add command-palette entries."
+      ],
+      "depth": 15
+    },
+    {
+      "id": "SHR-01",
+      "title": "Share Domain & Sanitized Manifest",
+      "goal": "Define explicit share membership, Snapshot/Live modes, permissions, and a sanitized artifact manifest independent from local paths.",
+      "deps": [
+        "FND-03"
+      ],
+      "specs": [
+        "10-sharing-security-ngrok.md",
+        "02-domain-data-model.md"
+      ],
+      "tests": [
+        "New Collection member does not auto-enter existing share.",
+        "Manifest contains only explicit member IDs.",
+        "Manifest payload has no physical path."
+      ],
+      "acceptance": [
+        "Live mode does not imply live membership."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Sharing/ShareManifest.cs",
+        "src/DocumentIDE.Infrastructure/Persistence/Repositories/ShareRepository.cs",
+        "tests/DocumentIDE.Core.Tests/Sharing/ShareManifestTests.cs"
+      ],
+      "failures": [],
+      "kind": "security",
+      "priority": "P0",
+      "path": "docs/sprints/sharing/SHR-01-share-domain-sanitized-manifest.md",
+      "tasks": [
+        "Create Share/ShareMember migrations.",
+        "Snapshot explicit membership at creation including collection-derived shares.",
+        "Define sanitized document/display metadata.",
+        "Create application-owned share artifact root.",
+        "Never store/expose physical paths in public manifest."
+      ],
+      "depth": 2
+    },
+    {
+      "id": "SHR-02",
+      "title": "Separate ShareHost Process",
+      "goal": "Create `DocumentIDE.ShareHost.exe` that serves only share manifests/artifacts and does not reference privileged mutation/Word services.",
+      "deps": [
+        "SHR-01",
+        "FND-08"
+      ],
+      "specs": [
+        "01-system-architecture.md",
+        "10-sharing-security-ngrok.md"
+      ],
+      "tests": [
+        "ShareHost builds/runs independently.",
+        "Dependency test fails if privileged service assembly/interface is referenced.",
+        "Arbitrary local path route does not exist."
+      ],
+      "acceptance": [
+        "Process separation is documented as risk reduction, not full sandbox."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.ShareHost/Program.cs",
+        "src/DocumentIDE.ShareHost/ShareHost.csproj",
+        "tests/DocumentIDE.ArchitectureTests/ShareHostDependencyTests.cs"
+      ],
+      "failures": [],
+      "kind": "security",
+      "priority": "P0",
+      "path": "docs/sprints/sharing/SHR-02-separate-sharehost-process.md",
+      "tasks": [
+        "Create separate executable/project.",
+        "Give it a narrow dependency graph.",
+        "Serve share-owned artifact directory only.",
+        "Exclude Word, batch mutation, unrestricted filesystem service references.",
+        "Bind viewer server to loopback for ngrok exposure."
+      ],
+      "depth": 5
+    },
+    {
+      "id": "SHR-03",
+      "title": "Share Token Authentication",
+      "goal": "Protect each public share with a fixed-format 256-bit secret token stored as hash and verified in fixed time.",
+      "deps": [
+        "SHR-02",
+        "FND-05"
+      ],
+      "specs": [
+        "10-sharing-security-ngrok.md"
+      ],
+      "tests": [
+        "Token A cannot access Share B.",
+        "Malformed long token is rejected cheaply.",
+        "Fixed-time comparison helper is used."
+      ],
+      "acceptance": [
+        "Ngrok URL alone is not authorization."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Sharing/ShareTokenService.cs",
+        "src/DocumentIDE.ShareHost/Security/ShareTokenMiddleware.cs",
+        "tests/DocumentIDE.IntegrationTests/Sharing/ShareTokenTests.cs"
+      ],
+      "failures": [],
+      "kind": "security",
+      "priority": "P0",
+      "path": "docs/sprints/sharing/SHR-03-share-token-authentication.md",
+      "tasks": [
+        "Generate 32 CSPRNG bytes and base64url encoding.",
+        "Persist hash + format version.",
+        "Reject malformed/oversized token before expensive lookup.",
+        "Verify hash with fixed-time compare.",
+        "Scope resolved ShareId before any document access."
+      ],
+      "depth": 6
+    },
+    {
+      "id": "SHR-04",
+      "title": "Snapshot Share",
+      "goal": "Publish a frozen read-only share package containing only explicit member artifacts as they existed at publication time.",
+      "deps": [
+        "SHR-03",
+        "WORD-04",
+        "MD-02"
+      ],
+      "specs": [
+        "10-sharing-security-ngrok.md"
+      ],
+      "tests": [
+        "Later local edit does not change Snapshot.",
+        "Nonmember ID returns not found/denied.",
+        "ShareHost does not invoke Word."
+      ],
+      "acceptance": [
+        "Original download absent unless permission later enables it."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Sharing/SnapshotSharePublisher.cs",
+        "src/DocumentIDE.ShareHost/Endpoints/SnapshotEndpoints.cs",
+        "tests/DocumentIDE.IntegrationTests/Sharing/SnapshotShareTests.cs"
+      ],
+      "failures": [],
+      "kind": "security",
+      "priority": "P0",
+      "path": "docs/sprints/sharing/SHR-04-snapshot-share.md",
+      "tasks": [
+        "Prepare DOCX preview artifacts owner-side.",
+        "Prepare sanitized Markdown rendered artifact.",
+        "Copy only allowed public metadata.",
+        "Freeze manifest/version.",
+        "Serve through ShareHost viewer."
+      ],
+      "depth": 11
+    },
+    {
+      "id": "SHR-05",
+      "title": "Membership-Safe Live Share",
+      "goal": "Refresh content only for existing share members while requiring explicit owner action for membership changes.",
+      "deps": [
+        "SHR-04",
+        "FS-03"
+      ],
+      "specs": [
+        "10-sharing-security-ngrok.md"
+      ],
+      "tests": [
+        "New file in shared folder is not public.",
+        "Collection membership change does not auto-publish.",
+        "Existing member update appears after refresh."
+      ],
+      "acceptance": [
+        "Live content \u2260 live membership."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Sharing/LiveSharePublisher.cs",
+        "tests/DocumentIDE.IntegrationTests/Sharing/LiveShareMembershipTests.cs"
+      ],
+      "failures": [],
+      "kind": "security",
+      "priority": "P0",
+      "path": "docs/sprints/sharing/SHR-05-membership-safe-live-share.md",
+      "tasks": [
+        "Subscribe owner process to changes for current ShareMember set.",
+        "Refresh artifacts after saved member file changes.",
+        "Do not react to new files as new public members.",
+        "Add explicit Add/Remove member owner operation.",
+        "Version manifest/artifacts atomically."
+      ],
+      "depth": 12
+    },
+    {
+      "id": "SHR-06",
+      "title": "Share-Scoped Search & Graph",
+      "goal": "Allow public viewer search/graph only over explicit share membership, never whole workspace then UI-filtered.",
+      "deps": [
+        "SHR-05",
+        "SRCH-02",
+        "GR-03"
+      ],
+      "specs": [
+        "10-sharing-security-ngrok.md"
+      ],
+      "tests": [
+        "Search cannot find nonmember content.",
+        "Graph omits edge to private node.",
+        "Payload contains no local path."
+      ],
+      "acceptance": [
+        "Scope enforcement is server-side."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.ShareHost/Search/ShareSearchService.cs",
+        "src/DocumentIDE.ShareHost/Graph/ShareGraphService.cs",
+        "tests/DocumentIDE.IntegrationTests/Sharing/ShareScopeTests.cs"
+      ],
+      "failures": [],
+      "kind": "security",
+      "priority": "P1",
+      "path": "docs/sprints/sharing/SHR-06-share-scoped-search-graph.md",
+      "tasks": [
+        "Build share-scoped search representation/index.",
+        "Enforce ShareMember constraint in backend query.",
+        "Filter graph to both endpoints being members.",
+        "Remove local path metadata.",
+        "Add viewer navigation."
+      ],
+      "depth": 13
+    },
+    {
+      "id": "SHR-07",
+      "title": "Share Download Permissions",
+      "goal": "Implement original/PDF download permissions defaulting OFF and enforced server-side.",
+      "deps": [
+        "SHR-04",
+        "PDF-01"
+      ],
+      "specs": [
+        "10-sharing-security-ngrok.md"
+      ],
+      "tests": [
+        "Original OFF cannot be downloaded.",
+        "PDF OFF cannot be downloaded.",
+        "Changing permission updates route behavior."
+      ],
+      "acceptance": [
+        "UI hiding is not the enforcement boundary."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.ShareHost/Endpoints/DownloadEndpoints.cs",
+        "src/DocumentIDE.Web/src/features/sharing/SharePermissions.tsx",
+        "tests/DocumentIDE.IntegrationTests/Sharing/DownloadPermissionTests.cs"
+      ],
+      "failures": [],
+      "kind": "security",
+      "priority": "P0",
+      "path": "docs/sprints/sharing/SHR-07-share-download-permissions.md",
+      "tasks": [
+        "Add permission fields to owner UI/domain.",
+        "Prepare original/PDF artifact only as policy requires.",
+        "Add permission-gated endpoints.",
+        "Omit buttons when disabled.",
+        "Prevent direct-ID bypass."
+      ],
+      "depth": 12
+    },
+    {
+      "id": "SHR-08",
+      "title": "Share CSP, Sanitization & Rate Limits",
+      "goal": "Harden the public viewer with strict CSP, HTML sanitization, and concrete endpoint/concurrency rate limits.",
+      "deps": [
+        "SHR-03",
+        "MD-02"
+      ],
+      "specs": [
+        "10-sharing-security-ngrok.md",
+        "11-testing-strategy.md"
+      ],
+      "tests": [
+        "Injected script is neutralized.",
+        "CSP lacks unsafe-eval/generic unsafe-inline script.",
+        "Rate-limit tests return 429."
+      ],
+      "acceptance": [
+        "Public request cannot trigger Word COM."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.ShareHost/Security/ViewerSecurityHeaders.cs",
+        "src/DocumentIDE.ShareHost/Security/ShareRateLimits.cs",
+        "tests/DocumentIDE.IntegrationTests/Sharing/ShareWebSecurityTests.cs"
+      ],
+      "failures": [],
+      "kind": "security",
+      "priority": "P0",
+      "path": "docs/sprints/sharing/SHR-08-share-csp-sanitization-rate-limits.md",
+      "tasks": [
+        "Apply CSP baseline from spec.",
+        "Set nosniff/referrer/frame/form policies.",
+        "Reuse maintained sanitizer for rendered Markdown.",
+        "Configure general 120/min/IP, search 30/min/IP, download 10/min/IP, concurrent download 2/IP defaults.",
+        "Return 429 with retry information.",
+        "Cap global expensive public work."
+      ],
+      "depth": 9
+    },
+    {
+      "id": "SHR-09",
+      "title": "ngrok Transport",
+      "goal": "Expose ShareHost through ngrok using an adapter owned by the desktop app and a user-configured protected credential.",
+      "deps": [
+        "SHR-02",
+        "FND-05"
+      ],
+      "specs": [
+        "10-sharing-security-ngrok.md"
+      ],
+      "tests": [
+        "Start returns public endpoint.",
+        "Stop invalidates active transport.",
+        "Credential never appears in logs."
+      ],
+      "acceptance": [
+        "Provider logic stays isolated."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/Sharing/IShareTransport.cs",
+        "src/DocumentIDE.Infrastructure/Sharing/NgrokTransport.cs",
+        "tests/DocumentIDE.IntegrationTests/Sharing/NgrokTransportTests.cs"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/sharing/SHR-09-ngrok-transport.md",
+      "tasks": [
+        "Define IShareTransport.",
+        "Implement NgrokTransport start/stop/status.",
+        "Use protected ngrok credential reference.",
+        "Build final public URL + secret path.",
+        "Handle tunnel failure/restart cleanly."
+      ],
+      "depth": 6
+    },
+    {
+      "id": "SHR-10",
+      "title": "ShareHost OS Isolation Spike",
+      "goal": "Evaluate practical Windows OS-level isolation so process separation is not falsely described as a sandbox.",
+      "deps": [
+        "SHR-02"
+      ],
+      "specs": [
+        "01-system-architecture.md",
+        "10-sharing-security-ngrok.md"
+      ],
+      "tests": [
+        "Experiment evidence is recorded.",
+        "Docs do not claim sandboxing unless test proves it.",
+        "Chosen restriction still permits required share artifact reads/network."
+      ],
+      "acceptance": [
+        "If strong isolation is not feasible V1, residual risk remains explicit."
+      ],
+      "artifacts": [
+        "docs/decisions/ADR-sharehost-isolation.md",
+        "tests/DocumentIDE.SecurityTests/ShareHostIsolationTests.cs"
+      ],
+      "failures": [],
+      "kind": "spike",
+      "priority": "P1",
+      "path": "docs/sprints/sharing/SHR-10-sharehost-os-isolation-spike.md",
+      "tasks": [
+        "Prototype restricted token/AppContainer or equivalent supported mechanism.",
+        "Prototype ACL-limited access to share artifact root.",
+        "Test what user filesystem paths remain readable after simulated compromise.",
+        "Document compatibility/cost trade-offs.",
+        "Record ADR choosing V1 isolation posture and exact residual risk."
+      ],
+      "depth": 6
+    },
+    {
+      "id": "SHR-11",
+      "title": "Owner Share Management UI",
+      "goal": "Give owner explicit create/copy/status/manage-members/permissions/revoke controls for Snapshot and Live shares.",
+      "deps": [
+        "SHR-05",
+        "SHR-07",
+        "SHR-09"
+      ],
+      "specs": [
+        "10-sharing-security-ngrok.md",
+        "03-workspace-canvas-spec.md"
+      ],
+      "tests": [
+        "User can see exact members.",
+        "Revoked link fails.",
+        "Adding member requires explicit action."
+      ],
+      "acceptance": [
+        "No hidden automatic publishing."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Web/src/features/sharing/ShareDialog.tsx",
+        "src/DocumentIDE.Web/src/features/sharing/ShareManager.tsx",
+        "tests/frontend/sharing/ShareManager.test.tsx"
+      ],
+      "failures": [],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/sharing/SHR-11-owner-share-management-ui.md",
+      "tasks": [
+        "Create share from selection/collection.",
+        "Choose Snapshot/Live and downloads.",
+        "Show active/stopped/tunnel-error state.",
+        "Manage explicit member list.",
+        "Copy link/revoke/regenerate share."
+      ],
+      "depth": 13
+    },
+    {
+      "id": "QA-01",
+      "title": "Golden DOCX Regression Corpus",
+      "goal": "Build the canonical fixture corpus and structural invariance tests for DOCX safety.",
+      "deps": [
+        "DOCX-03"
+      ],
+      "specs": [
+        "11-testing-strategy.md",
+        "06-docx-openxml-word-integration.md"
+      ],
+      "tests": [
+        "All fixtures open/parse as expected.",
+        "Strict replacement invariant suite passes.",
+        "Hostile fixtures fail safely."
+      ],
+      "acceptance": [
+        "Corpus is version controlled and deterministic."
+      ],
+      "artifacts": [
+        "tests/fixtures/docx/README.md",
+        "tests/DocumentIDE.GoldenTests/DocxGoldenTests.cs"
+      ],
+      "failures": [],
+      "kind": "quality",
+      "priority": "P0",
+      "path": "docs/sprints/quality/QA-01-golden-docx-regression-corpus.md",
+      "tasks": [
+        "Add simple/split-runs/mixed-format/tables/headers/footers/sections/images/fields/tracked-changes fixtures.",
+        "Add hostile/resource fixtures.",
+        "Create helper assertions for package validity and unrelated-property invariance.",
+        "Run no-op fingerprint tests.",
+        "Document fixture purpose."
+      ],
+      "depth": 11
+    },
+    {
+      "id": "QA-02",
+      "title": "Filesystem & Indexing Soak",
+      "goal": "Exercise watcher/reconciliation/indexing over long sessions with Word-like save bursts and filesystem churn.",
+      "deps": [
+        "FS-08",
+        "IDX-06"
+      ],
+      "specs": [
+        "11-testing-strategy.md"
+      ],
+      "tests": [
+        "No duplicate identity leak.",
+        "Index converges to filesystem state.",
+        "Memory/job queue remains bounded."
+      ],
+      "acceptance": [
+        "Failures produce reproducible logs."
+      ],
+      "artifacts": [
+        "tests/DocumentIDE.SoakTests/FilesystemIndexSoakTests.cs"
+      ],
+      "failures": [],
+      "kind": "quality",
+      "priority": "P1",
+      "path": "docs/sprints/quality/QA-02-filesystem-indexing-soak.md",
+      "tasks": [
+        "Create automated churn harness.",
+        "Simulate create/save/rename/move/delete cycles.",
+        "Include watcher overflow/reconciliation.",
+        "Measure duplicate jobs/DocumentIds and memory growth.",
+        "Run extended Windows soak."
+      ],
+      "depth": 11
+    },
+    {
+      "id": "QA-03",
+      "title": "Privileged Local API Security Audit",
+      "goal": "Prove localhost API cannot be driven by foreign browser origin, Host mismatch, or missing session authorization.",
+      "deps": [
+        "FND-02"
+      ],
+      "specs": [
+        "11-testing-strategy.md",
+        "01-system-architecture.md"
+      ],
+      "tests": [
+        "All hostile cases rejected before controller.",
+        "Valid WebView request succeeds.",
+        "No wildcard CORS."
+      ],
+      "acceptance": [
+        "Release gate blocks on failure."
+      ],
+      "artifacts": [
+        "tests/DocumentIDE.SecurityTests/LocalApiAttackSurfaceTests.cs"
+      ],
+      "failures": [],
+      "kind": "security",
+      "priority": "P0",
+      "path": "docs/sprints/quality/QA-03-privileged-local-api-security-audit.md",
+      "tasks": [
+        "Automate hostile Origin requests.",
+        "Automate Host/DNS-rebinding-style mismatch.",
+        "Test missing/wrong startup secret.",
+        "Test CORS policy and state-changing-method rules.",
+        "Run browser-based attack page fixture against live test host."
+      ],
+      "depth": 2
+    },
+    {
+      "id": "QA-04",
+      "title": "Batch Safety Regression Suite",
+      "goal": "Continuously prove stale/locked/failing/low-disk destructive operations cannot corrupt or silently alter user files.",
+      "deps": [
+        "BAT-10",
+        "HIST-02"
+      ],
+      "specs": [
+        "11-testing-strategy.md",
+        "07-batch-operation-engine.md"
+      ],
+      "tests": [
+        "Original survives every injected failure.",
+        "Stale plan rejected.",
+        "No-snapshot capacity blocks apply.",
+        "Undo conflict does not overwrite newer edit."
+      ],
+      "acceptance": [
+        "Runs in release gate."
+      ],
+      "artifacts": [
+        "tests/DocumentIDE.SafetyTests/BatchSafetyRegressionTests.cs"
+      ],
+      "failures": [],
+      "kind": "safety",
+      "priority": "P0",
+      "path": "docs/sprints/quality/QA-04-batch-safety-regression-suite.md",
+      "tasks": [
+        "Inject mutation validation failure.",
+        "Inject destination lock/write failure.",
+        "Change file after preview then apply.",
+        "Simulate insufficient recovery capacity.",
+        "Verify strict-operation non-target invariants."
+      ],
+      "depth": 18
+    },
+    {
+      "id": "QA-05",
+      "title": "Public Share Security Audit",
+      "goal": "Attack token scope, traversal, membership, XSS/CSP, rate limits, dependency boundary, and revoke behavior.",
+      "deps": [
+        "SHR-08",
+        "SHR-10"
+      ],
+      "specs": [
+        "11-testing-strategy.md",
+        "10-sharing-security-ngrok.md"
+      ],
+      "tests": [
+        "No private document becomes reachable.",
+        "Injected script does not execute.",
+        "Revoked share fails.",
+        "ShareHost lacks privileged services."
+      ],
+      "acceptance": [
+        "Residual same-user OS risk documented consistently."
+      ],
+      "artifacts": [
+        "tests/DocumentIDE.SecurityTests/PublicShareAttackSurfaceTests.cs"
+      ],
+      "failures": [],
+      "kind": "security",
+      "priority": "P0",
+      "path": "docs/sprints/quality/QA-05-public-share-security-audit.md",
+      "tasks": [
+        "Test token cross-share access.",
+        "Test traversal/absolute-path payloads.",
+        "Test Live membership leakage.",
+        "Test sanitizer/CSP script payloads.",
+        "Test download bypass/rate-limit bypass.",
+        "Check ShareHost architecture dependencies."
+      ],
+      "depth": 10
+    },
+    {
+      "id": "QA-06",
+      "title": "Performance Benchmark Gate",
+      "goal": "Record and gate practical performance for search/indexing/canvas/graph/PDF merge under target scale.",
+      "deps": [
+        "CAN-07",
+        "SRCH-05",
+        "GR-05",
+        "PDF-03"
+      ],
+      "specs": [
+        "11-testing-strategy.md"
+      ],
+      "tests": [
+        "No O(n\u00b2) full scan in measured placement path.",
+        "Interactive search remains responsive under write load.",
+        "PDF merge memory stays bounded."
+      ],
+      "acceptance": [
+        "Thresholds derive from measured baseline, not invented claims."
+      ],
+      "artifacts": [
+        "tests/DocumentIDE.PerformanceTests/PerformanceBenchmarks.cs",
+        "docs/quality/performance-baseline.md"
+      ],
+      "failures": [],
+      "kind": "performance",
+      "priority": "P1",
+      "path": "docs/sprints/quality/QA-06-performance-benchmark-gate.md",
+      "tasks": [
+        "Benchmark 100/500/1,000 canvas objects.",
+        "Benchmark warm FTS search during indexing writes.",
+        "Benchmark graph neighborhood vs full graph.",
+        "Benchmark streaming PDF merge peak memory.",
+        "Store baseline results and regression thresholds."
+      ],
+      "depth": 14
+    },
+    {
+      "id": "QA-07",
+      "title": "Crash & Interrupted-Operation Recovery",
+      "goal": "Verify app/process crashes at critical boundaries do not corrupt source files or leave unrecoverable internal state.",
+      "deps": [
+        "FND-04",
+        "HIST-02"
+      ],
+      "specs": [
+        "11-testing-strategy.md"
+      ],
+      "tests": [
+        "Source file remains valid at every injected crash point.",
+        "Startup repair marks/reconciles incomplete operation.",
+        "Temp artifacts are safely cleanable."
+      ],
+      "acceptance": [
+        "Never infer success from an interrupted operation without verification."
+      ],
+      "artifacts": [
+        "tests/DocumentIDE.SafetyTests/CrashRecoveryTests.cs"
+      ],
+      "failures": [],
+      "kind": "safety",
+      "priority": "P0",
+      "path": "docs/sprints/quality/QA-07-crash-interrupted-operation-recovery.md",
+      "tasks": [
+        "Crash during indexing.",
+        "Crash after snapshot before replace.",
+        "Crash during temp mutation.",
+        "Crash after atomic replace before history finalization.",
+        "Recover/clean orphan temp jobs on startup."
+      ],
+      "depth": 18
+    },
+    {
+      "id": "REL-01",
+      "title": "Windows Installer Packaging",
+      "goal": "Package the self-contained win-x64 desktop app and ShareHost into a normal Windows installer without bundling user documents.",
+      "deps": [
+        "FND-08",
+        "QA-03"
+      ],
+      "specs": [
+        "12-implementation-plan.md",
+        "01-system-architecture.md"
+      ],
+      "tests": [
+        "Clean test VM installs/runs.",
+        "Uninstall preserves `%USERPROFILE%` source documents.",
+        "App starts without dev server/.NET install."
+      ],
+      "acceptance": [
+        "Word remains external prerequisite for Word-dependent features."
+      ],
+      "artifacts": [
+        "installer/DocumentIDE.wxs",
+        "scripts/build-release.ps1",
+        "tests/DocumentIDE.InstallTests/InstallerSmoke.md"
+      ],
+      "failures": [],
+      "kind": "release",
+      "priority": "P0",
+      "path": "docs/sprints/release/REL-01-windows-installer-packaging.md",
+      "tasks": [
+        "Publish self-contained win-x64.",
+        "Package WPF/WebView assets/ShareHost/runtime dependencies.",
+        "Use WiX or chosen full-trust installer.",
+        "Check/install WebView2 Evergreen prerequisite.",
+        "Create Start Menu/uninstall entries.",
+        "Verify uninstall never removes source documents."
+      ],
+      "depth": 5
+    },
+    {
+      "id": "REL-02",
+      "title": "Release Verification Pipeline",
+      "goal": "Create a release gate that runs all safety/security/golden/performance checks before producing final artifacts.",
+      "deps": [
+        "REL-01",
+        "QA-01",
+        "QA-02",
+        "QA-04",
+        "QA-05",
+        "QA-06",
+        "QA-07"
+      ],
+      "specs": [
+        "11-testing-strategy.md",
+        "12-implementation-plan.md"
+      ],
+      "tests": [
+        "Any release-gate failure blocks packaging/release.",
+        "Artifact checksum generated.",
+        "Verification report names exact commit."
+      ],
+      "acceptance": [
+        "No 'green by skipping tests' policy."
+      ],
+      "artifacts": [
+        "scripts/verify-release.ps1",
+        ".github/workflows/release.yml",
+        "docs/quality/release-checklist.md"
+      ],
+      "failures": [],
+      "kind": "release",
+      "priority": "P0",
+      "path": "docs/sprints/release/REL-02-release-verification-pipeline.md",
+      "tasks": [
+        "Create release verification orchestration.",
+        "Run backend/frontend unit/integration tests.",
+        "Run Windows Word/COM suite on capable runner.",
+        "Run security/safety/golden gates.",
+        "Attach test summary and checksums to artifacts."
+      ],
+      "depth": 19
+    },
+    {
+      "id": "REL-03",
+      "title": "V1 Readiness Gate",
+      "goal": "Perform final product/spec coverage review and block V1 if any locked behavior remains unimplemented or unverified.",
+      "deps": [
+        "REL-02",
+        "SHR-11",
+        "CTX-04",
+        "AI-04",
+        "PDF-04"
+      ],
+      "specs": [
+        "00-master-product-technical-spec.md",
+        "11-testing-strategy.md",
+        "12-implementation-plan.md"
+      ],
+      "tests": [
+        "Every locked requirement maps to implementation evidence.",
+        "No skipped safety/security gate.",
+        "Residual risks are explicit."
+      ],
+      "acceptance": [
+        "V1 is evidence-based, not feature-count based."
+      ],
+      "artifacts": [
+        "docs/quality/v1-readiness-report.md"
+      ],
+      "failures": [],
+      "kind": "release",
+      "priority": "P0",
+      "path": "docs/sprints/release/REL-03-v1-readiness-gate.md",
+      "tasks": [
+        "Map every master-spec locked requirement to sprint/test evidence.",
+        "Run placeholder/skipped-test/spec-drift scans.",
+        "Review accepted residual risks/ADRs.",
+        "Verify core app works offline.",
+        "Generate V1 readiness report."
+      ],
+      "depth": 20
+    }
+  ]
+}

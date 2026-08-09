@@ -1,0 +1,697 @@
+[
+  {
+    "path": "AGENTS.md",
+    "bytes": 2258,
+    "sha256": "7903bc8fc286796b161cecd4fcf00843c955ec91482def20b2e2d69795d87d1b"
+  },
+  {
+    "path": "README.md",
+    "bytes": 1884,
+    "sha256": "27bd8576d4268c4ee56a0e3c548a727975cde5e78d5b3a6064fd778bab7c7af0"
+  },
+  {
+    "path": "docs/agent/00-agent-development-charter.md",
+    "bytes": 1284,
+    "sha256": "458b27d49decef7085b81a51dacb92b5a82bedaca3691b1b444faf1d48eef935"
+  },
+  {
+    "path": "docs/agent/01-spec-precedence-and-change-control.md",
+    "bytes": 780,
+    "sha256": "203e45976e89f4d2a92b930cf582a769e48bc31562d701004a7bf347cb248514"
+  },
+  {
+    "path": "docs/agent/02-agent-execution-protocol.md",
+    "bytes": 1072,
+    "sha256": "ac76ebd33cbbd7000a4b82d493eb5ac447940ec79d66d83e928a8c9c6fbd68d5"
+  },
+  {
+    "path": "docs/agent/03-repository-architecture-contract.md",
+    "bytes": 971,
+    "sha256": "7b356932a851cf92913681c55d1e3976b1cd441a0fe1256cbc6c1432ea9348b5"
+  },
+  {
+    "path": "docs/agent/04-git-branch-commit-policy.md",
+    "bytes": 715,
+    "sha256": "fc314108fc4403ce412a1b3c2498539907d01e8698b03d2d57b58b33fcd62ca7"
+  },
+  {
+    "path": "docs/agent/05-tdd-and-testing-policy.md",
+    "bytes": 678,
+    "sha256": "d8acd545018a8522a0c47be6e2ff08e900e3c24bf3e214e0ab9ba5872baeef31"
+  },
+  {
+    "path": "docs/agent/06-security-and-file-safety-gates.md",
+    "bytes": 707,
+    "sha256": "0764f0ae85fa004e3820021e2ade2acfb86c34f117a99d54aae3e245d66dd0ec"
+  },
+  {
+    "path": "docs/agent/07-definition-of-done.md",
+    "bytes": 734,
+    "sha256": "59f6e55c07d7f9abaeeb96d944fb901b88e2f364be3dfbf986c2e5941ac5f8dd"
+  },
+  {
+    "path": "docs/agent/08-code-review-checklist.md",
+    "bytes": 852,
+    "sha256": "846740771cf912eea7fa4b0d7099396ff1fad3f692635029d4c0731c311dd00d"
+  },
+  {
+    "path": "docs/agent/09-architecture-decision-policy.md",
+    "bytes": 452,
+    "sha256": "d7d43fe045c4b36967490dab6a2bac93e346e24f0e25eacae76287cb5821ad55"
+  },
+  {
+    "path": "docs/agent/10-sprint-handoff-protocol.md",
+    "bytes": 321,
+    "sha256": "02e9c7e6efe0561f12785f4dd065b0e46eae8a45e77bc82d71200cd85679a818"
+  },
+  {
+    "path": "docs/agent/11-agent-prompt-cookbook.md",
+    "bytes": 1065,
+    "sha256": "39559fbd2313ac0039fd51d899530ea40eb3efd0e6b6a52f86e3be6a2771fc08"
+  },
+  {
+    "path": "docs/agent/12-debugging-and-bugfix-protocol.md",
+    "bytes": 465,
+    "sha256": "ea970f8a1bd5a4b1f77008cca59185e4a1e75a42c449c5352636523f6a8b6216"
+  },
+  {
+    "path": "docs/agent/13-performance-discipline.md",
+    "bytes": 497,
+    "sha256": "54f1369a6fc26d34230e0134dc2c561910914b126e166204458e2bdeb9536a54"
+  },
+  {
+    "path": "docs/decisions/README.md",
+    "bytes": 228,
+    "sha256": "da864032eb056c94a6e6218ac495afb3d58d04401d35cacc0292320c76908f63"
+  },
+  {
+    "path": "docs/quality/README.md",
+    "bytes": 239,
+    "sha256": "9c170bc77c990968dabdc55b9dfbb34d4c132c632acfcf130c7c255da79135c6"
+  },
+  {
+    "path": "docs/specs/00-master-product-technical-spec.md",
+    "bytes": 69518,
+    "sha256": "fddf887e039686a668d34a6f869c7bf056cad61ef76bcde952d7c53a32ec070d"
+  },
+  {
+    "path": "docs/specs/01-system-architecture.md",
+    "bytes": 13222,
+    "sha256": "0bf30068869f9f1805e8c203bbef974dee11018d408e1ec2d9a09399888a4d52"
+  },
+  {
+    "path": "docs/specs/02-domain-data-model.md",
+    "bytes": 10381,
+    "sha256": "2c6c75be656cb9e456958499694950dc20fa62a60b8fd71d8873c77260c481a8"
+  },
+  {
+    "path": "docs/specs/03-workspace-canvas-spec.md",
+    "bytes": 9995,
+    "sha256": "a0f3bb6765142beaa233a59d85c948d8bd07220db6d5830bdb9ff9ffed2db5ed"
+  },
+  {
+    "path": "docs/specs/04-filesystem-sync-spec.md",
+    "bytes": 8715,
+    "sha256": "56f9a92929390ec56a68aee318c3efcb82f1345500dee0ae56be3db78bc47dfa"
+  },
+  {
+    "path": "docs/specs/05-search-indexing-spec.md",
+    "bytes": 6477,
+    "sha256": "47d3519acc16781f945d7e539b940536837928d93ef3c06191902489df7863b8"
+  },
+  {
+    "path": "docs/specs/06-docx-openxml-word-integration.md",
+    "bytes": 8185,
+    "sha256": "8984906ac05bed3d6f09288ba05eed8185a4bd2640a4b34af1f55140d02215c6"
+  },
+  {
+    "path": "docs/specs/07-batch-operation-engine.md",
+    "bytes": 7339,
+    "sha256": "c2e05ee672e4e03bbb6a7004a883794f021662dba7fe701bea281afce50991ae"
+  },
+  {
+    "path": "docs/specs/08-markdown-graph-spec.md",
+    "bytes": 6212,
+    "sha256": "6b9370d4cf57f9a14cc422233b41be3cca1adb2921877c6972457f6d40ec4af0"
+  },
+  {
+    "path": "docs/specs/09-pdf-finalization.md",
+    "bytes": 3989,
+    "sha256": "3ee5869daec4e02881f964c17bd54e956c47c2c96ffc1bef87d7f9e6974e4af2"
+  },
+  {
+    "path": "docs/specs/10-sharing-security-ngrok.md",
+    "bytes": 8339,
+    "sha256": "842581117fc3c30d1c43494e03c2b2c1329022dfaaad1e16647ff5debf00b798"
+  },
+  {
+    "path": "docs/specs/11-testing-strategy.md",
+    "bytes": 9266,
+    "sha256": "48704d73f2731d05f978acf7b60c55fa1b0e13382b1d8e6ead089a0134d26d81"
+  },
+  {
+    "path": "docs/specs/12-implementation-plan.md",
+    "bytes": 21196,
+    "sha256": "570c3ef4473b1c536b606ae65307a19a25fe652e282541896b909d71ef85311a"
+  },
+  {
+    "path": "docs/specs/README.md",
+    "bytes": 1992,
+    "sha256": "bfd42de7991edd785dfa73cd5eb1a103013e0fcf6e1b1b2d09fd42c0edddc9d1"
+  },
+  {
+    "path": "docs/sprints/00-sprint-index.md",
+    "bytes": 9028,
+    "sha256": "56120ecbc47fb1781e5c3762e18d1757bf2bb4e6008f93d5f18ebce70df6d305"
+  },
+  {
+    "path": "docs/sprints/01-dependency-graph.md",
+    "bytes": 8907,
+    "sha256": "22ebd2a239e43d043bd84af824d0f121b931fd2db2bcd4295057b84d2209f024"
+  },
+  {
+    "path": "docs/sprints/02-execution-waves.md",
+    "bytes": 4886,
+    "sha256": "45c71e8c8d97cc68ad61de5dde81e2bb49dc929e9470b466869e8b3a0f74aed5"
+  },
+  {
+    "path": "docs/sprints/SPRINT-STATUS.md",
+    "bytes": 7501,
+    "sha256": "5c3bed2705e3cf2b3093ba662a4f359c8ec16354810e6a5eb972f8599b9997c8"
+  },
+  {
+    "path": "docs/sprints/batch/BAT-01-batch-operation-plan-domain.md",
+    "bytes": 4556,
+    "sha256": "3a17d91b4120c2de4b6678a60897c0cf754c072d2af9c15b07cc7f2715c9255c"
+  },
+  {
+    "path": "docs/sprints/batch/BAT-02-batch-scope-resolver.md",
+    "bytes": 4500,
+    "sha256": "5fe25df198b2cbe035d9c0e5095a3190ca7064472f925c7375b71c7e62c53296"
+  },
+  {
+    "path": "docs/sprints/batch/BAT-03-batch-preview-api-review-shell.md",
+    "bytes": 4511,
+    "sha256": "2f3e9d6d3c37a8a90e570846a16a4d470f7e0e067718fa4dd7a6153312c9e9d1"
+  },
+  {
+    "path": "docs/sprints/batch/BAT-04-transactional-safe-apply-engine.md",
+    "bytes": 4821,
+    "sha256": "9966225a9c19c1d1fcdfc8a003a1fadefab235711199778b7ba32a785f859723"
+  },
+  {
+    "path": "docs/sprints/batch/BAT-05-exact-search-replace-operation.md",
+    "bytes": 4491,
+    "sha256": "84c01671c7a9e3a51127cdd559b1a40941409b72c026097a1f7d07cb52015cc2"
+  },
+  {
+    "path": "docs/sprints/batch/BAT-06-occurrence-review-ux.md",
+    "bytes": 4249,
+    "sha256": "ad5bb5d34349660dfb0d9ca8b0add63243af9acf9d7120b1d3f51721075c57a1"
+  },
+  {
+    "path": "docs/sprints/batch/BAT-07-regex-advanced-replace.md",
+    "bytes": 4268,
+    "sha256": "2887baf2d34f2018e674af593ea66401411000ff2d35ebe2d415a7265b7e35cb"
+  },
+  {
+    "path": "docs/sprints/batch/BAT-08-strict-font-font-size-operations.md",
+    "bytes": 4633,
+    "sha256": "0857bd89c2828dc12227017d6a4ce01e530823237aa76f00608f63c9a5acca2c"
+  },
+  {
+    "path": "docs/sprints/batch/BAT-09-strict-page-layout-operations.md",
+    "bytes": 4518,
+    "sha256": "d543cf1418c0f3d9f2c8bd3d69a7b339e5377ffb8c90b6d96f416361c4d79048"
+  },
+  {
+    "path": "docs/sprints/batch/BAT-10-strict-batch-rename.md",
+    "bytes": 4457,
+    "sha256": "5bff45709ad29266e9755f4c57b63df5677b047d514a0c091a689680e82f9725"
+  },
+  {
+    "path": "docs/sprints/batch/BAT-11-batch-results-history-ui.md",
+    "bytes": 4358,
+    "sha256": "9ef3f94b57c60c7d90d1a5d33c6344c393a6a8d959ca76248ad1e650703f2912"
+  },
+  {
+    "path": "docs/sprints/canvas/CAN-01-canvas-foundation.md",
+    "bytes": 4437,
+    "sha256": "25593ec2bf2b66293c65a8a2ae0afcd17282666f822d5c63fc099c2e35fa280d"
+  },
+  {
+    "path": "docs/sprints/canvas/CAN-02-folder-canvas-object.md",
+    "bytes": 4288,
+    "sha256": "e0167690e23263ec1dc55c5d8b6b420ed19e1fb34e6c5882bae9249c019f8b5d"
+  },
+  {
+    "path": "docs/sprints/canvas/CAN-03-document-paper-object-thumbnail-shell.md",
+    "bytes": 4543,
+    "sha256": "c8cf33db2df0effc37a77fe0dbdde48991937fc469d7183d862e73423ceae691"
+  },
+  {
+    "path": "docs/sprints/canvas/CAN-04-folder-picker-file-release.md",
+    "bytes": 4503,
+    "sha256": "33c547ba27b82d83ba331cbb0481ec5788845b7e4e3f586e8d368d7218ffa58e"
+  },
+  {
+    "path": "docs/sprints/canvas/CAN-05-spatially-indexed-assisted-placement.md",
+    "bytes": 4633,
+    "sha256": "c3a680b7e48899ec85938bceca53ab3c8ef16d2a39a870ebc228e1831dfc04d0"
+  },
+  {
+    "path": "docs/sprints/canvas/CAN-06-position-persistence-pinning.md",
+    "bytes": 4583,
+    "sha256": "b86d2b0b6fca04aedef6e43fa77de9d8adfa0d79721114f29068cba5cfb71b8c"
+  },
+  {
+    "path": "docs/sprints/canvas/CAN-07-multi-select-group-drag-tidy.md",
+    "bytes": 4500,
+    "sha256": "f32814281959b543cd955d61d0dfae3e602b438063cb3545964ed5200232fd26"
+  },
+  {
+    "path": "docs/sprints/canvas/CAN-08-list-view-view-switch.md",
+    "bytes": 4518,
+    "sha256": "e3a5f1546543f8055c01ae62cbf00ef40ebaf11f3bb4305dd5cb4bc1f1ef04ee"
+  },
+  {
+    "path": "docs/sprints/context-packs/CTX-01-context-pack-core.md",
+    "bytes": 4389,
+    "sha256": "7a5a8d22f8cb607b8cd9906e24be9f1c1d3c0d7a5ca6f8c96e0bde792d0f0d37"
+  },
+  {
+    "path": "docs/sprints/context-packs/CTX-02-explicit-dependency-expansion.md",
+    "bytes": 4397,
+    "sha256": "94657531ce94470be4d4f2f4a6c382a0e09f61498d15445ae799d30e57761876"
+  },
+  {
+    "path": "docs/sprints/context-packs/CTX-03-docx-context-representation.md",
+    "bytes": 4414,
+    "sha256": "fe7f9f9caabf9ace9e9320b27230027ab5245ea6440b28871223d28cdefdb8f1"
+  },
+  {
+    "path": "docs/sprints/context-packs/CTX-04-token-estimate-context-export.md",
+    "bytes": 4447,
+    "sha256": "f5c66c8017a9419dfc3081795c59c17f9daaf142694bcdc467466c82acec7ed7"
+  },
+  {
+    "path": "docs/sprints/docx/DOCX-01-logical-docx-text-run-map.md",
+    "bytes": 4372,
+    "sha256": "f68e9201a3a65b9b930620ac17bbd5b699bf6af5f77680446932c6c0e6e6c792"
+  },
+  {
+    "path": "docs/sprints/docx/DOCX-02-logical-search-across-runs.md",
+    "bytes": 4379,
+    "sha256": "05ac58859d3cd88009e3742939e5fb7a16186a713389023696f75c28063739aa"
+  },
+  {
+    "path": "docs/sprints/docx/DOCX-03-strict-docx-text-mutation.md",
+    "bytes": 4499,
+    "sha256": "80b4beca3a06ad7c2c1594ab9054af026b3ea8264e6102f411c0c3a7b609ec05"
+  },
+  {
+    "path": "docs/sprints/docx/DOCX-04-document-lens-metadata.md",
+    "bytes": 4418,
+    "sha256": "d9fac83c357bd4140146b544584ebd2b36e9c8cebef45f38494f88d33061e8b4"
+  },
+  {
+    "path": "docs/sprints/filesystem/FS-01-folder-source-attachment.md",
+    "bytes": 4637,
+    "sha256": "5b49cdf46bda28431479141f1656ca3f1c938ab68cd223fdf38061f3e488e2eb"
+  },
+  {
+    "path": "docs/sprints/filesystem/FS-02-stable-document-identity.md",
+    "bytes": 4657,
+    "sha256": "2c0b442e1bee928f0106b930483221b952f693518e7ec59ce38531a4f8f90434"
+  },
+  {
+    "path": "docs/sprints/filesystem/FS-03-runtime-file-watcher.md",
+    "bytes": 4657,
+    "sha256": "873059b6421bd182087bde7342bbfcae081f89d3a8b493ec446924f16cf4498b"
+  },
+  {
+    "path": "docs/sprints/filesystem/FS-04-hybrid-startup-reconciliation.md",
+    "bytes": 4689,
+    "sha256": "230d02f70abf5dd4e16bdf2a8b1dce5090f20b2c7f9310f94858583eeee93ccb"
+  },
+  {
+    "path": "docs/sprints/filesystem/FS-05-rename-move-correlation.md",
+    "bytes": 4656,
+    "sha256": "356d9aa7024fa79d9d8fb5098a693a1432b3f6ec2f0ac3d7abf9fab754949f4a"
+  },
+  {
+    "path": "docs/sprints/filesystem/FS-06-missing-file-folder-recovery.md",
+    "bytes": 4602,
+    "sha256": "a3759d04cd73dba1f2d3838811cab2547b150b11e32620303b0f41fda70f6fa3"
+  },
+  {
+    "path": "docs/sprints/filesystem/FS-07-explicit-physical-file-operations.md",
+    "bytes": 4771,
+    "sha256": "21aa14d8fcdaeba5fc0c1c41b153638a74aaa4c7b74350f2cee2719c2753cb0b"
+  },
+  {
+    "path": "docs/sprints/filesystem/FS-08-reparse-point-source-containment.md",
+    "bytes": 4701,
+    "sha256": "04b406cc134b6afcba4eb8c839673dfb12b524711e287459300e3673bf7e486c"
+  },
+  {
+    "path": "docs/sprints/foundation/FND-01-repository-bootstrap.md",
+    "bytes": 4657,
+    "sha256": "8d317048b65c2b9fe71640272f5d810103fe8136b8a73268636596840412ceb5"
+  },
+  {
+    "path": "docs/sprints/foundation/FND-02-privileged-local-api-security.md",
+    "bytes": 5008,
+    "sha256": "989c93f2fc09034105cf62feec33f7bdd9929a0daf1c09de23902adbba48733f"
+  },
+  {
+    "path": "docs/sprints/foundation/FND-03-sqlite-persistence-foundation.md",
+    "bytes": 4759,
+    "sha256": "e2b5d9e8469ca6fe37855b18d5905714ed4380507f15328a9fede6257a80c44b"
+  },
+  {
+    "path": "docs/sprints/foundation/FND-04-background-job-runtime.md",
+    "bytes": 4672,
+    "sha256": "d2e02c324bffb3a5e50a107fb9e96309d6bc492ea737d6a9ede5ebe37ea1f252"
+  },
+  {
+    "path": "docs/sprints/foundation/FND-05-settings-secret-storage.md",
+    "bytes": 4700,
+    "sha256": "6d2058bdbb5b628136f8931b7e6f8166e9f1b7fb3f9387f7d232fae227d7db3f"
+  },
+  {
+    "path": "docs/sprints/foundation/FND-06-structured-logging-diagnostics.md",
+    "bytes": 4732,
+    "sha256": "1f5f81d60c78df5bfc60d7419e7d6abb4dccc60195d33c145e65d5335dca7035"
+  },
+  {
+    "path": "docs/sprints/foundation/FND-07-desktop-webview-production-host.md",
+    "bytes": 4847,
+    "sha256": "12f8ca7e1e6e3593cd91b34990ce7c69fee28e0d9498dca654db7b2f28ed2e6d"
+  },
+  {
+    "path": "docs/sprints/foundation/FND-08-build-verify-artifact-scripts.md",
+    "bytes": 4650,
+    "sha256": "d3b9e60e68504cbd857b86933106b413e0532a62611d1a7f94d3847c55ef245f"
+  },
+  {
+    "path": "docs/sprints/graph/GR-01-relation-store-extraction.md",
+    "bytes": 4460,
+    "sha256": "390b965ca885a2d19a8e793e35331c88d9b4265114c1072ccb402756bc48ed73"
+  },
+  {
+    "path": "docs/sprints/graph/GR-02-backlinks-reference-inspector.md",
+    "bytes": 4492,
+    "sha256": "e5f455e8df926a03644c968a006e8e633497ac9c2e6f846e851b07761803a0a5"
+  },
+  {
+    "path": "docs/sprints/graph/GR-03-graph-view.md",
+    "bytes": 4437,
+    "sha256": "dcbd799e83d6aeebf778f008e59b2d2dfe2b1f09261713c3b9be0c084592adb3"
+  },
+  {
+    "path": "docs/sprints/graph/GR-04-manual-relations.md",
+    "bytes": 4353,
+    "sha256": "472de84b131b5b0405a679c401c30ad4b01697a0b991c7deedc2b87db57d9c13"
+  },
+  {
+    "path": "docs/sprints/graph/GR-05-bounded-graph-rendering.md",
+    "bytes": 4424,
+    "sha256": "0d4c99e11968e3207082869e556c42fe080b771a9569acf34c94faaf79ef18e9"
+  },
+  {
+    "path": "docs/sprints/history/HIST-01-recovery-snapshot-storage.md",
+    "bytes": 4633,
+    "sha256": "8b86644fce1a9e25aeee9a257ebe08ff1ce3daaaaf15a452e80c37c275e73dad"
+  },
+  {
+    "path": "docs/sprints/history/HIST-02-conflict-aware-undo.md",
+    "bytes": 4556,
+    "sha256": "4737f16ffc9c5721a1efd55fb84f81144b52e206bcaa0e7d818637cb5b4bed84"
+  },
+  {
+    "path": "docs/sprints/indexing/IDX-01-docx-package-resource-preflight.md",
+    "bytes": 4578,
+    "sha256": "8b0cd915e730eea02b3fd4764fe815bee233d11ded9f065b05baf2b7bb2aa01d"
+  },
+  {
+    "path": "docs/sprints/indexing/IDX-02-docx-structural-parser.md",
+    "bytes": 4479,
+    "sha256": "853315e13a67b13d71ea06513c4c59dbb41bd962340e004ed77d6fda0df7f87e"
+  },
+  {
+    "path": "docs/sprints/indexing/IDX-03-markdown-structural-parser.md",
+    "bytes": 4483,
+    "sha256": "033b9b0ec0e38a2b1ef13af65d556bdf8ba97c9bac897ae3bdc451974a30ab2d"
+  },
+  {
+    "path": "docs/sprints/indexing/IDX-04-metadata-persistence.md",
+    "bytes": 4618,
+    "sha256": "69675a1aa2ce898044367449f5d891ce39522354c1d0c093cb7abb38d584d406"
+  },
+  {
+    "path": "docs/sprints/indexing/IDX-05-fts5-search-index.md",
+    "bytes": 4423,
+    "sha256": "dacd49401165771a3ae61c7109ce8d279ef055124b98e985054287c62a233c96"
+  },
+  {
+    "path": "docs/sprints/indexing/IDX-06-incremental-index-scheduler.md",
+    "bytes": 4551,
+    "sha256": "9a3a483c9bb66e5deaeeda15edfcf88cef865c0ada607306ad2a0fe216b89de5"
+  },
+  {
+    "path": "docs/sprints/markdown/MD-01-source-first-markdown-editor.md",
+    "bytes": 4462,
+    "sha256": "24a11163969256af082ec75d87ae026f5dab3f3c871130593f3a9bf8f50a4f73"
+  },
+  {
+    "path": "docs/sprints/markdown/MD-02-markdown-preview-sanitization.md",
+    "bytes": 4490,
+    "sha256": "844426968b61e8ae17a88a64d434daa6f6975d5081b8effe9442e0e0c32448c4"
+  },
+  {
+    "path": "docs/sprints/markdown/MD-03-frontmatter-explicit-link-index.md",
+    "bytes": 4484,
+    "sha256": "8b962264c2fc1b90cb373c3deb1f81360df132c5edf6509ccf358f87313bd24d"
+  },
+  {
+    "path": "docs/sprints/markdown/MD-04-wikilink-resolution-backlink-inputs.md",
+    "bytes": 4356,
+    "sha256": "d60b96db251e6a84f32102ba90493603486cf31994a2faf764f581c015594ffb"
+  },
+  {
+    "path": "docs/sprints/pdf/PDF-01-single-docx-pdf-export.md",
+    "bytes": 4197,
+    "sha256": "b5a09295797412d37800a072034a10c552a94d6d33b53e61e444b557dacb9fd3"
+  },
+  {
+    "path": "docs/sprints/pdf/PDF-02-batch-separate-pdf-export.md",
+    "bytes": 4433,
+    "sha256": "d009dd92116625c3e2e10f799fdb02b5cf16ed127a52c4d685a40e8c1b0e7e89"
+  },
+  {
+    "path": "docs/sprints/pdf/PDF-03-streaming-ordered-pdf-merge.md",
+    "bytes": 4440,
+    "sha256": "c49b905cef44f6683fb0d3fc5ebfff1d5dfff629ee03ec84e1fff7b22ffabce6"
+  },
+  {
+    "path": "docs/sprints/pdf/PDF-04-pdf-finalization-ux.md",
+    "bytes": 4326,
+    "sha256": "a5538e7271785884c2ce4912b7b99fc96b51541658de5e4429f669d76b04a187"
+  },
+  {
+    "path": "docs/sprints/quality/QA-01-golden-docx-regression-corpus.md",
+    "bytes": 4406,
+    "sha256": "866432654a4040fa6dc4d9ac34f3ef6f077a881848f30d356e10a34ec280781a"
+  },
+  {
+    "path": "docs/sprints/quality/QA-02-filesystem-indexing-soak.md",
+    "bytes": 4332,
+    "sha256": "2d1ea8816fe172e4a4b0e8e9d2cd40dd4e1d32ac562407fbf01b1b212db1715e"
+  },
+  {
+    "path": "docs/sprints/quality/QA-03-privileged-local-api-security-audit.md",
+    "bytes": 4379,
+    "sha256": "ffb42c8fb82dc9496bbc43df9137c9716df3699f7b8b761c6054ce9b4c28f543"
+  },
+  {
+    "path": "docs/sprints/quality/QA-04-batch-safety-regression-suite.md",
+    "bytes": 4409,
+    "sha256": "f424c51b8fe971ff6365d406f0cee6bded2059d2c7e50936b92bb1e0f5916a08"
+  },
+  {
+    "path": "docs/sprints/quality/QA-05-public-share-security-audit.md",
+    "bytes": 4509,
+    "sha256": "206a5129cbc8f8bd6d6eccc83dd30722f98a95a5f93e5b70051b2b1de4aabe3f"
+  },
+  {
+    "path": "docs/sprints/quality/QA-06-performance-benchmark-gate.md",
+    "bytes": 4650,
+    "sha256": "ca004778d6bcbd73006ed06f92745b95a679ad865bed3e04fbe9326b8d269d09"
+  },
+  {
+    "path": "docs/sprints/quality/QA-07-crash-interrupted-operation-recovery.md",
+    "bytes": 4456,
+    "sha256": "5d5fb574c7ea10388146ba0f1c696d2ad80eecf1c7b9110eda093fc9338706cd"
+  },
+  {
+    "path": "docs/sprints/release/REL-01-windows-installer-packaging.md",
+    "bytes": 4591,
+    "sha256": "ef7589eb2e8b2d30e14b48f223540e0f04c8e9f65611f3ff52af271b1b147004"
+  },
+  {
+    "path": "docs/sprints/release/REL-02-release-verification-pipeline.md",
+    "bytes": 4916,
+    "sha256": "d929864698e6a2245543fa11857838eec55dde955990520dc20df748a558705d"
+  },
+  {
+    "path": "docs/sprints/release/REL-03-v1-readiness-gate.md",
+    "bytes": 4611,
+    "sha256": "16f707c69a63029fe570fb000ad10355c1d58a5172504243de358ac06bf45372"
+  },
+  {
+    "path": "docs/sprints/search/SRCH-01-structured-query-parser.md",
+    "bytes": 4334,
+    "sha256": "e735c56c5707367b4aa3410b372c141c836a1ff9e52a8da1f7ace8b805993f74"
+  },
+  {
+    "path": "docs/sprints/search/SRCH-02-exact-ranked-search.md",
+    "bytes": 4322,
+    "sha256": "cf53dad134fde5cfbb0f7b87321b1c451b58b24f61f35d9e2b2015e1ee3d3506"
+  },
+  {
+    "path": "docs/sprints/search/SRCH-03-metadata-filters.md",
+    "bytes": 4302,
+    "sha256": "f995b6208556412284a8669368008cd165cf9183452d2b92cb3fe366e99e8bc5"
+  },
+  {
+    "path": "docs/sprints/search/SRCH-04-fuzzy-exploratory-search.md",
+    "bytes": 4358,
+    "sha256": "142d14ec200a03b5bd2fe73c3572301aa660197888cbdc86cbdc9e1940f25706"
+  },
+  {
+    "path": "docs/sprints/search/SRCH-05-realtime-search-ui-selection.md",
+    "bytes": 4652,
+    "sha256": "66207278d9e939ee24edaea9e8a4f8ad5f56554aa6334e429ef09d6e2df9b915"
+  },
+  {
+    "path": "docs/sprints/semantic/AI-01-embedding-provider-abstraction.md",
+    "bytes": 4564,
+    "sha256": "7c126cc94cbd6f8dc962c4cf16c3236dbc9abba1c58623e680ff34a6d5506080"
+  },
+  {
+    "path": "docs/sprints/semantic/AI-02-local-embedding-provider.md",
+    "bytes": 4326,
+    "sha256": "9b847154eef4c9993b81f248ea1b2a3ce03dcb64145be1c45e3801bf5e257b6f"
+  },
+  {
+    "path": "docs/sprints/semantic/AI-03-semantic-search-mode.md",
+    "bytes": 4477,
+    "sha256": "a2cb19ac9e97946aec621dc93b9a006f4ad6db536b559112f4ae0878d007a7b2"
+  },
+  {
+    "path": "docs/sprints/semantic/AI-04-semantic-graph-suggestions.md",
+    "bytes": 4369,
+    "sha256": "0bc9305bd63e1e226f428d06008a2e19fcf35ce907384767ee30409d922b09cc"
+  },
+  {
+    "path": "docs/sprints/sharing/SHR-01-share-domain-sanitized-manifest.md",
+    "bytes": 4597,
+    "sha256": "55a27046f74a58ef98988da2d6da8f14faf9516ed9b8021f3f37f4b7ac546c8a"
+  },
+  {
+    "path": "docs/sprints/sharing/SHR-02-separate-sharehost-process.md",
+    "bytes": 4642,
+    "sha256": "fef301ef76e842f92a62125c79d1c47c18ec509f3fcd23cd1795f405965c6eff"
+  },
+  {
+    "path": "docs/sprints/sharing/SHR-03-share-token-authentication.md",
+    "bytes": 4476,
+    "sha256": "7d1aff975db421f294a21acde3908b5e0daab937d654919e9518826f02145011"
+  },
+  {
+    "path": "docs/sprints/sharing/SHR-04-snapshot-share.md",
+    "bytes": 4517,
+    "sha256": "53da0ebaddbb4c6623480a2278806300acaf2d3aa9b6d813d86b8904c831ca07"
+  },
+  {
+    "path": "docs/sprints/sharing/SHR-05-membership-safe-live-share.md",
+    "bytes": 4446,
+    "sha256": "f6097cf2952d84d7d1b9ce8334b00af16beb4da50259491abea0ccfd3a64c3a2"
+  },
+  {
+    "path": "docs/sprints/sharing/SHR-06-share-scoped-search-graph.md",
+    "bytes": 4482,
+    "sha256": "8b6952cd6e35f5c77ebe4e9e50dfd196961121e347c7113e2d288e3e2bdc461b"
+  },
+  {
+    "path": "docs/sprints/sharing/SHR-07-share-download-permissions.md",
+    "bytes": 4403,
+    "sha256": "844e04be20cf45ec6cf5fd28b22c07a272804007f8250c1ea0c6eb7a3cc5bb2b"
+  },
+  {
+    "path": "docs/sprints/sharing/SHR-08-share-csp-sanitization-rate-limits.md",
+    "bytes": 4676,
+    "sha256": "1c7ec1fdb0e61fe754356aa97ab2d18009af36c93659f7ec9926b48a8af34528"
+  },
+  {
+    "path": "docs/sprints/sharing/SHR-09-ngrok-transport.md",
+    "bytes": 4362,
+    "sha256": "61c6d9b39b8c0afaad0bdeff90f709e43fe5dcfe7902c8dd9dc4f7dfa0d80b24"
+  },
+  {
+    "path": "docs/sprints/sharing/SHR-10-sharehost-os-isolation-spike.md",
+    "bytes": 4525,
+    "sha256": "e237c061f98d18ef56f3a1f2c206a431ec91dc4ac2ac9d8bddc76bf38a005440"
+  },
+  {
+    "path": "docs/sprints/sharing/SHR-11-owner-share-management-ui.md",
+    "bytes": 4482,
+    "sha256": "b361916a027f3e32f11f84e81b786c418f0de035a7430b7c6cc6cd5dde0c7ef4"
+  },
+  {
+    "path": "docs/sprints/sprint-manifest.json",
+    "bytes": 130801,
+    "sha256": "c82c731e148f35f3b93d2004b44848fa32e0de44519b5cfa0aea32d661cd4da7"
+  },
+  {
+    "path": "docs/sprints/word/WORD-01-open-docx-in-microsoft-word.md",
+    "bytes": 4505,
+    "sha256": "60db9ac41ad0ca79d9557715930ea0839691c19ff337947039b1b854f7c1039f"
+  },
+  {
+    "path": "docs/sprints/word/WORD-02-word-editing-lock-detection.md",
+    "bytes": 4572,
+    "sha256": "2be61a82d76d59c4802c27ea6103a1751d818413f507a5c0b94c1f0189a5c7ff"
+  },
+  {
+    "path": "docs/sprints/word/WORD-03-dedicated-sta-word-automation-queue.md",
+    "bytes": 4634,
+    "sha256": "fcdf504f65bfc14c2442376964619fe3cef895ad3da11714da5eef2740ecdc28"
+  },
+  {
+    "path": "docs/sprints/word/WORD-04-high-fidelity-quick-look.md",
+    "bytes": 4529,
+    "sha256": "683abb8e89252d6783ebb510aba2a8e5c192fc854f9b9b4b86a0f03a57f390c5"
+  },
+  {
+    "path": "docs/templates/ADR-TEMPLATE.md",
+    "bytes": 263,
+    "sha256": "f43598cf02502da2c172c3c8594ab530ec9ec10016c41c21cd062535c69b739a"
+  },
+  {
+    "path": "docs/templates/CHANGE-REQUEST-TEMPLATE.md",
+    "bytes": 320,
+    "sha256": "5e2fbc91a4a50ba5a98c90f0f5f1e8061a1445490c1d0de81f6f2065a6b7bea7"
+  },
+  {
+    "path": "docs/templates/SPRINT-HANDOFF-TEMPLATE.md",
+    "bytes": 379,
+    "sha256": "43fae340d6ffae4a53d113037251b3707eb72fed88a2e2dace72fc6ce9dbc9f3"
+  },
+  {
+    "path": "docs/templates/SPRINT-REVIEW-TEMPLATE.md",
+    "bytes": 340,
+    "sha256": "3053c503fe52c958da1e062550dd1dee660c77dab3ff9a5978816f1e4b9f8c66"
+  }
+]
