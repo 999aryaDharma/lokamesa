@@ -23,7 +23,7 @@ Rules:
 | FND-02 | Privileged Local API Security | DONE | FND-01 | security/fnd-02-privileged-local-api-security (c54889b) | docs/sprints/handoffs/FND-02-HANDOFF.md |
 | FND-03 | SQLite Persistence Foundation | DONE | FND-01 | feat/fnd-03-sqlite-persistence-foundation (29b8d3f) | docs/sprints/handoffs/FND-03-HANDOFF.md |
 | QA-03 | Privileged Local API Security Audit | READY | FND-02 |  |  |
-| FND-04 | Background Job Runtime | READY | FND-03 |  |  |
+| FND-04 | Background Job Runtime | REVIEW | FND-03 | feat/fnd-04-background-job-runtime | docs/sprints/handoffs/FND-04-HANDOFF.md |
 | FND-05 | Settings & Secret Storage | READY | FND-02, FND-03 |  |  |
 | FND-06 | Structured Logging & Diagnostics | READY | FND-01, FND-03 |  |  |
 | SHR-01 | Share Domain & Sanitized Manifest | READY | FND-03 |  |  |

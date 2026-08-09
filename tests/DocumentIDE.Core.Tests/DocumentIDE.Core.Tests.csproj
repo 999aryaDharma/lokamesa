@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\DocumentIDE.Core\DocumentIDE.Core.csproj" />
+    <ProjectReference Include="..\..\src\DocumentIDE.Infrastructure\DocumentIDE.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
