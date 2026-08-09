@@ -24,10 +24,10 @@ Rules:
 | FND-03 | SQLite Persistence Foundation | DONE | FND-01 | feat/fnd-03-sqlite-persistence-foundation (29b8d3f) | docs/sprints/handoffs/FND-03-HANDOFF.md |
 | QA-03 | Privileged Local API Security Audit | READY | FND-02 |  |  |
 | FND-04 | Background Job Runtime | DONE | FND-03 | feat/fnd-04-background-job-runtime (065e335) | docs/sprints/handoffs/FND-04-HANDOFF.md |
-| FND-05 | Settings & Secret Storage | REVIEW | FND-02, FND-03 | security/fnd-05-settings-secret-storage | docs/sprints/handoffs/FND-05-HANDOFF.md |
+| FND-05 | Settings & Secret Storage | DONE | FND-02, FND-03 | security/fnd-05-settings-secret-storage (87de9be) | docs/sprints/handoffs/FND-05-HANDOFF.md |
 | FND-06 | Structured Logging & Diagnostics | READY | FND-01, FND-03 |  |  |
 | SHR-01 | Share Domain & Sanitized Manifest | READY | FND-03 |  |  |
-| FND-07 | Desktop/WebView Production Host | BLOCKED | FND-02, FND-05 |  |  |
+| FND-07 | Desktop/WebView Production Host | READY | FND-02, FND-05 |  |  |
 | CAN-01 | Canvas Foundation | BLOCKED | FND-07, FND-03 |  |  |
 | FND-08 | Build, Verify & Artifact Scripts | BLOCKED | FND-01, FND-07 |  |  |
 | FS-01 | Folder Source Attachment | BLOCKED | FND-03, FND-07 |  |  |
