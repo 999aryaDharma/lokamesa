@@ -20,7 +20,7 @@ Rules:
 | ID | Sprint | Status | Dependencies | Branch/Commit | Handoff |
 |---|---|---|---|---|---|
 | FND-01 | Repository Bootstrap | DONE | — | feat/fnd-01-repository-bootstrap (e6bdbb0) | docs/sprints/handoffs/FND-01-HANDOFF.md |
-| FND-02 | Privileged Local API Security | READY | FND-01 |  |  |
+| FND-02 | Privileged Local API Security | REVIEW | FND-01 | security/fnd-02-privileged-local-api-security | docs/sprints/handoffs/FND-02-HANDOFF.md |
 | FND-03 | SQLite Persistence Foundation | READY | FND-01 |  |  |
 | QA-03 | Privileged Local API Security Audit | BLOCKED | FND-02 |  |  |
 | FND-04 | Background Job Runtime | BLOCKED | FND-03 |  |  |
