@@ -5,10 +5,13 @@ obj/
 *.userosscache
 *.sln.docstates
 .vs/
-.vscode/
 .idea/
 *.userprefs
 *.suo
+
+# Build Artifacts & Generated Assets
+artifacts/
+src/DocumentIDE.Desktop/wwwroot/
 
 # Node / Web
 node_modules/
