@@ -1,4 +1,8 @@
 using DocumentIDE.Api.Security;
+using DocumentIDE.Core.Domain.Repositories;
+using DocumentIDE.Core.Filesystem;
+using DocumentIDE.Infrastructure.Persistence;
+using DocumentIDE.Infrastructure.Persistence.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,10 +16,26 @@ builder.WebHost.ConfigureKestrel(options =>
 // Step 2: Register 256-bit in-memory session token provider as Singleton
 builder.Services.AddSingleton<ISessionTokenProvider, SessionTokenProvider>();
 
+// Register Persistence & Services
+builder.Services.AddSingleton<AppDb>();
+builder.Services.AddScoped<IFolderSourceRepository, FolderSourceRepository>();
+builder.Services.AddScoped<IFolderSourceService, FolderSourceService>();
+
+builder.Services.AddControllers();
+
 var app = builder.Build();
+
+// Ensure DB migrations run on startup
+using (var scope = app.Services.CreateScope())
+{
+    var appDb = scope.ServiceProvider.GetRequiredService<AppDb>();
+    await appDb.InitializeAsync();
+}
 
 // Step 3 & 4: Privileged Request Security Guard Middleware
 app.UseMiddleware<PrivilegedRequestGuard>();
+
+app.MapControllers();
 
 app.MapGet("/", () => "Hello World!");
 

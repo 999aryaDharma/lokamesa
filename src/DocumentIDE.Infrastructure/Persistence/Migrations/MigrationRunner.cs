@@ -16,7 +16,8 @@ public class MigrationRunner
         _appDb = appDb;
         _migrations = new List<IMigration>
         {
-            new InitialMigration_001()
+            new InitialMigration_001(),
+            new Migration_002_FolderSourceFields()
         }.OrderBy(m => m.Version).ToList();
     }
 

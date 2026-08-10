@@ -1,0 +1,10 @@
+{
+  "dotnet.sdk.dotnetPath": "C:\\Users\\User\\AppData\\Local\\Programs\\FlyEnv-Data\\app\\dotnet\\10.0.302\\dotnet.exe",
+  "omnisharp.dotnetPath": "C:\\Users\\User\\AppData\\Local\\Programs\\FlyEnv-Data\\app\\dotnet\\10.0.302",
+  "dotnetAcquisitionExtension.existingDotnetPath": [
+    {
+      "extensionId": "ms-dotnettools.csharp",
+      "path": "C:\\Users\\User\\AppData\\Local\\Programs\\FlyEnv-Data\\app\\dotnet\\10.0.302\\dotnet.exe"
+    }
+  ]
+}
