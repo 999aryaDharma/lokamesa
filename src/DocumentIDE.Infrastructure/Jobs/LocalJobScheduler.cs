@@ -9,7 +9,7 @@ using DocumentIDE.Core.Jobs;
 
 namespace DocumentIDE.Infrastructure.Jobs;
 
-public class LocalJobScheduler : IDisposable
+public class LocalJobScheduler : IJobScheduler, IDisposable
 {
     private readonly Channel<JobWorkItem> _queue;
     private readonly ConcurrentDictionary<string, JobWorkItem> _jobsById = new();

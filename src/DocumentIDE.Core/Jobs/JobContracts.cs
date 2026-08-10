@@ -74,6 +74,16 @@ public interface IJob
     Task ExecuteAsync(JobContext context);
 }
 
+public interface IJobScheduler
+{
+    Task<JobInfo> EnqueueJobAsync(
+        string jobType,
+        string documentId,
+        string? fingerprint,
+        IJob job,
+        bool isMutation = false);
+}
+
 public class DelegateJob : IJob
 {
     private readonly Func<JobContext, Task> _work;
@@ -88,3 +98,4 @@ public class DelegateJob : IJob
         return _work(context);
     }
 }
+

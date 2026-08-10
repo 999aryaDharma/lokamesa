@@ -38,14 +38,14 @@ Rules:
 | SHR-03 | Share Token Authentication | BLOCKED | SHR-02, FND-05 |  |  |
 | SHR-09 | ngrok Transport | BLOCKED | SHR-02, FND-05 |  |  |
 | SHR-10 | ShareHost OS Isolation Spike | BLOCKED | SHR-02 |  |  |
-| FS-03 | Runtime File Watcher | READY | FND-04, FS-02 |  |  |
+| FS-03 | Runtime File Watcher | DONE | FND-04, FS-02 | feat/fs-03-runtime-file-watcher (3d16a60) | docs/sprints/handoffs/FS-03-HANDOFF.md |
 | FS-07 | Explicit Physical File Operations | READY | FS-02, FND-02 |  |  |
 | HIST-01 | Recovery Snapshot Storage | READY | FND-03, FS-02 |  |  |
 | IDX-01 | DOCX Package Resource Preflight | READY | FND-04, FS-02 |  |  |
 | IDX-03 | Markdown Structural Parser | READY | FND-04, FS-02 |  |  |
 | WORD-01 | Open DOCX in Microsoft Word | READY | FND-07, FS-02 |  |  |
-| FS-04 | Hybrid Startup Reconciliation | BLOCKED | FS-02, FS-03 |  |  |
-| FS-05 | Rename & Move Correlation | BLOCKED | FS-02, FS-03 |  |  |
+| FS-04 | Hybrid Startup Reconciliation | READY | FS-02, FS-03 |  |  |
+| FS-05 | Rename & Move Correlation | READY | FS-02, FS-03 |  |  |
 | FS-08 | Reparse Point & Source Containment | BLOCKED | FS-01, FS-07 |  |  |
 | IDX-02 | DOCX Structural Parser | BLOCKED | IDX-01 |  |  |
 | MD-01 | Source-First Markdown Editor | BLOCKED | FND-07, IDX-03 |  |  |
