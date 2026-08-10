@@ -28,7 +28,7 @@ Rules:
 | FND-06 | Structured Logging & Diagnostics | READY | FND-01, FND-03 |  |  |
 | SHR-01 | Share Domain & Sanitized Manifest | READY | FND-03 |  |  |
 | FND-07 | Desktop/WebView Production Host | DONE | FND-02, FND-05 | feat/fnd-07-desktop-webview-production-host (99627e7) | docs/sprints/handoffs/FND-07-HANDOFF.md |
-| CAN-01 | Canvas Foundation | REVIEW | FND-07, FND-03 | feat/can-01-canvas-foundation | docs/sprints/handoffs/CAN-01-HANDOFF.md |
+| CAN-01 | Canvas Foundation | DONE | FND-07, FND-03 | feat/can-01-canvas-foundation (c3249ab) | docs/sprints/handoffs/CAN-01-HANDOFF.md |
 | FND-08 | Build, Verify & Artifact Scripts | DONE | FND-01, FND-07 | feat/fnd-08-build-verify-artifact-scripts (fb9979f) | docs/sprints/handoffs/FND-08-HANDOFF.md |
 | FS-01 | Folder Source Attachment | READY | FND-03, FND-07 |  |  |
 | REL-01 | Windows Installer Packaging | BLOCKED | FND-08, QA-03 |  |  |
