@@ -34,16 +34,16 @@ Rules:
 | REL-01 | Windows Installer Packaging | BLOCKED | FND-08, QA-03 |  |  |
 | SHR-02 | Separate ShareHost Process | BLOCKED | SHR-01, FND-08 |  |  |
 | CAN-02 | Folder Canvas Object | READY | FS-01, CAN-01 |  |  |
-| FS-02 | Stable Document Identity | REVIEW | FND-03, FS-01 | feat/fs-02-stable-document-identity (31b2491) | docs/sprints/handoffs/FS-02-HANDOFF.md |
+| FS-02 | Stable Document Identity | DONE | FND-03, FS-01 | feat/fs-02-stable-document-identity (5d473d9) | docs/sprints/handoffs/FS-02-HANDOFF.md |
 | SHR-03 | Share Token Authentication | BLOCKED | SHR-02, FND-05 |  |  |
 | SHR-09 | ngrok Transport | BLOCKED | SHR-02, FND-05 |  |  |
 | SHR-10 | ShareHost OS Isolation Spike | BLOCKED | SHR-02 |  |  |
-| FS-03 | Runtime File Watcher | BLOCKED | FND-04, FS-02 |  |  |
-| FS-07 | Explicit Physical File Operations | BLOCKED | FS-02, FND-02 |  |  |
-| HIST-01 | Recovery Snapshot Storage | BLOCKED | FND-03, FS-02 |  |  |
-| IDX-01 | DOCX Package Resource Preflight | BLOCKED | FND-04, FS-02 |  |  |
-| IDX-03 | Markdown Structural Parser | BLOCKED | FND-04, FS-02 |  |  |
-| WORD-01 | Open DOCX in Microsoft Word | BLOCKED | FND-07, FS-02 |  |  |
+| FS-03 | Runtime File Watcher | READY | FND-04, FS-02 |  |  |
+| FS-07 | Explicit Physical File Operations | READY | FS-02, FND-02 |  |  |
+| HIST-01 | Recovery Snapshot Storage | READY | FND-03, FS-02 |  |  |
+| IDX-01 | DOCX Package Resource Preflight | READY | FND-04, FS-02 |  |  |
+| IDX-03 | Markdown Structural Parser | READY | FND-04, FS-02 |  |  |
+| WORD-01 | Open DOCX in Microsoft Word | READY | FND-07, FS-02 |  |  |
 | FS-04 | Hybrid Startup Reconciliation | BLOCKED | FS-02, FS-03 |  |  |
 | FS-05 | Rename & Move Correlation | BLOCKED | FS-02, FS-03 |  |  |
 | FS-08 | Reparse Point & Source Containment | BLOCKED | FS-01, FS-07 |  |  |

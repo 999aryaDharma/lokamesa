@@ -1,8 +1,8 @@
 # Sprint Handoff — FS-02: Stable Document Identity
 
-**Status:** REVIEW  
+**Status:** DONE  
 **Branch:** `feat/fs-02-stable-document-identity`  
-**Commit:** `feat(filesystem): stable document identity` (pending)  
+**Commit:** `5d473d9`  
 **Implementation Agent:** Antigravity  
 **Reviewer Agent:** User / Codex  
 
