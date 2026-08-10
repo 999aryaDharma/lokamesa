@@ -33,7 +33,7 @@ Rules:
 | FS-01 | Folder Source Attachment | DONE | FND-03, FND-07 | feat/fs-01-folder-source-attachment (d34138c) | docs/sprints/handoffs/FS-01-HANDOFF.md |
 | REL-01 | Windows Installer Packaging | BLOCKED | FND-08, QA-03 |  |  |
 | SHR-02 | Separate ShareHost Process | BLOCKED | SHR-01, FND-08 |  |  |
-| CAN-02 | Folder Canvas Object | READY | FS-01, CAN-01 |  |  |
+| CAN-02 | Folder Canvas Object | DONE | FS-01, CAN-01 | feat/can-02-folder-canvas-object (eb7b952) | docs/sprints/handoffs/CAN-02-HANDOFF.md |
 | FS-02 | Stable Document Identity | DONE | FND-03, FS-01 | feat/fs-02-stable-document-identity (5d473d9) | docs/sprints/handoffs/FS-02-HANDOFF.md |
 | SHR-03 | Share Token Authentication | BLOCKED | SHR-02, FND-05 |  |  |
 | SHR-09 | ngrok Transport | BLOCKED | SHR-02, FND-05 |  |  |
