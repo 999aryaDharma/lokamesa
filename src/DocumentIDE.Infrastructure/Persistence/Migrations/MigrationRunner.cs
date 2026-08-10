@@ -17,7 +17,8 @@ public class MigrationRunner
         _migrations = new List<IMigration>
         {
             new InitialMigration_001(),
-            new Migration_002_FolderSourceFields()
+            new Migration_002_FolderSourceFields(),
+            new Migration_003_DocumentIdentityFields()
         }.OrderBy(m => m.Version).ToList();
     }
 

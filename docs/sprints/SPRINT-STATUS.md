@@ -34,7 +34,7 @@ Rules:
 | REL-01 | Windows Installer Packaging | BLOCKED | FND-08, QA-03 |  |  |
 | SHR-02 | Separate ShareHost Process | BLOCKED | SHR-01, FND-08 |  |  |
 | CAN-02 | Folder Canvas Object | READY | FS-01, CAN-01 |  |  |
-| FS-02 | Stable Document Identity | READY | FND-03, FS-01 |  |  |
+| FS-02 | Stable Document Identity | REVIEW | FND-03, FS-01 | feat/fs-02-stable-document-identity (31b2491) | docs/sprints/handoffs/FS-02-HANDOFF.md |
 | SHR-03 | Share Token Authentication | BLOCKED | SHR-02, FND-05 |  |  |
 | SHR-09 | ngrok Transport | BLOCKED | SHR-02, FND-05 |  |  |
 | SHR-10 | ShareHost OS Isolation Spike | BLOCKED | SHR-02 |  |  |

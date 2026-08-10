@@ -12,6 +12,8 @@ public class Document
     public string Filename { get; set; } = string.Empty;
     public string Extension { get; set; } = string.Empty;
     public string DocumentType { get; set; } = "markdown";
+    public long SizeBytes { get; set; }
+    public string? ModifiedAt { get; set; }
     public string? ContentFingerprint { get; set; }
     public string AvailabilityStatus { get; set; } = "available";
     public string IndexStatus { get; set; } = "pending";

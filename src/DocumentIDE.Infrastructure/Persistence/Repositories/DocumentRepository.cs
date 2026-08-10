@@ -21,7 +21,7 @@ public class DocumentRepository : IDocumentRepository
         await conn.OpenAsync();
 
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT id, filesystem_volume_id, filesystem_object_id, current_path, last_known_path, filename, extension, document_type, content_fingerprint, availability_status, index_status, created_at, updated_at FROM documents WHERE id = @id;";
+        cmd.CommandText = "SELECT id, filesystem_volume_id, filesystem_object_id, current_path, last_known_path, filename, extension, document_type, size_bytes, modified_at, content_fingerprint, availability_status, index_status, created_at, updated_at FROM documents WHERE id = @id;";
         cmd.Parameters.AddWithValue("@id", id);
 
         using var reader = await cmd.ExecuteReaderAsync();
@@ -39,7 +39,7 @@ public class DocumentRepository : IDocumentRepository
         await conn.OpenAsync();
 
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT id, filesystem_volume_id, filesystem_object_id, current_path, last_known_path, filename, extension, document_type, content_fingerprint, availability_status, index_status, created_at, updated_at FROM documents WHERE current_path = @currentPath;";
+        cmd.CommandText = "SELECT id, filesystem_volume_id, filesystem_object_id, current_path, last_known_path, filename, extension, document_type, size_bytes, modified_at, content_fingerprint, availability_status, index_status, created_at, updated_at FROM documents WHERE current_path = @currentPath;";
         cmd.Parameters.AddWithValue("@currentPath", currentPath);
 
         using var reader = await cmd.ExecuteReaderAsync();
@@ -51,6 +51,44 @@ public class DocumentRepository : IDocumentRepository
         return null;
     }
 
+    public async Task<Document?> GetByVolumeAndObjectIdAsync(string volumeId, string objectId)
+    {
+        using var conn = _appDb.CreateConnection();
+        await conn.OpenAsync();
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT id, filesystem_volume_id, filesystem_object_id, current_path, last_known_path, filename, extension, document_type, size_bytes, modified_at, content_fingerprint, availability_status, index_status, created_at, updated_at FROM documents WHERE filesystem_volume_id = @volumeId AND filesystem_object_id = @objectId;";
+        cmd.Parameters.AddWithValue("@volumeId", volumeId);
+        cmd.Parameters.AddWithValue("@objectId", objectId);
+
+        using var reader = await cmd.ExecuteReaderAsync();
+        if (await reader.ReadAsync())
+        {
+            return MapDocument(reader);
+        }
+
+        return null;
+    }
+
+    public async Task<System.Collections.Generic.List<Document>> GetDocumentsByFingerprintAsync(string fingerprint)
+    {
+        var list = new System.Collections.Generic.List<Document>();
+        using var conn = _appDb.CreateConnection();
+        await conn.OpenAsync();
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT id, filesystem_volume_id, filesystem_object_id, current_path, last_known_path, filename, extension, document_type, size_bytes, modified_at, content_fingerprint, availability_status, index_status, created_at, updated_at FROM documents WHERE content_fingerprint = @fingerprint;";
+        cmd.Parameters.AddWithValue("@fingerprint", fingerprint);
+
+        using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            list.Add(MapDocument(reader));
+        }
+
+        return list;
+    }
+
     public async Task CreateAsync(Document document)
     {
         using var conn = _appDb.CreateConnection();
@@ -58,8 +96,8 @@ public class DocumentRepository : IDocumentRepository
 
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            INSERT INTO documents (id, filesystem_volume_id, filesystem_object_id, current_path, last_known_path, filename, extension, document_type, content_fingerprint, availability_status, index_status, created_at, updated_at)
-            VALUES (@id, @volumeId, @objectId, @currentPath, @lastKnownPath, @filename, @extension, @documentType, @fingerprint, @availabilityStatus, @indexStatus, @createdAt, @updatedAt);
+            INSERT INTO documents (id, filesystem_volume_id, filesystem_object_id, current_path, last_known_path, filename, extension, document_type, size_bytes, modified_at, content_fingerprint, availability_status, index_status, created_at, updated_at)
+            VALUES (@id, @volumeId, @objectId, @currentPath, @lastKnownPath, @filename, @extension, @documentType, @sizeBytes, @modifiedAt, @fingerprint, @availabilityStatus, @indexStatus, @createdAt, @updatedAt);
         ";
         cmd.Parameters.AddWithValue("@id", document.Id);
         cmd.Parameters.AddWithValue("@volumeId", (object?)document.FilesystemVolumeId ?? DBNull.Value);
@@ -69,6 +107,8 @@ public class DocumentRepository : IDocumentRepository
         cmd.Parameters.AddWithValue("@filename", document.Filename);
         cmd.Parameters.AddWithValue("@extension", document.Extension);
         cmd.Parameters.AddWithValue("@documentType", document.DocumentType);
+        cmd.Parameters.AddWithValue("@sizeBytes", document.SizeBytes);
+        cmd.Parameters.AddWithValue("@modifiedAt", (object?)document.ModifiedAt ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@fingerprint", (object?)document.ContentFingerprint ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@availabilityStatus", document.AvailabilityStatus);
         cmd.Parameters.AddWithValue("@indexStatus", document.IndexStatus);
@@ -93,6 +133,8 @@ public class DocumentRepository : IDocumentRepository
                 filename = @filename,
                 extension = @extension,
                 document_type = @documentType,
+                size_bytes = @sizeBytes,
+                modified_at = @modifiedAt,
                 content_fingerprint = @fingerprint,
                 availability_status = @availabilityStatus,
                 index_status = @indexStatus,
@@ -107,6 +149,8 @@ public class DocumentRepository : IDocumentRepository
         cmd.Parameters.AddWithValue("@filename", document.Filename);
         cmd.Parameters.AddWithValue("@extension", document.Extension);
         cmd.Parameters.AddWithValue("@documentType", document.DocumentType);
+        cmd.Parameters.AddWithValue("@sizeBytes", document.SizeBytes);
+        cmd.Parameters.AddWithValue("@modifiedAt", (object?)document.ModifiedAt ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@fingerprint", (object?)document.ContentFingerprint ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@availabilityStatus", document.AvailabilityStatus);
         cmd.Parameters.AddWithValue("@indexStatus", document.IndexStatus);
@@ -139,11 +183,13 @@ public class DocumentRepository : IDocumentRepository
             Filename = reader.GetString(5),
             Extension = reader.GetString(6),
             DocumentType = reader.GetString(7),
-            ContentFingerprint = reader.IsDBNull(8) ? null : reader.GetString(8),
-            AvailabilityStatus = reader.GetString(9),
-            IndexStatus = reader.GetString(10),
-            CreatedAt = reader.GetString(11),
-            UpdatedAt = reader.GetString(12)
+            SizeBytes = reader.GetInt64(8),
+            ModifiedAt = reader.IsDBNull(9) ? null : reader.GetString(9),
+            ContentFingerprint = reader.IsDBNull(10) ? null : reader.GetString(10),
+            AvailabilityStatus = reader.GetString(11),
+            IndexStatus = reader.GetString(12),
+            CreatedAt = reader.GetString(13),
+            UpdatedAt = reader.GetString(14)
         };
     }
 }
