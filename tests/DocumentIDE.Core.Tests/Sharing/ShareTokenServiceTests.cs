@@ -75,4 +75,47 @@ public class ShareTokenServiceTests
         Assert.ThrowsAny<Exception>(() => _tokenService.GetArtifactPath(shareId, @"..\..\..\Secret\passwords.txt"));
         Assert.ThrowsAny<Exception>(() => _tokenService.GetArtifactPath(shareId, @"C:\Windows\System32\calc.exe"));
     }
+
+    [Fact]
+    public void EnsureStorageDirectoryCreated_CreatesApplicationOwnedShareRoot()
+    {
+        var tempBase = Path.Combine(Path.GetTempPath(), $"docide_shares_test_{Guid.NewGuid():N}");
+        try
+        {
+            var service = new ShareTokenService(tempBase);
+            var rootDir = service.EnsureStorageDirectoryCreated();
+
+            Assert.True(Directory.Exists(rootDir));
+            Assert.Equal(Path.GetFullPath(tempBase), Path.GetFullPath(rootDir));
+        }
+        finally
+        {
+            if (Directory.Exists(tempBase))
+            {
+                try { Directory.Delete(tempBase, true); } catch { }
+            }
+        }
+    }
+
+    [Fact]
+    public void EnsureShareRootExists_CreatesSpecificShareFolder()
+    {
+        var tempBase = Path.Combine(Path.GetTempPath(), $"docide_shares_test_{Guid.NewGuid():N}");
+        var shareId = "test-share-folder-001";
+        try
+        {
+            var service = new ShareTokenService(tempBase);
+            var shareFolder = service.EnsureShareRootExists(shareId);
+
+            Assert.True(Directory.Exists(shareFolder));
+            Assert.Equal(Path.GetFullPath(Path.Combine(tempBase, shareId)), Path.GetFullPath(shareFolder));
+        }
+        finally
+        {
+            if (Directory.Exists(tempBase))
+            {
+                try { Directory.Delete(tempBase, true); } catch { }
+            }
+        }
+    }
 }

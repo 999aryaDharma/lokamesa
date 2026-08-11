@@ -17,4 +17,30 @@ public class Share
 
     public List<ShareMember> Members { get; set; } = new List<ShareMember>();
     public List<ShareSnapshotArtifact> SnapshotArtifacts { get; set; } = new List<ShareSnapshotArtifact>();
+
+    /// <summary>
+    /// Snapshots explicit membership at creation from a collection of documents.
+    /// New members added to the collection later do not automatically become share members.
+    /// </summary>
+    public void SnapshotMembersFromCollection(IEnumerable<Document> initialDocuments)
+    {
+        if (initialDocuments == null) throw new ArgumentNullException(nameof(initialDocuments));
+
+        foreach (var doc in initialDocuments)
+        {
+            if (doc == null || string.IsNullOrWhiteSpace(doc.Id)) continue;
+
+            if (Members.Exists(m => string.Equals(m.DocumentId, doc.Id, StringComparison.Ordinal)))
+                continue;
+
+            Members.Add(new ShareMember
+            {
+                Id = Guid.NewGuid().ToString(),
+                ShareId = Id,
+                DocumentId = doc.Id,
+                DisplayPath = doc.Filename ?? "unnamed_document",
+                AddedAt = DateTime.UtcNow.ToString("O")
+            });
+        }
+    }
 }

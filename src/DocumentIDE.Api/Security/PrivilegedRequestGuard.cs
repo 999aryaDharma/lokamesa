@@ -24,8 +24,16 @@ public class PrivilegedRequestGuard
     public async Task InvokeAsync(HttpContext context, ISessionTokenProvider sessionTokenProvider)
     {
         // 1. Host Header Validation (DNS Rebinding Check)
-        var host = context.Request.Host.Host;
-        if (string.IsNullOrEmpty(host) || !AllowedHosts.Contains(host))
+        var rawHost = context.Request.Host.Value;
+        if (string.IsNullOrEmpty(rawHost))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsync("Forbidden: Host header missing.");
+            return;
+        }
+
+        string hostWithoutPort = ExtractHostWithoutPort(rawHost);
+        if (string.IsNullOrEmpty(hostWithoutPort) || !AllowedHosts.Contains(hostWithoutPort))
         {
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             await context.Response.WriteAsync("Forbidden: Host header mismatch.");
@@ -89,6 +97,40 @@ public class PrivilegedRequestGuard
         await _next(context);
     }
 
+    private static string ExtractHostWithoutPort(string rawHost)
+    {
+        if (string.IsNullOrWhiteSpace(rawHost))
+            return string.Empty;
+
+        // If IPv6 address with brackets like [::1] or [::1]:5000 or [::1].attacker.com
+        if (rawHost.StartsWith("["))
+        {
+            int closingBracket = rawHost.IndexOf(']');
+            if (closingBracket < 0)
+                return string.Empty;
+
+            if (closingBracket == rawHost.Length - 1)
+            {
+                return rawHost;
+            }
+
+            if (rawHost[closingBracket + 1] == ':')
+            {
+                return rawHost.Substring(0, closingBracket + 1);
+            }
+
+            return rawHost;
+        }
+
+        int colonIdx = rawHost.LastIndexOf(':');
+        if (colonIdx > 0)
+        {
+            return rawHost.Substring(0, colonIdx);
+        }
+
+        return rawHost;
+    }
+
     private static bool IsAllowedOrigin(string origin)
     {
         if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri))
@@ -104,7 +146,8 @@ public class PrivilegedRequestGuard
         }
 
         if (string.Equals(uri.Scheme, "https", StringComparison.OrdinalIgnoreCase) &&
-            uri.Host.EndsWith("appassets.html2sav", StringComparison.OrdinalIgnoreCase))
+            (string.Equals(uri.Host, "appassets.html2sav", StringComparison.OrdinalIgnoreCase) ||
+             uri.Host.EndsWith(".appassets.html2sav", StringComparison.OrdinalIgnoreCase)))
         {
             return true;
         }

@@ -321,6 +321,38 @@ public class ShareManifestTests
         Assert.Single(manifest.Documents);
         Assert.Equal(doc.Id, manifest.Documents[0].DocumentId);
     }
+
+    [Fact]
+    public void SnapshotMembersFromCollection_Freezes_Membership_AtCreation()
+    {
+        var doc1 = new Document { Id = "doc-col-1", CurrentPath = @"D:\Collection\Doc1.md", Filename = "Doc1.md" };
+        var doc2 = new Document { Id = "doc-col-2", CurrentPath = @"D:\Collection\Doc2.md", Filename = "Doc2.md" };
+
+        var initialCollectionDocs = new[] { doc1, doc2 };
+
+        var share = new Share
+        {
+            Id = Guid.NewGuid().ToString(),
+            Mode = ShareMode.Live
+        };
+
+        // Snapshot explicit membership at creation time from collection
+        share.SnapshotMembersFromCollection(initialCollectionDocs);
+
+        Assert.Equal(2, share.Members.Count);
+        Assert.Contains(share.Members, m => m.DocumentId == "doc-col-1");
+        Assert.Contains(share.Members, m => m.DocumentId == "doc-col-2");
+
+        // Later, a new document doc3 enters the collection
+        var doc3 = new Document { Id = "doc-col-3", CurrentPath = @"D:\Collection\Doc3.md", Filename = "Doc3.md" };
+        var updatedCollectionDocs = new[] { doc1, doc2, doc3 };
+
+        // Manifest generated for this share must NOT include doc3
+        var manifest = ShareManifest.Create(share, updatedCollectionDocs);
+
+        Assert.Equal(2, manifest.Documents.Count);
+        Assert.DoesNotContain(manifest.Documents, d => d.DocumentId == "doc-col-3");
+    }
 }
 
 

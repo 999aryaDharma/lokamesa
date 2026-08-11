@@ -111,4 +111,29 @@ public class ShareTokenService
 
         return combinedPath;
     }
+
+    /// <summary>
+    /// Ensures the application-owned share artifact root directory (%LOCALAPPDATA%\DocumentIDE\shares) exists.
+    /// </summary>
+    public string EnsureStorageDirectoryCreated()
+    {
+        if (!Directory.Exists(_sharesBaseDirectory))
+        {
+            Directory.CreateDirectory(_sharesBaseDirectory);
+        }
+        return _sharesBaseDirectory;
+    }
+
+    /// <summary>
+    /// Ensures the specific share root directory (%LOCALAPPDATA%\DocumentIDE\shares\<shareId>) exists.
+    /// </summary>
+    public string EnsureShareRootExists(string shareId)
+    {
+        string shareRoot = GetShareRootPath(shareId);
+        if (!Directory.Exists(shareRoot))
+        {
+            Directory.CreateDirectory(shareRoot);
+        }
+        return shareRoot;
+    }
 }
