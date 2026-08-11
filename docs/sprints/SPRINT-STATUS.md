@@ -25,7 +25,7 @@ Rules:
 | QA-03 | Privileged Local API Security Audit | READY | FND-02 |  |  |
 | FND-04 | Background Job Runtime | DONE | FND-03 | feat/fnd-04-background-job-runtime (065e335) | docs/sprints/handoffs/FND-04-HANDOFF.md |
 | FND-05 | Settings & Secret Storage | DONE | FND-02, FND-03 | security/fnd-05-settings-secret-storage (87de9be) | docs/sprints/handoffs/FND-05-HANDOFF.md |
-| FND-06 | Structured Logging & Diagnostics | DONE | FND-01, FND-03 | feat/fnd-06-structured-logging-diagnostics | docs/sprints/handoffs/FND-06-HANDOFF.md |
+| FND-06 | Structured Logging & Diagnostics | DONE | FND-01, FND-03 | feat/fnd-06-structured-logging-diagnostics (0a0d29e) | docs/sprints/handoffs/FND-06-HANDOFF.md |
 | SHR-01 | Share Domain & Sanitized Manifest | READY | FND-03 |  |  |
 | FND-07 | Desktop/WebView Production Host | DONE | FND-02, FND-05 | feat/fnd-07-desktop-webview-production-host (99627e7) | docs/sprints/handoffs/FND-07-HANDOFF.md |
 | CAN-01 | Canvas Foundation | DONE | FND-07, FND-03 | feat/can-01-canvas-foundation (c3249ab) | docs/sprints/handoffs/CAN-01-HANDOFF.md |
