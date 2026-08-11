@@ -133,6 +133,22 @@ public class PrivilegedRequestGuard
 
     private static bool IsAllowedOrigin(string origin)
     {
+        if (string.IsNullOrWhiteSpace(origin))
+        {
+            return false;
+        }
+
+        // Check for IPv6 bracket spoofing (e.g. http://[::1].attacker.com)
+        int closeBracket = origin.IndexOf(']');
+        if (closeBracket >= 0 && closeBracket + 1 < origin.Length)
+        {
+            char nextChar = origin[closeBracket + 1];
+            if (nextChar != ':' && nextChar != '/' && nextChar != '?' && nextChar != '#')
+            {
+                return false;
+            }
+        }
+
         if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri))
         {
             return false;

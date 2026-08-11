@@ -33,7 +33,7 @@ describe('OpenInWordAction Challenger Stress Tests', () => {
       json: async () => {
         throw new SyntaxError('Unexpected token < in JSON at position 0');
       },
-    } as Response);
+    } as unknown as Response);
 
     const result = await openInWord('doc-503-html');
 

@@ -22,7 +22,7 @@ Rules:
 | FND-01 | Repository Bootstrap | DONE | — | feat/fnd-01-repository-bootstrap (e6bdbb0) | docs/sprints/handoffs/FND-01-HANDOFF.md |
 | FND-02 | Privileged Local API Security | DONE | FND-01 | security/fnd-02-privileged-local-api-security (c54889b) | docs/sprints/handoffs/FND-02-HANDOFF.md |
 | FND-03 | SQLite Persistence Foundation | DONE | FND-01 | feat/fnd-03-sqlite-persistence-foundation (29b8d3f) | docs/sprints/handoffs/FND-03-HANDOFF.md |
-| QA-03 | Privileged Local API Security Audit | READY | FND-02 |  |  |
+| QA-03 | Privileged Local API Security Audit | DONE | FND-02 | security/qa-03-privileged-local-api-security-audit | docs/sprints/handoffs/QA-03-HANDOFF.md |
 | FND-04 | Background Job Runtime | DONE | FND-03 | feat/fnd-04-background-job-runtime (065e335) | docs/sprints/handoffs/FND-04-HANDOFF.md |
 | FND-05 | Settings & Secret Storage | DONE | FND-02, FND-03 | security/fnd-05-settings-secret-storage (87de9be) | docs/sprints/handoffs/FND-05-HANDOFF.md |
 | FND-06 | Structured Logging & Diagnostics | DONE | FND-01, FND-03 | feat/fnd-06-structured-logging-diagnostics (0a0d29e) | docs/sprints/handoffs/FND-06-HANDOFF.md |
@@ -31,7 +31,7 @@ Rules:
 | CAN-01 | Canvas Foundation | DONE | FND-07, FND-03 | feat/can-01-canvas-foundation (c3249ab) | docs/sprints/handoffs/CAN-01-HANDOFF.md |
 | FND-08 | Build, Verify & Artifact Scripts | DONE | FND-01, FND-07 | feat/fnd-08-build-verify-artifact-scripts (fb9979f) | docs/sprints/handoffs/FND-08-HANDOFF.md |
 | FS-01 | Folder Source Attachment | DONE | FND-03, FND-07 | feat/fs-01-folder-source-attachment (d34138c) | docs/sprints/handoffs/FS-01-HANDOFF.md |
-| REL-01 | Windows Installer Packaging | BLOCKED | FND-08, QA-03 |  |  |
+| REL-01 | Windows Installer Packaging | READY | FND-08, QA-03 |  |  |
 | SHR-02 | Separate ShareHost Process | READY | SHR-01, FND-08 |  |  |
 | CAN-02 | Folder Canvas Object | DONE | FS-01, CAN-01 | feat/can-02-folder-canvas-object (eb7b952) | docs/sprints/handoffs/CAN-02-HANDOFF.md |
 | FS-02 | Stable Document Identity | DONE | FND-03, FS-01 | feat/fs-02-stable-document-identity (5d473d9) | docs/sprints/handoffs/FS-02-HANDOFF.md |

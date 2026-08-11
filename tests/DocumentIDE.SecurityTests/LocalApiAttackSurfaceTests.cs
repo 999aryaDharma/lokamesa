@@ -1,17 +1,46 @@
 using System.Net;
 using System.Net.Http.Json;
 using DocumentIDE.Api.Security;
+using DocumentIDE.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace DocumentIDE.SecurityTests;
 
-public class LocalApiAttackSurfaceTests : IClassFixture<WebApplicationFactory<Program>>
+public class CustomSecurityTestWebApplicationFactory : WebApplicationFactory<Program>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"sec_audit_{Guid.NewGuid():N}.db");
 
-    public LocalApiAttackSurfaceTests(WebApplicationFactory<Program> factory)
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.ConfigureServices(services =>
+        {
+            var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(AppDb));
+            if (descriptor != null)
+            {
+                services.Remove(descriptor);
+            }
+            services.AddSingleton(new AppDb(_dbPath));
+        });
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if (File.Exists(_dbPath))
+        {
+            try { File.Delete(_dbPath); } catch { }
+        }
+    }
+}
+
+public class LocalApiAttackSurfaceTests : IClassFixture<CustomSecurityTestWebApplicationFactory>
+{
+    private readonly CustomSecurityTestWebApplicationFactory _factory;
+
+    public LocalApiAttackSurfaceTests(CustomSecurityTestWebApplicationFactory factory)
     {
         _factory = factory;
     }
@@ -259,8 +288,8 @@ public class LocalApiAttackSurfaceTests : IClassFixture<WebApplicationFactory<Pr
         Assert.Equal(HttpStatusCode.Forbidden, postResponse.StatusCode);
         Assert.False(postResponse.Headers.Contains("Access-Control-Allow-Origin"));
 
-        // 2. Attack scenario B: Attacker page attempts cross-origin GET to read diagnostics logs
-        var getRequest = new HttpRequestMessage(HttpMethod.Get, "/api/diagnostics/latest");
+        // 2. Attack scenario B: Attacker page attempts cross-origin GET
+        var getRequest = new HttpRequestMessage(HttpMethod.Get, "/api/workspaces/victim-ws/folder-sources");
         getRequest.Headers.Add("Origin", "http://attacker-site.com");
         getRequest.Headers.Add("Referer", "http://attacker-site.com/exploit.html");
         getRequest.Headers.Add("Sec-Fetch-Site", "cross-site");
