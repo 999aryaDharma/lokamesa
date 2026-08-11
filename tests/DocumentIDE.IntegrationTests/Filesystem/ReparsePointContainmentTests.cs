@@ -4,6 +4,7 @@ using System.IO;
 using DocumentIDE.Core.Domain;
 using DocumentIDE.Core.Filesystem;
 using NUnit.Framework;
+using Assert = NUnit.Framework.Assert;
 
 namespace DocumentIDE.IntegrationTests.Filesystem
 {

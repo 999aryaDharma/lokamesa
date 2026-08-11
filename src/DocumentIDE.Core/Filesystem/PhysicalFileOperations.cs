@@ -144,6 +144,9 @@ public class PhysicalFileOperations : IPhysicalFileOperations
             }
 
             string fullTargetPath = Path.GetFullPath(Path.Combine(fullDestDir, targetFileName));
+            // Journal move intent
+            var docId = LookupDocumentIdAsync(fullSourcePath).GetAwaiter().GetResult();
+            _moveCorrelationService?.RecordMoveIntent(docId, fullSourcePath, fullTargetPath);
 
             // Destination collision check
             if (!string.Equals(fullSourcePath, fullTargetPath, StringComparison.OrdinalIgnoreCase))

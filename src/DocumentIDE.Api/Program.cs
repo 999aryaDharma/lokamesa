@@ -1,3 +1,4 @@
+using DocumentIDE.Infrastructure.Word;
 using DocumentIDE.Api.Security;
 using DocumentIDE.Core.Domain.Repositories;
 using DocumentIDE.Core.Filesystem;
@@ -5,9 +6,10 @@ using DocumentIDE.Core.Word;
 using DocumentIDE.Infrastructure.Filesystem;
 using DocumentIDE.Infrastructure.Persistence;
 using DocumentIDE.Infrastructure.Persistence.Repositories;
-using DocumentIDE.Infrastructure.Word;
+using DocumentIDE.Infrastructure.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Host.UseDiagnostics();
 
 // Step 1: Configure Kestrel host to bind ONLY to loopback interfaces
 builder.WebHost.ConfigureKestrel(options =>
@@ -31,6 +33,7 @@ builder.Services.AddScoped<IStartupReconciler, StartupReconciler>();
 builder.Services.AddScoped<IWordDesktopLauncher, WordDesktopLauncher>();
 builder.Services.AddScoped<IRecycleBin, WindowsRecycleBin>();
 builder.Services.AddScoped<IPhysicalFileOperations, PhysicalFileOperations>();
+builder.Services.AddScoped<DocumentIDE.Core.Diagnostics.IDiagnosticsExportService, DiagnosticsExportService>();
 
 builder.Services.AddControllers();
 

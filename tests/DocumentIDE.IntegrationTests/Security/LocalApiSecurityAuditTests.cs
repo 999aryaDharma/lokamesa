@@ -1,4 +1,5 @@
 using System.Net;
+using DocumentIDE.Api.Security;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -17,10 +18,18 @@ public class LocalApiSecurityAuditTests : IClassFixture<WebApplicationFactory<Pr
     [Fact]
     public async Task Allowed_Origin_Receives_Correct_CORS_Header()
     {
+        using var scope = _factory.Services.CreateScope();
+        var tokenProvider = scope.ServiceProvider.GetRequiredService<ISessionTokenProvider>();
+        var token = tokenProvider.SessionToken;
+
         var client = _factory.CreateClient();
         var request = new HttpRequestMessage(HttpMethod.Get, "/");
         var allowedOrigin = "http://localhost:5173";
         request.Headers.Add("Origin", allowedOrigin);
+        if (!string.IsNullOrEmpty(token))
+        {
+            request.Headers.Add("X-DocumentIDE-Session-Token", token);
+        }
 
         var response = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

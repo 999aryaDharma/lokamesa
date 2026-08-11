@@ -59,7 +59,7 @@ namespace DocumentIDE.IntegrationTests.History
     {
         private readonly string _basePath;
         private readonly long _capacityBytes;
-        public TestHistoryStorage(long capacityBytes = 0)
+        public TestHistoryStorage(long capacityBytes = long.MaxValue)
         {
             _basePath = Path.Combine(Path.GetTempPath(), "HistoryTestStorage", Guid.NewGuid().ToString());
             Directory.CreateDirectory(_basePath);
@@ -95,6 +95,7 @@ namespace DocumentIDE.IntegrationTests.History
             }
             return Task.FromResult(total);
         }
+        public Task<long> GetCapacityBytesAsync() => Task.FromResult(_capacityBytes);
         public Task CleanupExpiredAsync() => Task.CompletedTask;
         private static long GetDirectorySize(string path)
         {
