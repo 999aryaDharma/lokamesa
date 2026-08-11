@@ -30,6 +30,22 @@ Before starting a sprint:
 5. create/follow the sprint branch,
 6. use TDD for behavior changes.
 
+## Strict TDD Workflow (Red ➔ Green ➔ Refactor)
+
+Every AI coding agent producing or implementing a sprint in this repository MUST follow strict TDD for all behavioral changes:
+
+1. **Red Stage**:
+   - Write a failing unit or integration test FIRST before writing any production code.
+   - Run the test suite and confirm that the test fails explicitly for the expected reason.
+2. **Green Stage**:
+   - Write the minimum necessary implementation code required to satisfy the failing test.
+   - Run the test suite and verify that the test passes cleanly.
+3. **Refactor Stage**:
+   - Clean up, simplify, and refactor the code and structure without breaking any existing behavior.
+   - Re-run the full test suite to guarantee zero regressions.
+
+**Rule**: Never write production code first and batch test writing at the end. Every behavioral step within a sprint must follow the Red ➔ Green ➔ Refactor cycle.
+
 ## Non-negotiable product rules
 
 - Local filesystem remains source of truth.
