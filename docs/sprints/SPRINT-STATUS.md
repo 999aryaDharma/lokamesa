@@ -39,19 +39,19 @@ Rules:
 | SHR-09 | ngrok Transport | BLOCKED | SHR-02, FND-05 |  |  |
 | SHR-10 | ShareHost OS Isolation Spike | BLOCKED | SHR-02 |  |  |
 | FS-03 | Runtime File Watcher | DONE | FND-04, FS-02 | feat/fs-03-runtime-file-watcher (3d16a60) | docs/sprints/handoffs/FS-03-HANDOFF.md |
-| FS-07 | Explicit Physical File Operations | READY | FS-02, FND-02 |  |  |
-| HIST-01 | Recovery Snapshot Storage | READY | FND-03, FS-02 |  |  |
-| IDX-01 | DOCX Package Resource Preflight | READY | FND-04, FS-02 |  |  |
-| IDX-03 | Markdown Structural Parser | READY | FND-04, FS-02 |  |  |
-| WORD-01 | Open DOCX in Microsoft Word | READY | FND-07, FS-02 |  |  |
-| FS-04 | Hybrid Startup Reconciliation | READY | FS-02, FS-03 |  |  |
-| FS-05 | Rename & Move Correlation | READY | FS-02, FS-03 |  |  |
-| FS-08 | Reparse Point & Source Containment | BLOCKED | FS-01, FS-07 |  |  |
-| IDX-02 | DOCX Structural Parser | BLOCKED | IDX-01 |  |  |
-| MD-01 | Source-First Markdown Editor | BLOCKED | FND-07, IDX-03 |  |  |
-| WORD-02 | Word Editing/Lock Detection | BLOCKED | WORD-01, FS-03 |  |  |
-| WORD-03 | Dedicated STA Word Automation Queue | BLOCKED | FND-04, WORD-01 |  |  |
-| FS-06 | Missing File & Folder Recovery | BLOCKED | FS-04 |  |  |
+| FS-07 | Explicit Physical File Operations | DONE | FS-02, FND-02 | security/fs-07-explicit-physical-file-operations | docs/sprints/handoffs/FS-07-HANDOFF.md |
+| HIST-01 | Recovery Snapshot Storage | DONE | FND-03, FS-02 | fix/hist-01-recovery-snapshot-storage (TODO) | docs/sprints/handoffs/HIST-01-HANDOFF.md |
+| IDX-01 | DOCX Package Resource Preflight | DONE | FND-04, FS-02 | security/idx-01-docx-package-resource-preflight | docs/sprints/handoffs/IDX-01-HANDOFF.md |
+| IDX-03 | Markdown Structural Parser | DONE | FND-04, FS-02 | feat/idx-03-markdown-structural-parser | docs/sprints/handoffs/IDX-03-HANDOFF.md |
+| WORD-01 | Open DOCX in Microsoft Word | DONE | FND-07, FS-02 | feat/word-01-open-docx-in-microsoft-word | docs/sprints/handoffs/WORD-01-HANDOFF.md |
+| FS-04 | Hybrid Startup Reconciliation | DONE | FS-02, FS-03 | feat/fs-04-hybrid-startup-reconciliation | docs/sprints/handoffs/FS-04-HANDOFF.md |
+| FS-05 | Rename & Move Correlation | DONE | FS-02, FS-03 | feat/fs-05-rename-move-correlation | docs/sprints/handoffs/FS-05-HANDOFF.md |
+| FS-08 | Reparse Point & Source Containment | DONE | FS-01, FS-07 | feat/fs-08-reparse-point-source-containment | docs/sprints/handoffs/FS-08-HANDOFF.md |
+| IDX-02 | DOCX Structural Parser | IN_PROGRESS | IDX-01 |  |  |
+| MD-01 | Source-First Markdown Editor | IN_PROGRESS | FND-07, IDX-03 |  |  |
+| WORD-02 | Word Editing/Lock Detection | IN_PROGRESS | WORD-01, FS-03 |  |  |
+| WORD-03 | Dedicated STA Word Automation Queue | IN_PROGRESS | FND-04, WORD-01 |  |  |
+| FS-06 | Missing File & Folder Recovery | IN_PROGRESS | FS-04 |  |  |
 | DOCX-01 | Logical DOCX Text/Run Map | BLOCKED | IDX-02 |  |  |
 | IDX-04 | Metadata Persistence | BLOCKED | IDX-02, IDX-03, FND-03 |  |  |
 | MD-02 | Markdown Preview & Sanitization | BLOCKED | MD-01 |  |  |

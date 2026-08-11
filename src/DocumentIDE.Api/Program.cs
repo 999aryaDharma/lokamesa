@@ -1,9 +1,11 @@
 using DocumentIDE.Api.Security;
 using DocumentIDE.Core.Domain.Repositories;
 using DocumentIDE.Core.Filesystem;
+using DocumentIDE.Core.Word;
 using DocumentIDE.Infrastructure.Filesystem;
 using DocumentIDE.Infrastructure.Persistence;
 using DocumentIDE.Infrastructure.Persistence.Repositories;
+using DocumentIDE.Infrastructure.Word;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,6 +26,11 @@ builder.Services.AddScoped<IFolderSourceService, FolderSourceService>();
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
 builder.Services.AddScoped<IFileIdentityProvider, WindowsFileIdentityProvider>();
 builder.Services.AddScoped<DocumentIdentityService>();
+builder.Services.AddScoped<IMoveCorrelationService, MoveCorrelationService>();
+builder.Services.AddScoped<IStartupReconciler, StartupReconciler>();
+builder.Services.AddScoped<IWordDesktopLauncher, WordDesktopLauncher>();
+builder.Services.AddScoped<IRecycleBin, WindowsRecycleBin>();
+builder.Services.AddScoped<IPhysicalFileOperations, PhysicalFileOperations>();
 
 builder.Services.AddControllers();
 

@@ -19,6 +19,7 @@ import React, {
   useRef,
   useSyncExternalStore,
 } from 'react';
+import { openInWord } from '../files/OpenInWordAction';
 import { canvasStoreInstance, useCanvasStore } from './canvasStore';
 import type { CanvasObject } from './types';
 import { ZOOM_MAX, ZOOM_MIN } from './types';
@@ -41,9 +42,20 @@ interface CanvasCardProps {
   object: CanvasObject;
   isSelected: boolean;
   onSelect: (id: string) => void;
+  onDoubleClick?: (object: CanvasObject) => void;
 }
 
-const CanvasCard = memo(function CanvasCard({ object, isSelected, onSelect }: CanvasCardProps) {
+const CanvasCard = memo(function CanvasCard({ object, isSelected, onSelect, onDoubleClick }: CanvasCardProps) {
+  const handleDoubleClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (onDoubleClick) {
+        onDoubleClick(object);
+      }
+    },
+    [onDoubleClick, object]
+  );
+
   return (
     <div
       role="button"
@@ -68,6 +80,7 @@ const CanvasCard = memo(function CanvasCard({ object, isSelected, onSelect }: Ca
           : 'border-slate-200 hover:border-slate-300 hover:shadow-md',
       ].join(' ')}
       onClick={() => onSelect(object.id)}
+      onDoubleClick={handleDoubleClick}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelect(object.id); }}
     >
       {/* Object type icon */}
@@ -273,6 +286,15 @@ export default function DocumentCanvas() {
     [toggleSelect],
   );
 
+  const handleCardDoubleClick = useCallback(async (obj: CanvasObject) => {
+    if (obj.type === 'document' || obj.title.endsWith('.docx') || obj.title.endsWith('.doc')) {
+      const res = await openInWord(obj.id);
+      if (!res.success) {
+        alert(res.errorMessage);
+      }
+    }
+  }, []);
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
@@ -318,6 +340,7 @@ export default function DocumentCanvas() {
               object={obj}
               isSelected={selectedIds.has(obj.id)}
               onSelect={handleObjectSelect}
+              onDoubleClick={handleCardDoubleClick}
             />
           ))}
         </div>

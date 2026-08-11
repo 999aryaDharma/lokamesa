@@ -19,8 +19,6 @@ A sprint may make implementation detail more concrete, but it may not silently w
 
 Default rule:
 
-> Implement exactly one sprint per coding session/branch.
-
 Do not implement downstream features “while you are here”.
 
 Before starting a sprint:
@@ -63,3 +61,4 @@ Report:
 - commit hash if committed.
 
 Do not claim “done” if a required test is skipped or failing.
+

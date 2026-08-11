@@ -17,6 +17,7 @@ public class FileChangeCoordinator : IDisposable
     private readonly DocumentIdentityService _identityService;
     private readonly IDocumentRepository _documentRepo;
     private readonly IJobScheduler? _jobScheduler;
+    private readonly IMoveCorrelationService? _moveCorrelationService;
     private readonly TimeSpan _debounceDelay;
 
     private readonly ConcurrentDictionary<string, PendingPathChange> _pendingChanges = new(StringComparer.OrdinalIgnoreCase);
@@ -46,12 +47,14 @@ public class FileChangeCoordinator : IDisposable
         DocumentIdentityService identityService,
         IDocumentRepository documentRepo,
         IJobScheduler? jobScheduler = null,
-        TimeSpan? debounceDelay = null)
+        TimeSpan? debounceDelay = null,
+        IMoveCorrelationService? moveCorrelationService = null)
     {
         _watcher = watcher ?? throw new ArgumentNullException(nameof(watcher));
         _identityService = identityService ?? throw new ArgumentNullException(nameof(identityService));
         _documentRepo = documentRepo ?? throw new ArgumentNullException(nameof(documentRepo));
         _jobScheduler = jobScheduler;
+        _moveCorrelationService = moveCorrelationService;
         _debounceDelay = debounceDelay ?? TimeSpan.FromMilliseconds(300);
 
         _watcher.OnRawEvent += HandleRawEvent;
@@ -133,6 +136,26 @@ public class FileChangeCoordinator : IDisposable
 
             if (exists)
             {
+                // Check if an app-originated move intent exists for this destination path
+                var activeDestIntent = _moveCorrelationService?.FindActiveIntentByDestination(canonicalPath);
+                if (activeDestIntent != null)
+                {
+                    var correlatedDoc = await _moveCorrelationService!.CorrelateSameVolumeMoveAsync(canonicalPath);
+                    if (correlatedDoc != null)
+                    {
+                        var intentChangeEvent = new FileChangeEvent
+                        {
+                            ChangeType = FileChangeType.Renamed,
+                            Path = canonicalPath,
+                            OldPath = activeDestIntent.SourcePath,
+                            DocumentId = correlatedDoc.Id,
+                            FolderSourceId = pending.FolderSourceId
+                        };
+                        OnFileChanged?.Invoke(this, intentChangeEvent);
+                        return;
+                    }
+                }
+
                 // Retrieve document state before identity resolution for comparison
                 var docBefore = await _documentRepo.GetByPathAsync(canonicalPath);
                 if (docBefore == null && !string.IsNullOrEmpty(pending.OldCanonicalPath))
@@ -203,6 +226,13 @@ public class FileChangeCoordinator : IDisposable
             }
             else
             {
+                // If an active move intent exists for this source path, do not mark as missing prematurely
+                var activeSourceIntent = _moveCorrelationService?.FindActiveIntentBySource(canonicalPath);
+                if (activeSourceIntent != null)
+                {
+                    return;
+                }
+
                 // File does not exist physically on disk
                 var docInDb = await _documentRepo.GetByPathAsync(canonicalPath);
                 if (docInDb == null && !string.IsNullOrEmpty(pending.OldCanonicalPath))

@@ -8,6 +8,8 @@ public interface IDocumentRepository
     Task<Document?> GetByPathAsync(string currentPath);
     Task<Document?> GetByVolumeAndObjectIdAsync(string volumeId, string objectId);
     Task<System.Collections.Generic.List<Document>> GetDocumentsByFingerprintAsync(string fingerprint);
+    Task<System.Collections.Generic.IReadOnlyList<Document>> GetByFolderSourcePathAsync(string folderPath);
+    Task<System.Collections.Generic.IReadOnlyList<Document>> GetByWorkspaceAsync(string workspaceId);
     Task CreateAsync(Document document);
     Task UpdateAsync(Document document);
     Task DeleteAsync(string id);

@@ -104,6 +104,24 @@ public class FolderSourceRepository : IFolderSourceRepository
         await cmd.ExecuteNonQueryAsync();
     }
 
+    public async Task UpdateLastReconciledAtAsync(string id, string lastReconciledAt)
+    {
+        using var conn = _appDb.CreateConnection();
+        await conn.OpenAsync();
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            UPDATE folder_sources
+            SET last_reconciled_at = @lastReconciledAt, updated_at = @updatedAt
+            WHERE id = @id;
+        ";
+        cmd.Parameters.AddWithValue("@id", id);
+        cmd.Parameters.AddWithValue("@lastReconciledAt", lastReconciledAt);
+        cmd.Parameters.AddWithValue("@updatedAt", DateTime.UtcNow.ToString("O"));
+
+        await cmd.ExecuteNonQueryAsync();
+    }
+
     public async Task DeleteAsync(string id)
     {
         using var conn = _appDb.CreateConnection();

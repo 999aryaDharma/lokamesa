@@ -89,6 +89,60 @@ public class DocumentRepository : IDocumentRepository
         return list;
     }
 
+    public async Task<System.Collections.Generic.IReadOnlyList<Document>> GetByFolderSourcePathAsync(string folderPath)
+    {
+        var list = new System.Collections.Generic.List<Document>();
+        using var conn = _appDb.CreateConnection();
+        await conn.OpenAsync();
+
+        string prefix = folderPath.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT id, filesystem_volume_id, filesystem_object_id, current_path, last_known_path, filename, extension, document_type, size_bytes, modified_at, content_fingerprint, availability_status, index_status, created_at, updated_at
+            FROM documents
+            WHERE current_path LIKE @prefix || '%' OR last_known_path LIKE @prefix || '%';
+        ";
+        cmd.Parameters.AddWithValue("@prefix", prefix);
+
+        using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            list.Add(MapDocument(reader));
+        }
+
+        return list;
+    }
+
+    public async Task<System.Collections.Generic.IReadOnlyList<Document>> GetByWorkspaceAsync(string workspaceId)
+    {
+        var list = new System.Collections.Generic.List<Document>();
+        using var conn = _appDb.CreateConnection();
+        await conn.OpenAsync();
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT DISTINCT d.id, d.filesystem_volume_id, d.filesystem_object_id, d.current_path, d.last_known_path, d.filename, d.extension, d.document_type, d.size_bytes, d.modified_at, d.content_fingerprint, d.availability_status, d.index_status, d.created_at, d.updated_at
+            FROM documents d
+            INNER JOIN workspace_documents wd ON d.id = wd.document_id
+            WHERE wd.workspace_id = @workspaceId
+            UNION
+            SELECT DISTINCT d.id, d.filesystem_volume_id, d.filesystem_object_id, d.current_path, d.last_known_path, d.filename, d.extension, d.document_type, d.size_bytes, d.modified_at, d.content_fingerprint, d.availability_status, d.index_status, d.created_at, d.updated_at
+            FROM documents d
+            INNER JOIN folder_sources fs ON (d.current_path LIKE fs.canonical_path || '%' OR d.current_path LIKE fs.canonical_path || '\%' OR d.current_path LIKE fs.canonical_path || '/%')
+            WHERE fs.workspace_id = @workspaceId;
+        ";
+        cmd.Parameters.AddWithValue("@workspaceId", workspaceId);
+
+        using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            list.Add(MapDocument(reader));
+        }
+
+        return list;
+    }
+
     public async Task CreateAsync(Document document)
     {
         using var conn = _appDb.CreateConnection();
