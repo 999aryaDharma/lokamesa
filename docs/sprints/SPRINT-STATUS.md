@@ -91,7 +91,7 @@ Rules:
 | CTX-02 | Explicit Dependency Expansion | READY | CTX-01, GR-02 |  |  |
 | CTX-03 | DOCX Context Representation | READY | CTX-01, IDX-02 |  |  |
 | GR-04 | Manual Relations | DONE | GR-01, GR-03 | feat/gr-04-manual-relations | docs/sprints/handoffs/GR-04-HANDOFF.md |
-| GR-05 | Bounded Graph Rendering | READY | GR-03 |  |  |
+| GR-05 | Bounded Graph Rendering | DONE | GR-03 | perf/gr-05-bounded-graph-rendering | docs/sprints/handoffs/GR-05-HANDOFF.md |
 | CAN-07 | Multi-Select, Group Drag & Tidy | BLOCKED | CAN-06 |  |  |
 | SHR-06 | Share-Scoped Search & Graph | BLOCKED | SHR-05, SRCH-02, GR-03 |  |  |
 | SHR-11 | Owner Share Management UI | BLOCKED | SHR-05, SHR-07, SHR-09 |  |  |
