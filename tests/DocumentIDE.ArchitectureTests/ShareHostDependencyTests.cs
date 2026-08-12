@@ -16,7 +16,7 @@ public class ShareHostDependencyTests : IClassFixture<WebApplicationFactory<Prog
 {
     private readonly WebApplicationFactory<Program> _factory;
 
-    public ShareHostDependencyTests(WebApplicationFactory<Program> factory)
+    internal ShareHostDependencyTests(WebApplicationFactory<Program> factory)
     {
         _factory = factory;
     }
