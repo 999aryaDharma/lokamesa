@@ -8,6 +8,8 @@ namespace DocumentIDE.Core.Sharing;
 public class ShareTokenService
 {
     private readonly string _sharesBaseDirectory;
+    // In-memory map of shareId to token hash for authentication
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _shareTokenHashes = new System.Collections.Concurrent.ConcurrentDictionary<string, string>();
 
     public ShareTokenService(string? sharesBaseDirectory = null)
     {
@@ -136,4 +138,23 @@ public class ShareTokenService
         }
         return shareRoot;
     }
-}
+
+        // Generates a token for a specific share and stores its hash.
+        public string GenerateTokenForShare(string shareId)
+        {
+            var token = GenerateToken();
+            var hash = ComputeHash(token);
+            _shareTokenHashes[shareId] = hash;
+            return token;
+        }
+
+        // Verifies a token for the given share using stored hash.
+        public bool VerifyTokenForShare(string shareId, string token)
+        {
+            if (string.IsNullOrWhiteSpace(shareId) || string.IsNullOrWhiteSpace(token))
+                return false;
+            if (!_shareTokenHashes.TryGetValue(shareId, out var storedHash))
+                return false;
+            return VerifyToken(token, storedHash);
+        }
+    }

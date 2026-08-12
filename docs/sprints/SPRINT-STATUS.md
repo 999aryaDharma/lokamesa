@@ -35,9 +35,9 @@ Rules:
 | SHR-02 | Separate ShareHost Process | DONE | SHR-01, FND-08 | security/shr-02-separate-sharehost-process (c4ce75a) | docs/sprints/handoffs/SHR-02-HANDOFF.md |
 | CAN-02 | Folder Canvas Object | DONE | FS-01, CAN-01 | feat/can-02-folder-canvas-object (eb7b952) | docs/sprints/handoffs/CAN-02-HANDOFF.md |
 | FS-02 | Stable Document Identity | DONE | FND-03, FS-01 | feat/fs-02-stable-document-identity (5d473d9) | docs/sprints/handoffs/FS-02-HANDOFF.md |
-| SHR-03 | Share Token Authentication | READY | SHR-02, FND-05 |  |  |
-| SHR-09 | ngrok Transport | READY | SHR-02, FND-05 |  |  |
-| SHR-10 | ShareHost OS Isolation Spike | READY | SHR-02 |  |  |
+| SHR-03 | Share Token Authentication | DONE | SHR-02, FND-05 | feat/shr-03-share-token-authentication |  |
+| SHR-09 | ngrok Transport | DONE | SHR-02, FND-05 |  |  |
+| SHR-10 | ShareHost OS Isolation Spike | DONE | SHR-02 | chore/shr-10-sharehost-os-isolation-spike |  |
 | FS-03 | Runtime File Watcher | DONE | FND-04, FS-02 | feat/fs-03-runtime-file-watcher (3d16a60) | docs/sprints/handoffs/FS-03-HANDOFF.md |
 | FS-07 | Explicit Physical File Operations | DONE | FS-02, FND-02 | security/fs-07-explicit-physical-file-operations | docs/sprints/handoffs/FS-07-HANDOFF.md |
 | HIST-01 | Recovery Snapshot Storage | DONE | FND-03, FS-02 | fix/hist-01-recovery-snapshot-storage (TODO) | docs/sprints/handoffs/HIST-01-HANDOFF.md |

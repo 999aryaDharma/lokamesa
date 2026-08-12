@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text.Json;
 using DocumentIDE.Core.Sharing;
+using DocumentIDE.ShareHost;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,7 +18,12 @@ builder.WebHost.ConfigureKestrel(options =>
 
 builder.Services.AddSingleton<ShareTokenService>();
 
+
 var app = builder.Build();
+app.UseWhen(context => context.Request.Headers.ContainsKey("X-Share-Token"), appBuilder =>
+{
+    appBuilder.UseMiddleware<ShareTokenMiddleware>();
+});
 
 app.MapGet("/", () => Results.Ok(new { status = "DocumentIDE ShareHost Active", service = "ShareHost" }));
 
