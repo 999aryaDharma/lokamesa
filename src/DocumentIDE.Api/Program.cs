@@ -9,6 +9,8 @@ using DocumentIDE.Infrastructure.Persistence.Repositories;
 using DocumentIDE.Infrastructure.Diagnostics;
 using DocumentIDE.Core.Search;
 using DocumentIDE.Infrastructure.Search;
+using DocumentIDE.Core.Indexing;
+using DocumentIDE.Infrastructure.Docx;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseDiagnostics();
@@ -35,8 +37,11 @@ builder.Services.AddScoped<IStartupReconciler, StartupReconciler>();
 builder.Services.AddScoped<IWordDesktopLauncher, WordDesktopLauncher>();
 builder.Services.AddScoped<IRecycleBin, WindowsRecycleBin>();
 builder.Services.AddScoped<IPhysicalFileOperations, PhysicalFileOperations>();
-builder.Services.AddScoped<DocumentIDE.Core.Diagnostics.IDiagnosticsExportService, DiagnosticsExportService>();
+builder.Services.AddScoped<IDocumentMetadataRepository, DocumentMetadataRepository>();
 builder.Services.AddScoped<IFtsIndex, FtsIndex>();
+builder.Services.AddScoped<DocumentIDE.Core.Markdown.IMarkdownStructureParser, DocumentIDE.Core.Markdown.MarkdownStructureParser>();
+builder.Services.AddScoped<DocumentIDE.Core.Indexing.IDocxStructureParser, DocxStructureParser>();
+builder.Services.AddScoped<IncrementalIndexCoordinator>();
 
 builder.Services.AddControllers();
 

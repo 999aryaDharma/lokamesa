@@ -68,8 +68,8 @@ Rules:
 | DOCX-03 | Strict DOCX Text Mutation | DONE | DOCX-02 | feat/docx-03-strict-docx-text-mutation (d58d337) | docs/sprints/handoffs/DOCX-03-HANDOFF.md |
 | CAN-04 | Folder Picker & File Release | BLOCKED | CAN-02, CAN-03 |  |  |
 | WORD-04 | High-Fidelity Quick Look | BLOCKED | WORD-03, DOCX-04 |  |  |
-| IDX-06 | Incremental Index Scheduler | READY | IDX-05, FS-03 |  |  |
-| SRCH-01 | Structured Query Parser | READY | IDX-05 |  |  |
+| IDX-06 | Incremental Index Scheduler | DONE | IDX-05, FS-03 | feat/idx-06-incremental-index-scheduler | docs/sprints/handoffs/IDX-06-HANDOFF.md |
+| SRCH-01 | Structured Query Parser | DONE | IDX-05 | feat/srch-01-structured-query-parser | docs/sprints/handoffs/SRCH-01-HANDOFF.md |
 | QA-05 | Public Share Security Audit | BLOCKED | SHR-08, SHR-10 |  |  |
 | GR-02 | Backlinks & Reference Inspector | DONE | GR-01, MD-04 | feat/gr-02-backlinks-reference-inspector (c192481) | docs/sprints/handoffs/GR-02-HANDOFF.md |
 | PDF-03 | Streaming Ordered PDF Merge | BLOCKED | PDF-02 |  |  |
@@ -77,9 +77,9 @@ Rules:
 | QA-01 | Golden DOCX Regression Corpus | READY | DOCX-03 |  |  |
 | CAN-05 | Spatially Indexed Assisted Placement | BLOCKED | CAN-04 |  |  |
 | SHR-04 | Snapshot Share | BLOCKED | SHR-03, WORD-04, MD-02 |  |  |
-| AI-01 | Embedding Provider Abstraction | BLOCKED | FND-05, IDX-06 |  |  |
-| QA-02 | Filesystem & Indexing Soak | BLOCKED | FS-08, IDX-06 |  |  |
-| SRCH-02 | Exact Ranked Search | BLOCKED | SRCH-01 |  |  |
+| AI-01 | Embedding Provider Abstraction | READY | FND-05, IDX-06 |  |  |
+| QA-02 | Filesystem & Indexing Soak | READY | FS-08, IDX-06 |  |  |
+| SRCH-02 | Exact Ranked Search | READY | SRCH-01 |  |  |
 | CTX-01 | Context Pack Core | DONE | MD-03, GR-02 | feat/ctx-01-context-pack-core | docs/sprints/handoffs/CTX-01-HANDOFF.md |
 | GR-03 | Graph View | DONE | GR-02, CAN-01 | feat/gr-03-graph-view | docs/sprints/handoffs/GR-03-HANDOFF.md |
 | CAN-06 | Position Persistence & Pinning | BLOCKED | CAN-05, FS-05 |  |  |
