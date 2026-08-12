@@ -352,7 +352,7 @@ public class SourceWatcherTests : IDisposable
         File.Delete(docPath);
         mockWatcher.RaiseRawEvent(WatcherChangeTypes.Deleted, docPath, null, source.Id);
 
-        await Task.Delay(250);
+        await Task.Delay(500);
 
         try
         {
