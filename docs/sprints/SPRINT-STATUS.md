@@ -57,7 +57,7 @@ Rules:
 | MD-02 | Markdown Preview & Sanitization | DONE | MD-01 | feat/md-02-markdown-preview (abcdef12) | docs/sprints/handoffs/MD-02-HANDOFF.md |
 | MD-03 | Frontmatter & Explicit Link Index | DONE | IDX-03, MD-01 | feat/md-03-frontmatter-explicit-link-index (1398e2c) | docs/sprints/handoffs/MD-03-HANDOFF.md |
 | PDF-01 | Single DOCX PDF Export | BLOCKED | WORD-03 |  |  |
-| DOCX-02 | Logical Search Across Runs | READY | DOCX-01 |  |  |
+| DOCX-02 | Logical Search Across Runs | DONE | DOCX-01 | feat/docx-02-logical-search-across-runs (ee88815) | docs/sprints/handoffs/DOCX-02-HANDOFF.md |
 | CAN-03 | Document Paper Object & Thumbnail Shell | READY | IDX-04, CAN-01 |  |  |
 | DOCX-04 | Document Lens Metadata | READY | IDX-04 |  |  |
 | IDX-05 | FTS5 Search Index | READY | IDX-04 |  |  |
@@ -65,7 +65,7 @@ Rules:
 | GR-01 | Relation Store & Extraction | READY | MD-03, FND-03 |  |  |
 | MD-04 | Wikilink Resolution & Backlink Inputs | READY | MD-03 |  |  |
 | PDF-02 | Batch Separate PDF Export | BLOCKED | PDF-01, FND-04 |  |  |
-| DOCX-03 | Strict DOCX Text Mutation | BLOCKED | DOCX-02 |  |  |
+| DOCX-03 | Strict DOCX Text Mutation | READY | DOCX-02 |  |  |
 | CAN-04 | Folder Picker & File Release | BLOCKED | CAN-02, CAN-03 |  |  |
 | WORD-04 | High-Fidelity Quick Look | BLOCKED | WORD-03, DOCX-04 |  |  |
 | IDX-06 | Incremental Index Scheduler | BLOCKED | IDX-05, FS-03 |  |  |
