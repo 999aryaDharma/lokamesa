@@ -77,17 +77,17 @@ Rules:
 | QA-01 | Golden DOCX Regression Corpus | READY | DOCX-03 |  |  |
 | CAN-05 | Spatially Indexed Assisted Placement | BLOCKED | CAN-04 |  |  |
 | SHR-04 | Snapshot Share | BLOCKED | SHR-03, WORD-04, MD-02 |  |  |
-| AI-01 | Embedding Provider Abstraction | READY | FND-05, IDX-06 |  |  |
+| AI-01 | Embedding Provider Abstraction | DONE | FND-05, IDX-06 | feat/ai-01-embedding-provider-abstraction | docs/sprints/handoffs/AI-01-HANDOFF.md |
 | QA-02 | Filesystem & Indexing Soak | READY | FS-08, IDX-06 |  |  |
-| SRCH-02 | Exact Ranked Search | READY | SRCH-01 |  |  |
+| SRCH-02 | Exact Ranked Search | DONE | SRCH-01 | feat/srch-02-exact-ranked-search | docs/sprints/handoffs/SRCH-02-HANDOFF.md |
 | CTX-01 | Context Pack Core | DONE | MD-03, GR-02 | feat/ctx-01-context-pack-core | docs/sprints/handoffs/CTX-01-HANDOFF.md |
 | GR-03 | Graph View | DONE | GR-02, CAN-01 | feat/gr-03-graph-view | docs/sprints/handoffs/GR-03-HANDOFF.md |
 | CAN-06 | Position Persistence & Pinning | BLOCKED | CAN-05, FS-05 |  |  |
 | SHR-05 | Membership-Safe Live Share | BLOCKED | SHR-04, FS-03 |  |  |
 | SHR-07 | Share Download Permissions | BLOCKED | SHR-04, PDF-01 |  |  |
-| AI-02 | Local Embedding Provider | BLOCKED | AI-01 |  |  |
-| SRCH-03 | Metadata Filters | BLOCKED | SRCH-02 |  |  |
-| SRCH-04 | Fuzzy Exploratory Search | BLOCKED | SRCH-02 |  |  |
+| AI-02 | Local Embedding Provider | READY | AI-01 |  |  |
+| SRCH-03 | Metadata Filters | READY | SRCH-02 |  |  |
+| SRCH-04 | Fuzzy Exploratory Search | READY | SRCH-02 |  |  |
 | CTX-02 | Explicit Dependency Expansion | DONE | CTX-01, GR-02 | feat/ctx-02-explicit-dependency-expansion (8aa5e85) | docs/sprints/handoffs/CTX-02-HANDOFF.md |
 | CTX-03 | DOCX Context Representation | DONE | CTX-01, IDX-02 | feat/ctx-03-docx-context-representation (0cd43a4) | docs/sprints/handoffs/CTX-03-HANDOFF.md |
 | GR-04 | Manual Relations | DONE | GR-01, GR-03 | feat/gr-04-manual-relations | docs/sprints/handoffs/GR-04-HANDOFF.md |

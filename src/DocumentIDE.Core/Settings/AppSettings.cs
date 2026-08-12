@@ -8,4 +8,7 @@ public class AppSettings
     public long RecoveryCapacityBudgetBytes { get; set; } = 5368709120L;
     public string DefaultView { get; set; } = "canvas";
     public bool TelemetryOptOut { get; set; } = true;
+    public bool EnableExternalEmbeddingProvider { get; set; } = false;
+    public string ActiveEmbeddingProviderId { get; set; } = "none";
+    public string ActiveEmbeddingModelId { get; set; } = "";
 }
