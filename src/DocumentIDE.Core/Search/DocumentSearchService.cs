@@ -48,17 +48,20 @@ public class DocumentSearchService : IDocumentSearchService
     private readonly IDocumentRepository _documentRepository;
     private readonly IDocumentMetadataRepository? _metadataRepository;
     private readonly IFuzzySearchService _fuzzySearchService;
+    private readonly ISemanticSearchService? _semanticSearchService;
 
     public DocumentSearchService(
         IFtsIndex ftsIndex,
         IDocumentRepository documentRepository,
         IDocumentMetadataRepository? metadataRepository = null,
-        IFuzzySearchService? fuzzySearchService = null)
+        IFuzzySearchService? fuzzySearchService = null,
+        ISemanticSearchService? semanticSearchService = null)
     {
         _ftsIndex = ftsIndex ?? throw new ArgumentNullException(nameof(ftsIndex));
         _documentRepository = documentRepository ?? throw new ArgumentNullException(nameof(documentRepository));
         _metadataRepository = metadataRepository;
         _fuzzySearchService = fuzzySearchService ?? new FuzzySearchService();
+        _semanticSearchService = semanticSearchService;
     }
 
     public Task<SearchExecutionResult> SearchAsync(string rawQuery, DocumentSearchOptions? options = null, CancellationToken cancellationToken = default)
@@ -70,6 +73,11 @@ public class DocumentSearchService : IDocumentSearchService
     public async Task<SearchExecutionResult> SearchAsync(SearchQuery query, DocumentSearchOptions? options = null, CancellationToken cancellationToken = default)
     {
         if (query == null) throw new ArgumentNullException(nameof(query));
+
+        if (query.Mode == SearchMode.Smart && _semanticSearchService != null)
+        {
+            return await _semanticSearchService.SearchAsync(query, options, cancellationToken);
+        }
 
         var stopwatch = Stopwatch.StartNew();
         options ??= new DocumentSearchOptions();

@@ -6,6 +6,7 @@
  */
 import React, { useSyncExternalStore, useCallback } from 'react';
 import { MetadataFilterChips } from './MetadataFilterChips';
+import { SearchModeSwitch, SearchMode } from './SearchModeSwitch';
 import { searchStoreInstance, useSearchStore, SearchResult, SearchBatchScope } from './searchStore';
 
 export interface SearchPanelProps {
@@ -60,6 +61,23 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     removeFilterChip,
     getBatchScope,
   } = state;
+
+  const activeMode: SearchMode = React.useMemo(() => {
+    if (/\bmode:(smart|semantic)\b/i.test(query)) return 'smart';
+    if (/\bmode:(fuzzy|exploratory)\b/i.test(query)) return 'fuzzy';
+    return 'exact';
+  }, [query]);
+
+  const handleModeChange = useCallback(
+    (newMode: SearchMode) => {
+      let cleanQuery = query.replace(/\bmode:\w+\b/gi, '').trim();
+      if (newMode !== 'exact') {
+        cleanQuery = cleanQuery ? `${cleanQuery} mode:${newMode}` : `mode:${newMode}`;
+      }
+      setQuery(cleanQuery, true);
+    },
+    [query, setQuery]
+  );
 
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -134,6 +152,11 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
           ) : isLoading ? (
             <span className="absolute right-2 text-xs animate-spin opacity-60">⏳</span>
           ) : null}
+        </div>
+
+        {/* Search Mode Switch (Exact / Fuzzy / Smart) */}
+        <div className="flex justify-start">
+          <SearchModeSwitch mode={activeMode} onModeChange={handleModeChange} />
         </div>
 
         {/* Metadata Filter Chips */}

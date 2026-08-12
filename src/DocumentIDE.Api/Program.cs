@@ -42,6 +42,10 @@ builder.Services.AddScoped<IFtsIndex, FtsIndex>();
 builder.Services.AddScoped<DocumentIDE.Core.Markdown.IMarkdownStructureParser, DocumentIDE.Core.Markdown.MarkdownStructureParser>();
 builder.Services.AddScoped<DocumentIDE.Core.Indexing.IDocxStructureParser, DocxStructureParser>();
 builder.Services.AddScoped<IncrementalIndexCoordinator>();
+builder.Services.AddScoped<DocumentIDE.Core.Semantic.IEmbeddingStore, DocumentIDE.Infrastructure.Semantic.SqliteEmbeddingStore>();
+builder.Services.AddScoped<DocumentIDE.Core.Semantic.IEmbeddingProvider, DocumentIDE.Infrastructure.Semantic.LocalEmbeddingProvider>();
+builder.Services.AddScoped<ISemanticSearchService, SemanticSearchService>();
+builder.Services.AddScoped<IDocumentSearchService, DocumentSearchService>();
 
 builder.Services.AddControllers();
 
