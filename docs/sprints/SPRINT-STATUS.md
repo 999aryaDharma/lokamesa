@@ -88,15 +88,15 @@ Rules:
 | AI-02 | Local Embedding Provider | BLOCKED | AI-01 |  |  |
 | SRCH-03 | Metadata Filters | BLOCKED | SRCH-02 |  |  |
 | SRCH-04 | Fuzzy Exploratory Search | BLOCKED | SRCH-02 |  |  |
-| CTX-02 | Explicit Dependency Expansion | READY | CTX-01, GR-02 |  |  |
-| CTX-03 | DOCX Context Representation | READY | CTX-01, IDX-02 |  |  |
+| CTX-02 | Explicit Dependency Expansion | DONE | CTX-01, GR-02 | feat/ctx-02-explicit-dependency-expansion | docs/sprints/handoffs/CTX-02-HANDOFF.md |
+| CTX-03 | DOCX Context Representation | DONE | CTX-01, IDX-02 | feat/ctx-03-docx-context-representation (0cd43a4) | docs/sprints/handoffs/CTX-03-HANDOFF.md |
 | GR-04 | Manual Relations | DONE | GR-01, GR-03 | feat/gr-04-manual-relations | docs/sprints/handoffs/GR-04-HANDOFF.md |
 | GR-05 | Bounded Graph Rendering | DONE | GR-03 | perf/gr-05-bounded-graph-rendering | docs/sprints/handoffs/GR-05-HANDOFF.md |
 | CAN-07 | Multi-Select, Group Drag & Tidy | BLOCKED | CAN-06 |  |  |
 | SHR-06 | Share-Scoped Search & Graph | BLOCKED | SHR-05, SRCH-02, GR-03 |  |  |
 | SHR-11 | Owner Share Management UI | BLOCKED | SHR-05, SHR-07, SHR-09 |  |  |
 | SRCH-05 | Realtime Search UI & Selection | BLOCKED | SRCH-03, SRCH-04, FND-07 |  |  |
-| CTX-04 | Token Estimate & Context Export | BLOCKED | CTX-02, CTX-03 |  |  |
+| CTX-04 | Token Estimate & Context Export | READY | CTX-02, CTX-03 |  |  |
 | AI-04 | Semantic Graph Suggestions | BLOCKED | AI-02, GR-05 |  |  |
 | AI-03 | Semantic Search Mode | BLOCKED | AI-02, SRCH-05 |  |  |
 | BAT-02 | Batch Scope Resolver | BLOCKED | FS-01, SRCH-05, BAT-01 |  |  |
