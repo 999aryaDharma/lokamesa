@@ -85,7 +85,7 @@ Rules:
 | CAN-06 | Position Persistence & Pinning | BLOCKED | CAN-05, FS-05 |  |  |
 | SHR-05 | Membership-Safe Live Share | BLOCKED | SHR-04, FS-03 |  |  |
 | SHR-07 | Share Download Permissions | BLOCKED | SHR-04, PDF-01 |  |  |
-| AI-02 | Local Embedding Provider | READY | AI-01 |  |  |
+| AI-02 | Local Embedding Provider | DONE | AI-01 | feat/ai-02-local-embedding-provider (90c3d39) | docs/sprints/handoffs/AI-02-HANDOFF.md |
 | SRCH-03 | Metadata Filters | READY | SRCH-02 |  |  |
 | SRCH-04 | Fuzzy Exploratory Search | READY | SRCH-02 |  |  |
 | CTX-02 | Explicit Dependency Expansion | DONE | CTX-01, GR-02 | feat/ctx-02-explicit-dependency-expansion (8aa5e85) | docs/sprints/handoffs/CTX-02-HANDOFF.md |
@@ -97,7 +97,7 @@ Rules:
 | SHR-11 | Owner Share Management UI | BLOCKED | SHR-05, SHR-07, SHR-09 |  |  |
 | SRCH-05 | Realtime Search UI & Selection | BLOCKED | SRCH-03, SRCH-04, FND-07 |  |  |
 | CTX-04 | Token Estimate & Context Export | DONE | CTX-02, CTX-03 | feat/ctx-04-token-estimate-context-export | docs/sprints/handoffs/CTX-04-HANDOFF.md |
-| AI-04 | Semantic Graph Suggestions | BLOCKED | AI-02, GR-05 |  |  |
+| AI-04 | Semantic Graph Suggestions | READY | AI-02, GR-05 |  |  |
 | AI-03 | Semantic Search Mode | BLOCKED | AI-02, SRCH-05 |  |  |
 | BAT-02 | Batch Scope Resolver | BLOCKED | FS-01, SRCH-05, BAT-01 |  |  |
 | CAN-08 | List View & View Switch | BLOCKED | CAN-03, SRCH-05 |  |  |

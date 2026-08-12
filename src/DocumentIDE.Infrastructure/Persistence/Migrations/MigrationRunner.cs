@@ -23,7 +23,8 @@ public class MigrationRunner
             new Migration_005_MetadataPersistence(),
             new Migration_006_RelationStore(),
             new Migration_007_BatchOperationPlans(),
-            new Migration_008_FtsIndex()
+            new Migration_008_FtsIndex(),
+            new Migration_009_EmbeddingStore()
         }.OrderBy(m => m.Version).ToList();
     }
 
