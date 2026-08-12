@@ -63,7 +63,7 @@ Rules:
 | IDX-05 | FTS5 Search Index | READY | IDX-04 |  |  |
 | SHR-08 | Share CSP, Sanitization & Rate Limits | BLOCKED | SHR-03, MD-02 |  |  |
 | GR-01 | Relation Store & Extraction | READY | MD-03, FND-03 |  |  |
-| MD-04 | Wikilink Resolution & Backlink Inputs | READY | MD-03 |  |  |
+| MD-04 | Wikilink Resolution & Backlink Inputs | DONE | MD-03 | feat/md-04-wikilink-resolution-backlink-inputs (b6ace97) | docs/sprints/handoffs/MD-04-HANDOFF.md |
 | PDF-02 | Batch Separate PDF Export | BLOCKED | PDF-01, FND-04 |  |  |
 | DOCX-03 | Strict DOCX Text Mutation | READY | DOCX-02 |  |  |
 | CAN-04 | Folder Picker & File Release | BLOCKED | CAN-02, CAN-03 |  |  |

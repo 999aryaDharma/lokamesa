@@ -157,41 +157,8 @@ public static class MarkdownLinkIndexer
         }
         else if (linkType == MarkdownLinkType.Wikilink)
         {
-            string targetClean = rawTarget;
-            int hashIdx = targetClean.IndexOf('#');
-            if (hashIdx >= 0)
-            {
-                targetClean = targetClean.Substring(0, hashIdx).Trim();
-            }
-
-            if (targetClean.Contains('/') || targetClean.Contains('\\') || Path.HasExtension(targetClean))
-            {
-                string norm = NormalizeRelativeLink(sourceFilePath, targetClean);
-                var pathMatch = filesList.FirstOrDefault(f => string.Equals(f, norm, StringComparison.OrdinalIgnoreCase));
-                if (pathMatch != null)
-                {
-                    return new LinkResolutionResult(true, false, pathMatch, new[] { pathMatch });
-                }
-            }
-
-            string targetStem = Path.GetFileNameWithoutExtension(targetClean);
-            var stemMatches = filesList.Where(f =>
-                string.Equals(Path.GetFileNameWithoutExtension(f), targetStem, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(Path.GetFileName(f), targetClean, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(Path.GetFileName(f), targetClean + ".md", StringComparison.OrdinalIgnoreCase))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            if (stemMatches.Count == 1)
-            {
-                return new LinkResolutionResult(true, false, stemMatches[0], stemMatches);
-            }
-            else if (stemMatches.Count > 1)
-            {
-                return new LinkResolutionResult(false, true, null, stemMatches);
-            }
-
-            return new LinkResolutionResult(false, false, null, Array.Empty<string>());
+            var wikiRes = WikilinkResolver.ResolveWikilink(sourceFilePath, rawTarget, filesList);
+            return new LinkResolutionResult(wikiRes.IsResolved, wikiRes.IsAmbiguous, wikiRes.ResolvedPath, wikiRes.CandidatePaths);
         }
 
         return new LinkResolutionResult(false, false, null, Array.Empty<string>());
