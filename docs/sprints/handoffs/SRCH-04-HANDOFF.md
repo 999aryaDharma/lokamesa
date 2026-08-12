@@ -1,49 +1,40 @@
-# Sprint Handoff: SRCH-04 — Fuzzy Exploratory Search
+# Sprint Handoff — SRCH-04
 
-**Date:** 2026-08-12  
-**Sprint:** `SRCH-04 — Fuzzy Exploratory Search`  
 **Status:** DONE  
-**Recommended Branch:** `feat/srch-04-fuzzy-exploratory-search`
+**Branch:** `feat/srch-04-fuzzy-exploratory-search`  
+**Commits:** `8514a2c`
 
----
+## What changed
+- Implemented `FuzzySearchService` using Levenshtein distance edit matching bounded by term length for typo-tolerant exploratory search.
+- Blended fuzzy search score (capped at 50.0) below exact lexical match scores (100.0+ to 10,000.0) to ensure exact results strictly outrank fuzzy results.
+- Labeled fuzzy match sources with `"fuzzy"` in `MatchSources`.
+- Capped candidate set evaluation to `MaxCandidates` (default 1000) before calculating edit distances.
+- Exposed fuzzy search toggle via `SearchQuery.Mode == SearchMode.Fuzzy`.
+- Integrated `IFuzzySearchService` into `DocumentSearchService`.
+- Added unit test suite in `FuzzySearchTests.cs` verifying TDD Red-Green-Refactor, edit distance, candidate capping, ranking hierarchy, exact mode isolation, and Batch module decoupling.
 
-## 1. Executive Summary
+## Files changed
+- `src/DocumentIDE.Core/Search/FuzzySearchService.cs`
+- `src/DocumentIDE.Core/Search/DocumentSearchService.cs`
+- `src/DocumentIDE.Core/Graph/SemanticRelationService.cs`
+- `tests/DocumentIDE.Core.Tests/Search/FuzzySearchTests.cs`
+- `docs/sprints/handoffs/SRCH-04-HANDOFF.md`
 
-`SRCH-04 — Fuzzy Exploratory Search` adds typo-tolerant exploratory search matching over workspace documents while guaranteeing that exact lexical matches always outrank fuzzy matches and destructive operations remain strictly isolated from fuzzy matching algorithms.
+## Verification
+- `& 'C:\Users\User\AppData\Local\Programs\FlyEnv-Data\app\dotnet\10.0.302\dotnet.exe' test --filter "FullyQualifiedName~FuzzySearchTests"` → PASS (5 unit tests passed)
+- `& 'C:\Users\User\AppData\Local\Programs\FlyEnv-Data\app\dotnet\10.0.302\dotnet.exe' test` → PASS (399 Core unit tests, 158 Integration tests, 7 Architecture tests passed)
 
----
-
-## 2. Key Changes & Deliverables
-
-- **`FuzzySearchService`** (`src/DocumentIDE.Core/Search/FuzzySearchService.cs`):
-  - Implemented bounded Levenshtein & Damerau-Levenshtein distance matching over document titles, paths, and content candidate sets.
-  - Blends fuzzy scores below exact match scores so exact matches always rank higher.
-  - Labels match sources with `"fuzzy"`.
-  - Caps candidate set size before performing distance calculations.
-  - Exposes configurable `EnableFuzzy` toggle option.
-- **Unit & Integration Test Suite** (`tests/DocumentIDE.Core.Tests/Search/FuzzySearchTests.cs`):
-  - Unit tests verifying:
-    - Small typo finds expected document.
-    - Exact result outranks fuzzy result.
-    - Batch/SearchReplace module has zero dependency on fuzzy matcher.
-    - Fuzzy match mode toggle functionality.
-
----
-
-## 3. Verification & Test Results
-
-- Executed command: `& "C:\Users\User\AppData\Local\Programs\FlyEnv-Data\app\dotnet\10.0.302\dotnet.exe" test`
-- Results:
-  - `Core.Tests`: **395 PASSED** (100%)
-  - `IntegrationTests`: **158 PASSED** (100%)
-  - `ArchitectureTests`: **7 PASSED** (100%)
-  - Total: **560 PASSED** (0 failed, 0 skipped)
-
----
-
-## 4. Acceptance Criteria & Safety Gate
-
+## Acceptance criteria
 - [x] Small typo finds expected document.
 - [x] Exact result outranks fuzzy result.
 - [x] Batch/SearchReplace module has no dependency on fuzzy matcher.
 - [x] Fuzzy never becomes implicit destructive matching.
+
+## Deviations / spec conflicts
+None.
+
+## Risks discovered
+None.
+
+## Next eligible sprint(s)
+- `SRCH-05` — Realtime Search UI & Selection
