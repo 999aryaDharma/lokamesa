@@ -47,12 +47,12 @@ Rules:
 | FS-04 | Hybrid Startup Reconciliation | DONE | FS-02, FS-03 | feat/fs-04-hybrid-startup-reconciliation | docs/sprints/handoffs/FS-04-HANDOFF.md |
 | FS-05 | Rename & Move Correlation | DONE | FS-02, FS-03 | feat/fs-05-rename-move-correlation | docs/sprints/handoffs/FS-05-HANDOFF.md |
 | FS-08 | Reparse Point & Source Containment | DONE | FS-01, FS-07 | feat/fs-08-reparse-point-source-containment | docs/sprints/handoffs/FS-08-HANDOFF.md |
-| IDX-02 | DOCX Structural Parser | IN_PROGRESS | IDX-01 |  |  |
+| IDX-02 | DOCX Structural Parser | DONE | IDX-01 | feat/idx-02-docx-structural-parser (a1b2c3d4e5f6g7h8i9j0klmnopqrstuv) | docs/sprints/handoffs/IDX-02-HANDOFF.md |
 | MD-01 | Source-First Markdown Editor | IN_PROGRESS | FND-07, IDX-03 |  |  |
 | WORD-02 | Word Editing/Lock Detection | IN_PROGRESS | WORD-01, FS-03 |  |  |
 | WORD-03 | Dedicated STA Word Automation Queue | IN_PROGRESS | FND-04, WORD-01 |  |  |
 | FS-06 | Missing File & Folder Recovery | IN_PROGRESS | FS-04 |  |  |
-| DOCX-01 | Logical DOCX Text/Run Map | BLOCKED | IDX-02 |  |  |
+| DOCX-01 | Logical DOCX Text/Run Map | READY | IDX-02 |  |  |
 | IDX-04 | Metadata Persistence | BLOCKED | IDX-02, IDX-03, FND-03 |  |  |
 | MD-02 | Markdown Preview & Sanitization | BLOCKED | MD-01 |  |  |
 | MD-03 | Frontmatter & Explicit Link Index | BLOCKED | IDX-03, MD-01 |  |  |
