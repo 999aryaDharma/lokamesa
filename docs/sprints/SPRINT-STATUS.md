@@ -62,7 +62,7 @@ Rules:
 | DOCX-04 | Document Lens Metadata | READY | IDX-04 |  |  |
 | IDX-05 | FTS5 Search Index | READY | IDX-04 |  |  |
 | SHR-08 | Share CSP, Sanitization & Rate Limits | BLOCKED | SHR-03, MD-02 |  |  |
-| GR-01 | Relation Store & Extraction | READY | MD-03, FND-03 |  |  |
+| GR-01 | Relation Store & Extraction | DONE | MD-03, FND-03 | feat/gr-01-relation-store-extraction | docs/sprints/handoffs/GR-01-HANDOFF.md |
 | MD-04 | Wikilink Resolution & Backlink Inputs | DONE | MD-03 | feat/md-04-wikilink-resolution-backlink-inputs (b6ace97) | docs/sprints/handoffs/MD-04-HANDOFF.md |
 | PDF-02 | Batch Separate PDF Export | BLOCKED | PDF-01, FND-04 |  |  |
 | DOCX-03 | Strict DOCX Text Mutation | READY | DOCX-02 |  |  |
@@ -71,7 +71,7 @@ Rules:
 | IDX-06 | Incremental Index Scheduler | BLOCKED | IDX-05, FS-03 |  |  |
 | SRCH-01 | Structured Query Parser | BLOCKED | IDX-05 |  |  |
 | QA-05 | Public Share Security Audit | BLOCKED | SHR-08, SHR-10 |  |  |
-| GR-02 | Backlinks & Reference Inspector | BLOCKED | GR-01, MD-04 |  |  |
+| GR-02 | Backlinks & Reference Inspector | READY | GR-01, MD-04 |  |  |
 | PDF-03 | Streaming Ordered PDF Merge | BLOCKED | PDF-02 |  |  |
 | BAT-01 | Batch Operation Plan Domain | BLOCKED | FND-03, DOCX-03 |  |  |
 | QA-01 | Golden DOCX Regression Corpus | BLOCKED | DOCX-03 |  |  |

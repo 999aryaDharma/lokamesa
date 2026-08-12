@@ -20,7 +20,8 @@ public class MigrationRunner
             new Migration_002_FolderSourceFields(),
             new Migration_003_DocumentIdentityFields(),
             new Migration_004_ShareDomain(),
-            new Migration_005_MetadataPersistence()
+            new Migration_005_MetadataPersistence(),
+            new Migration_006_RelationStore()
         }.OrderBy(m => m.Version).ToList();
     }
 
