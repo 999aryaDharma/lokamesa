@@ -1,7 +1,27 @@
+using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 namespace DocumentIDE.Core.Markdown;
+
+public record ExplicitRelationCandidate(
+    string SourceFilePath,
+    string NormalizedTargetPath,
+    MarkdownLinkType RelationType,
+    string RawTarget,
+    string? Anchor,
+    string? Alias,
+    int LineNumber
+);
+
+public record LinkResolutionResult(
+    bool IsResolved,
+    bool IsAmbiguous,
+    string? ResolvedPath,
+    IReadOnlyList<string> CandidatePaths
+);
 
 /// <summary>
 /// Provides utilities to extract searchable representations of frontmatter and explicit link information
@@ -11,20 +31,38 @@ public static class MarkdownLinkIndexer
 {
     /// <summary>
     /// Returns a dictionary of frontmatter key/value pairs that are suitable for search indexing.
-    /// The values are converted to simple strings using <c>ToString()</c>.
+    /// Collections are flattened into comma-separated strings.
     /// </summary>
-    /// <param name="result">The parsed markdown result.</param>
-    /// <returns>A read‑only dictionary of frontmatter entries.</returns>
     public static IReadOnlyDictionary<string, string> GetFrontmatterIndex(MarkdownParseResult result)
     {
         if (result.Frontmatter.StructuredData is null)
             return new Dictionary<string, string>();
 
-        return result.Frontmatter.StructuredData
-            .Where(kv => kv.Value != null)
-            .ToDictionary(
-                kv => kv.Key,
-                kv => kv.Value.ToString() ?? string.Empty);
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var kv in result.Frontmatter.StructuredData)
+        {
+            if (kv.Value is null) continue;
+
+            if (kv.Value is string s)
+            {
+                dict[kv.Key] = s;
+            }
+            else if (kv.Value is IEnumerable enumerable && !(kv.Value is string))
+            {
+                var items = enumerable.Cast<object?>()
+                    .Where(x => x != null)
+                    .Select(x => x!.ToString())
+                    .Where(x => !string.IsNullOrWhiteSpace(x));
+                dict[kv.Key] = string.Join(", ", items);
+            }
+            else
+            {
+                dict[kv.Key] = kv.Value.ToString() ?? string.Empty;
+            }
+        }
+
+        return dict;
     }
 
     /// <summary>
@@ -35,4 +73,128 @@ public static class MarkdownLinkIndexer
     {
         return result.Links ?? new List<MarkdownLinkInfo>();
     }
+
+    /// <summary>
+    /// Normalizes a relative link target against a source physical file path.
+    /// </summary>
+    public static string NormalizeRelativeLink(string sourceFilePath, string relativeTarget)
+    {
+        if (string.IsNullOrWhiteSpace(relativeTarget))
+            return relativeTarget;
+
+        string targetWithoutAnchor = relativeTarget;
+        int hashIdx = relativeTarget.IndexOf('#');
+        if (hashIdx >= 0)
+        {
+            targetWithoutAnchor = relativeTarget.Substring(0, hashIdx);
+        }
+
+        if (Path.IsPathRooted(targetWithoutAnchor))
+        {
+            return Path.GetFullPath(targetWithoutAnchor);
+        }
+
+        string? dir = Path.GetDirectoryName(sourceFilePath);
+        if (string.IsNullOrEmpty(dir))
+        {
+            return Path.GetFullPath(targetWithoutAnchor);
+        }
+
+        string combined = Path.Combine(dir, targetWithoutAnchor);
+        return Path.GetFullPath(combined);
+    }
+
+    /// <summary>
+    /// Extracts explicit relation candidates for a document at <paramref name="sourceFilePath"/>.
+    /// </summary>
+    public static IReadOnlyList<ExplicitRelationCandidate> GetExplicitRelationCandidates(string sourceFilePath, MarkdownParseResult parseResult)
+    {
+        var links = GetExplicitLinks(parseResult);
+        var candidates = new List<ExplicitRelationCandidate>();
+
+        foreach (var link in links)
+        {
+            string normalizedTarget = link.Target;
+            if (link.Type == MarkdownLinkType.NormalLink && !string.IsNullOrWhiteSpace(link.Target))
+            {
+                normalizedTarget = NormalizeRelativeLink(sourceFilePath, link.Target);
+            }
+
+            candidates.Add(new ExplicitRelationCandidate(
+                sourceFilePath,
+                normalizedTarget,
+                link.Type,
+                link.RawTarget,
+                link.Anchor,
+                link.Alias,
+                link.LineNumber));
+        }
+
+        return candidates;
+    }
+
+    /// <summary>
+    /// Resolves a link target against a set of known workspace file paths.
+    /// </summary>
+    public static LinkResolutionResult ResolveLinkTarget(
+        string sourceFilePath,
+        string rawTarget,
+        MarkdownLinkType linkType,
+        IEnumerable<string> workspaceFiles)
+    {
+        var filesList = workspaceFiles?.ToList() ?? new List<string>();
+
+        if (linkType == MarkdownLinkType.NormalLink || linkType == MarkdownLinkType.FrontmatterDependency)
+        {
+            string normalized = NormalizeRelativeLink(sourceFilePath, rawTarget);
+            var match = filesList.FirstOrDefault(f => string.Equals(f, normalized, StringComparison.OrdinalIgnoreCase));
+            if (match != null)
+            {
+                return new LinkResolutionResult(true, false, match, new[] { match });
+            }
+
+            return new LinkResolutionResult(false, false, normalized, Array.Empty<string>());
+        }
+        else if (linkType == MarkdownLinkType.Wikilink)
+        {
+            string targetClean = rawTarget;
+            int hashIdx = targetClean.IndexOf('#');
+            if (hashIdx >= 0)
+            {
+                targetClean = targetClean.Substring(0, hashIdx).Trim();
+            }
+
+            if (targetClean.Contains('/') || targetClean.Contains('\\') || Path.HasExtension(targetClean))
+            {
+                string norm = NormalizeRelativeLink(sourceFilePath, targetClean);
+                var pathMatch = filesList.FirstOrDefault(f => string.Equals(f, norm, StringComparison.OrdinalIgnoreCase));
+                if (pathMatch != null)
+                {
+                    return new LinkResolutionResult(true, false, pathMatch, new[] { pathMatch });
+                }
+            }
+
+            string targetStem = Path.GetFileNameWithoutExtension(targetClean);
+            var stemMatches = filesList.Where(f =>
+                string.Equals(Path.GetFileNameWithoutExtension(f), targetStem, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(Path.GetFileName(f), targetClean, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(Path.GetFileName(f), targetClean + ".md", StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (stemMatches.Count == 1)
+            {
+                return new LinkResolutionResult(true, false, stemMatches[0], stemMatches);
+            }
+            else if (stemMatches.Count > 1)
+            {
+                return new LinkResolutionResult(false, true, null, stemMatches);
+            }
+
+            return new LinkResolutionResult(false, false, null, Array.Empty<string>());
+        }
+
+        return new LinkResolutionResult(false, false, null, Array.Empty<string>());
+    }
 }
+

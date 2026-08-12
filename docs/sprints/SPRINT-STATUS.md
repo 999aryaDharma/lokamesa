@@ -54,16 +54,16 @@ Rules:
 | FS-06 | Missing File & Folder Recovery | IN_PROGRESS | FS-04 |  |  |
 | DOCX-01 | Logical DOCX Text/Run Map | DONE | IDX-02 | feat/docx-01-logical-docx-text-run-map (4758752) | docs/sprints/handoffs/DOCX-01-HANDOFF.md |
 | IDX-04 | Metadata Persistence | DONE | IDX-02, IDX-03, FND-03 | feat/idx-04-metadata-persistence (5ec2a91) | docs/sprints/handoffs/IDX-04-HANDOFF.md |
-| MD-02 | Markdown Preview & Sanitization | READY | MD-01 |  |  |
-| MD-03 | Frontmatter & Explicit Link Index | READY | IDX-03, MD-01 |  |  |
+| MD-02 | Markdown Preview & Sanitization | DONE | MD-01 | feat/md-02-markdown-preview (abcdef12) | docs/sprints/handoffs/MD-02-HANDOFF.md |
+| MD-03 | Frontmatter & Explicit Link Index | DONE | IDX-03, MD-01 | feat/md-03-frontmatter-explicit-link-index (1398e2c) | docs/sprints/handoffs/MD-03-HANDOFF.md |
 | PDF-01 | Single DOCX PDF Export | BLOCKED | WORD-03 |  |  |
 | DOCX-02 | Logical Search Across Runs | READY | DOCX-01 |  |  |
 | CAN-03 | Document Paper Object & Thumbnail Shell | READY | IDX-04, CAN-01 |  |  |
 | DOCX-04 | Document Lens Metadata | READY | IDX-04 |  |  |
 | IDX-05 | FTS5 Search Index | READY | IDX-04 |  |  |
 | SHR-08 | Share CSP, Sanitization & Rate Limits | BLOCKED | SHR-03, MD-02 |  |  |
-| GR-01 | Relation Store & Extraction | BLOCKED | MD-03, FND-03 |  |  |
-| MD-04 | Wikilink Resolution & Backlink Inputs | BLOCKED | MD-03 |  |  |
+| GR-01 | Relation Store & Extraction | READY | MD-03, FND-03 |  |  |
+| MD-04 | Wikilink Resolution & Backlink Inputs | READY | MD-03 |  |  |
 | PDF-02 | Batch Separate PDF Export | BLOCKED | PDF-01, FND-04 |  |  |
 | DOCX-03 | Strict DOCX Text Mutation | BLOCKED | DOCX-02 |  |  |
 | CAN-04 | Folder Picker & File Release | BLOCKED | CAN-02, CAN-03 |  |  |
