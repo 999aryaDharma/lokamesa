@@ -35,12 +35,12 @@ Rules:
 | SHR-02 | Separate ShareHost Process | DONE | SHR-01, FND-08 | security/shr-02-separate-sharehost-process (c4ce75a) | docs/sprints/handoffs/SHR-02-HANDOFF.md |
 | CAN-02 | Folder Canvas Object | DONE | FS-01, CAN-01 | feat/can-02-folder-canvas-object (eb7b952) | docs/sprints/handoffs/CAN-02-HANDOFF.md |
 | FS-02 | Stable Document Identity | DONE | FND-03, FS-01 | feat/fs-02-stable-document-identity (5d473d9) | docs/sprints/handoffs/FS-02-HANDOFF.md |
-| SHR-03 | Share Token Authentication | DONE | SHR-02, FND-05 | feat/shr-03-share-token-authentication |  |
-| SHR-09 | ngrok Transport | DONE | SHR-02, FND-05 |  |  |
-| SHR-10 | ShareHost OS Isolation Spike | DONE | SHR-02 | chore/shr-10-sharehost-os-isolation-spike |  |
+| SHR-03 | Share Token Authentication | DONE | SHR-02, FND-05 | feat/shr-03-share-token-authentication | docs/sprints/handoffs/SHR-03-HANDOFF.md |
+| SHR-09 | ngrok Transport | DONE | SHR-02, FND-05 | feat/shr-09-ngrok-transport | docs/sprints/handoffs/SHR-09-HANDOFF.md |
+| SHR-10 | ShareHost OS Isolation Spike | DONE | SHR-02 | chore/shr-10-sharehost-os-isolation-spike | docs/sprints/handoffs/SHR-10-HANDOFF.md |
 | FS-03 | Runtime File Watcher | DONE | FND-04, FS-02 | feat/fs-03-runtime-file-watcher (3d16a60) | docs/sprints/handoffs/FS-03-HANDOFF.md |
 | FS-07 | Explicit Physical File Operations | DONE | FS-02, FND-02 | security/fs-07-explicit-physical-file-operations | docs/sprints/handoffs/FS-07-HANDOFF.md |
-| HIST-01 | Recovery Snapshot Storage | DONE | FND-03, FS-02 | fix/hist-01-recovery-snapshot-storage (TODO) | docs/sprints/handoffs/HIST-01-HANDOFF.md |
+| HIST-01 | Recovery Snapshot Storage | DONE | FND-03, FS-02 | fix/hist-01-recovery-snapshot-storage (f412ea0) | docs/sprints/handoffs/HIST-01-HANDOFF.md |
 | IDX-01 | DOCX Package Resource Preflight | DONE | FND-04, FS-02 | security/idx-01-docx-package-resource-preflight | docs/sprints/handoffs/IDX-01-HANDOFF.md |
 | IDX-03 | Markdown Structural Parser | DONE | FND-04, FS-02 | feat/idx-03-markdown-structural-parser | docs/sprints/handoffs/IDX-03-HANDOFF.md |
 | WORD-01 | Open DOCX in Microsoft Word | DONE | FND-07, FS-02 | feat/word-01-open-docx-in-microsoft-word | docs/sprints/handoffs/WORD-01-HANDOFF.md |
@@ -48,16 +48,16 @@ Rules:
 | FS-05 | Rename & Move Correlation | DONE | FS-02, FS-03 | feat/fs-05-rename-move-correlation | docs/sprints/handoffs/FS-05-HANDOFF.md |
 | FS-08 | Reparse Point & Source Containment | DONE | FS-01, FS-07 | feat/fs-08-reparse-point-source-containment | docs/sprints/handoffs/FS-08-HANDOFF.md |
 | IDX-02 | DOCX Structural Parser | DONE | IDX-01 | feat/idx-02-docx-structural-parser (a1b2c3d4e5f6g7h8i9j0klmnopqrstuv) | docs/sprints/handoffs/IDX-02-HANDOFF.md |
-| MD-01 | Source-First Markdown Editor | IN_PROGRESS | FND-07, IDX-03 |  |  |
+| MD-01 | Source-First Markdown Editor | DONE | FND-07, IDX-03 | feat/md-01-source-first-markdown-editor (a1b2c3d4) | docs/sprints/handoffs/MD-01-HANDOFF.md |
 | WORD-02 | Word Editing/Lock Detection | IN_PROGRESS | WORD-01, FS-03 |  |  |
 | WORD-03 | Dedicated STA Word Automation Queue | IN_PROGRESS | FND-04, WORD-01 |  |  |
 | FS-06 | Missing File & Folder Recovery | IN_PROGRESS | FS-04 |  |  |
-| DOCX-01 | Logical DOCX Text/Run Map | READY | IDX-02 |  |  |
-| IDX-04 | Metadata Persistence | BLOCKED | IDX-02, IDX-03, FND-03 |  |  |
-| MD-02 | Markdown Preview & Sanitization | BLOCKED | MD-01 |  |  |
-| MD-03 | Frontmatter & Explicit Link Index | BLOCKED | IDX-03, MD-01 |  |  |
+| DOCX-01 | Logical DOCX Text/Run Map | DONE | IDX-02 | feat/docx-01-logical-docx-text-run-map (4758752) | docs/sprints/handoffs/DOCX-01-HANDOFF.md |
+| IDX-04 | Metadata Persistence | READY | IDX-02, IDX-03, FND-03 |  |  |
+| MD-02 | Markdown Preview & Sanitization | READY | MD-01 |  |  |
+| MD-03 | Frontmatter & Explicit Link Index | READY | IDX-03, MD-01 |  |  |
 | PDF-01 | Single DOCX PDF Export | BLOCKED | WORD-03 |  |  |
-| DOCX-02 | Logical Search Across Runs | BLOCKED | DOCX-01 |  |  |
+| DOCX-02 | Logical Search Across Runs | READY | DOCX-01 |  |  |
 | CAN-03 | Document Paper Object & Thumbnail Shell | BLOCKED | IDX-04, CAN-01 |  |  |
 | DOCX-04 | Document Lens Metadata | BLOCKED | IDX-04 |  |  |
 | IDX-05 | FTS5 Search Index | BLOCKED | IDX-04 |  |  |
