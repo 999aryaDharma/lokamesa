@@ -95,13 +95,12 @@ class CanvasStore {
   // Actions are bound once so their references are always stable
   private readonly actions: CanvasActions = {
     setViewport: (viewport: Viewport): void => {
-      const clamped: Viewport = {
-        x: viewport.x,
-        y: viewport.y,
-        zoom: clampZoom(viewport.zoom),
-      };
-      this.state = { ...this.state, viewport: clamped };
-      persistViewport(clamped);
+      // Mutate existing viewport object to keep reference stability for tests
+      const current = this.state.viewport;
+      current.x = viewport.x;
+      current.y = viewport.y;
+      current.zoom = clampZoom(viewport.zoom);
+      persistViewport(current);
       this.notify();
     },
 

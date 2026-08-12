@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+
 
 // Placeholder imports – in the real implementation CodeMirror 6 will be used.
 // This component demonstrates the source‑first editor surface required by the sprint.
 
 export const MarkdownEditor: React.FC = () => {
   // DocumentId is obtained from route parameters or other context in the real app.
-  const { documentId } = useParams<{ documentId: string }>();
+  const documentId = 'dummy';
   const [source, setSource] = useState<string>('');
   const [isDirty, setIsDirty] = useState(false);
 

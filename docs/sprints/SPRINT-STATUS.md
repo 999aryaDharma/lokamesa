@@ -80,18 +80,18 @@ Rules:
 | AI-01 | Embedding Provider Abstraction | BLOCKED | FND-05, IDX-06 |  |  |
 | QA-02 | Filesystem & Indexing Soak | BLOCKED | FS-08, IDX-06 |  |  |
 | SRCH-02 | Exact Ranked Search | BLOCKED | SRCH-01 |  |  |
-| CTX-01 | Context Pack Core | READY | MD-03, GR-02 |  |  |
-| GR-03 | Graph View | READY | GR-02, CAN-01 |  |  |
+| CTX-01 | Context Pack Core | DONE | MD-03, GR-02 | feat/ctx-01-context-pack-core | docs/sprints/handoffs/CTX-01-HANDOFF.md |
+| GR-03 | Graph View | DONE | GR-02, CAN-01 | feat/gr-03-graph-view | docs/sprints/handoffs/GR-03-HANDOFF.md |
 | CAN-06 | Position Persistence & Pinning | BLOCKED | CAN-05, FS-05 |  |  |
 | SHR-05 | Membership-Safe Live Share | BLOCKED | SHR-04, FS-03 |  |  |
 | SHR-07 | Share Download Permissions | BLOCKED | SHR-04, PDF-01 |  |  |
 | AI-02 | Local Embedding Provider | BLOCKED | AI-01 |  |  |
 | SRCH-03 | Metadata Filters | BLOCKED | SRCH-02 |  |  |
 | SRCH-04 | Fuzzy Exploratory Search | BLOCKED | SRCH-02 |  |  |
-| CTX-02 | Explicit Dependency Expansion | BLOCKED | CTX-01, GR-02 |  |  |
-| CTX-03 | DOCX Context Representation | BLOCKED | CTX-01, IDX-02 |  |  |
-| GR-04 | Manual Relations | BLOCKED | GR-01, GR-03 |  |  |
-| GR-05 | Bounded Graph Rendering | BLOCKED | GR-03 |  |  |
+| CTX-02 | Explicit Dependency Expansion | READY | CTX-01, GR-02 |  |  |
+| CTX-03 | DOCX Context Representation | READY | CTX-01, IDX-02 |  |  |
+| GR-04 | Manual Relations | READY | GR-01, GR-03 |  |  |
+| GR-05 | Bounded Graph Rendering | READY | GR-03 |  |  |
 | CAN-07 | Multi-Select, Group Drag & Tidy | BLOCKED | CAN-06 |  |  |
 | SHR-06 | Share-Scoped Search & Graph | BLOCKED | SHR-05, SRCH-02, GR-03 |  |  |
 | SHR-11 | Owner Share Management UI | BLOCKED | SHR-05, SHR-07, SHR-09 |  |  |
