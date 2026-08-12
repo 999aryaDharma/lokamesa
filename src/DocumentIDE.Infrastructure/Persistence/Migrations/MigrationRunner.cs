@@ -21,7 +21,8 @@ public class MigrationRunner
             new Migration_003_DocumentIdentityFields(),
             new Migration_004_ShareDomain(),
             new Migration_005_MetadataPersistence(),
-            new Migration_006_RelationStore()
+            new Migration_006_RelationStore(),
+            new Migration_007_BatchOperationPlans()
         }.OrderBy(m => m.Version).ToList();
     }
 
