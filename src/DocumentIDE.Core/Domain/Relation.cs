@@ -7,6 +7,7 @@ public static class RelationOrigin
     public const string Explicit = "Explicit";
     public const string Inferred = "Inferred";
     public const string Manual = "Manual";
+    public const string Semantic = "semantic";
 }
 
 public static class RelationType

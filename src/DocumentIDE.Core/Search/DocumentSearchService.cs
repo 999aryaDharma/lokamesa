@@ -47,15 +47,18 @@ public class DocumentSearchService : IDocumentSearchService
     private readonly IFtsIndex _ftsIndex;
     private readonly IDocumentRepository _documentRepository;
     private readonly IDocumentMetadataRepository? _metadataRepository;
+    private readonly IFuzzySearchService _fuzzySearchService;
 
     public DocumentSearchService(
         IFtsIndex ftsIndex,
         IDocumentRepository documentRepository,
-        IDocumentMetadataRepository? metadataRepository = null)
+        IDocumentMetadataRepository? metadataRepository = null,
+        IFuzzySearchService? fuzzySearchService = null)
     {
         _ftsIndex = ftsIndex ?? throw new ArgumentNullException(nameof(ftsIndex));
         _documentRepository = documentRepository ?? throw new ArgumentNullException(nameof(documentRepository));
         _metadataRepository = metadataRepository;
+        _fuzzySearchService = fuzzySearchService ?? new FuzzySearchService();
     }
 
     public Task<SearchExecutionResult> SearchAsync(string rawQuery, DocumentSearchOptions? options = null, CancellationToken cancellationToken = default)
@@ -242,6 +245,73 @@ public class DocumentSearchService : IDocumentSearchService
                     MetadataSummary: options.IncludeMetadataSummary ? BuildMetadataSummary(doc) : null,
                     Path: doc.CurrentPath
                 ));
+            }
+        }
+
+        if (query.Mode == SearchMode.Fuzzy && _fuzzySearchService != null)
+        {
+            var existingDocIds = finalResults.Select(r => r.DocumentId).ToHashSet();
+            IEnumerable<Document> allCandidateDocs;
+
+            if (candidateDocsMap != null)
+            {
+                allCandidateDocs = candidateDocsMap.Values;
+            }
+            else
+            {
+                allCandidateDocs = await _documentRepository.GetByWorkspaceAsync("");
+            }
+
+            var fuzzyCandidates = new List<FuzzySearchCandidate>();
+            foreach (var doc in allCandidateDocs)
+            {
+                if (options.AllowedDocumentIds != null && !options.AllowedDocumentIds.Contains(doc.Id))
+                    continue;
+                if (!string.IsNullOrWhiteSpace(folderFilter) && !IsPathInFolder(doc.CurrentPath, folderFilter))
+                    continue;
+
+                fuzzyCandidates.Add(new FuzzySearchCandidate(
+                    DocumentId: doc.Id,
+                    Filename: doc.Filename,
+                    Body: doc.Filename,
+                    Headings: null,
+                    CurrentPath: doc.CurrentPath
+                ));
+            }
+
+            var fuzzyResults = _fuzzySearchService.PerformFuzzySearch(query, fuzzyCandidates);
+
+            foreach (var fRes in fuzzyResults)
+            {
+                if (!existingDocIds.Contains(fRes.DocumentId))
+                {
+                    var matchedDoc = allCandidateDocs.FirstOrDefault(d => d.Id == fRes.DocumentId);
+                    if (matchedDoc != null)
+                    {
+                        DocumentMetadata? docxMeta = null;
+                        MarkdownDocumentMetadata? mdMeta = null;
+                        if (_metadataRepository != null)
+                        {
+                            docxMeta = await _metadataRepository.GetDocxMetadataAsync(matchedDoc.Id);
+                            mdMeta = await _metadataRepository.GetMarkdownMetadataAsync(matchedDoc.Id);
+                        }
+
+                        if (filterPredicate(matchedDoc, docxMeta, mdMeta))
+                        {
+                            evaluatedTuples.Add((matchedDoc, docxMeta, mdMeta));
+                            finalResults.Add(new SearchResult(
+                                DocumentId: fRes.DocumentId,
+                                Filename: fRes.Filename,
+                                Score: fRes.Score,
+                                MatchSources: fRes.MatchSources,
+                                Snippets: fRes.Snippets,
+                                MetadataSummary: options.IncludeMetadataSummary ? BuildMetadataSummary(matchedDoc) : null,
+                                Path: fRes.Path
+                            ));
+                            existingDocIds.Add(fRes.DocumentId);
+                        }
+                    }
+                }
             }
         }
 
