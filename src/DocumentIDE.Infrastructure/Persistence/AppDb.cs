@@ -62,13 +62,25 @@ public class AppDb
 
     private static void ApplyPragmas(SqliteConnection connection)
     {
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = @"
-            PRAGMA journal_mode = WAL;
-            PRAGMA foreign_keys = ON;
-            PRAGMA busy_timeout = 5000;
-            PRAGMA synchronous = NORMAL;
-        ";
-        cmd.ExecuteNonQuery();
+        try
+        {
+            if (connection.State != System.Data.ConnectionState.Open) return;
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = @"
+                PRAGMA journal_mode = WAL;
+                PRAGMA foreign_keys = ON;
+                PRAGMA busy_timeout = 5000;
+                PRAGMA synchronous = NORMAL;
+            ";
+            cmd.ExecuteNonQuery();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Ignore connection disposed during concurrent teardown
+        }
+        catch (InvalidOperationException)
+        {
+            // Ignore state change during execution
+        }
     }
 }

@@ -32,7 +32,8 @@ public record SearchExecutionResult(
     IReadOnlyList<SearchResult> Results,
     int TotalCount,
     double ExecutionTimeMs,
-    SearchQuery Query
+    SearchQuery Query,
+    IReadOnlyList<FilterChipInfo>? ActiveFilterChips = null
 );
 
 public interface IDocumentSearchService
@@ -45,11 +46,16 @@ public class DocumentSearchService : IDocumentSearchService
 {
     private readonly IFtsIndex _ftsIndex;
     private readonly IDocumentRepository _documentRepository;
+    private readonly IDocumentMetadataRepository? _metadataRepository;
 
-    public DocumentSearchService(IFtsIndex ftsIndex, IDocumentRepository documentRepository)
+    public DocumentSearchService(
+        IFtsIndex ftsIndex,
+        IDocumentRepository documentRepository,
+        IDocumentMetadataRepository? metadataRepository = null)
     {
         _ftsIndex = ftsIndex ?? throw new ArgumentNullException(nameof(ftsIndex));
         _documentRepository = documentRepository ?? throw new ArgumentNullException(nameof(documentRepository));
+        _metadataRepository = metadataRepository;
     }
 
     public Task<SearchExecutionResult> SearchAsync(string rawQuery, DocumentSearchOptions? options = null, CancellationToken cancellationToken = default)
@@ -73,6 +79,8 @@ public class DocumentSearchService : IDocumentSearchService
         string? typeFilter = GetFilterValue(query, "type");
         string? nameFilter = GetFilterValue(query, "name");
 
+        var filterPredicate = MetadataFilterCompiler.Compile(query);
+
         // 1. Gather scope candidates if workspace or folder filter is specified
         Dictionary<string, Document>? candidateDocsMap = null;
 
@@ -93,14 +101,13 @@ public class DocumentSearchService : IDocumentSearchService
             }
             else
             {
-                // Intersect workspace and folder maps
                 candidateDocsMap = candidateDocsMap
                     .Where(kvp => folderMap.ContainsKey(kvp.Key))
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
             }
         }
 
-        // 2. Perform FTS Search
+        // 2. Perform FTS Search if search terms exist
         string ftsQuery = SearchQueryParser.ToFts5Query(query);
         IReadOnlyList<FtsSearchResult> ftsResults = Array.Empty<FtsSearchResult>();
 
@@ -109,91 +116,135 @@ public class DocumentSearchService : IDocumentSearchService
             ftsResults = await _ftsIndex.SearchAsync(ftsQuery, limit * 4, cancellationToken);
         }
 
-        // 3. Process & Filter Results
         var searchTerms = query.Terms.Concat(query.ExactPhrases)
             .Where(t => !string.IsNullOrWhiteSpace(t))
             .Select(t => t.ToLowerInvariant())
             .ToList();
 
         var finalResults = new List<SearchResult>();
+        var evaluatedTuples = new List<(Document Doc, DocumentMetadata? Docx, MarkdownDocumentMetadata? Md)>();
 
-        foreach (var ftsItem in ftsResults)
+        if (!string.IsNullOrWhiteSpace(ftsQuery))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            // Check options.AllowedDocumentIds
-            if (options.AllowedDocumentIds != null && !options.AllowedDocumentIds.Contains(ftsItem.DocumentId))
+            // FTS Search Path
+            foreach (var ftsItem in ftsResults)
             {
-                continue;
-            }
+                cancellationToken.ThrowIfCancellationRequested();
 
-            // Check candidateDocsMap (workspace/folder scope)
-            Document? doc = null;
-            if (candidateDocsMap != null)
-            {
-                if (!candidateDocsMap.TryGetValue(ftsItem.DocumentId, out doc))
-                {
-                    continue; // Out of requested scope
-                }
-            }
-            else
-            {
-                doc = await _documentRepository.GetByIdAsync(ftsItem.DocumentId);
-            }
-
-            if (doc == null)
-            {
-                continue;
-            }
-
-            // Check folder path containment if folder filter was passed but not matched by repo
-            if (!string.IsNullOrWhiteSpace(folderFilter) && !IsPathInFolder(doc.CurrentPath, folderFilter))
-            {
-                continue;
-            }
-
-            // Check document type/extension filter
-            if (!string.IsNullOrWhiteSpace(typeFilter))
-            {
-                string ext = doc.Extension.TrimStart('.').ToLowerInvariant();
-                string type = doc.DocumentType.ToLowerInvariant();
-                string targetType = typeFilter.TrimStart('.').ToLowerInvariant();
-
-                if (!string.Equals(ext, targetType, StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(type, targetType, StringComparison.OrdinalIgnoreCase))
+                if (options.AllowedDocumentIds != null && !options.AllowedDocumentIds.Contains(ftsItem.DocumentId))
                 {
                     continue;
                 }
-            }
 
-            // Check filename filter
-            if (!string.IsNullOrWhiteSpace(nameFilter) &&
-                !doc.Filename.Contains(nameFilter, StringComparison.OrdinalIgnoreCase))
+                Document? doc = null;
+                if (candidateDocsMap != null)
+                {
+                    if (!candidateDocsMap.TryGetValue(ftsItem.DocumentId, out doc))
+                    {
+                        continue;
+                    }
+                }
+                else
+                {
+                    doc = await _documentRepository.GetByIdAsync(ftsItem.DocumentId);
+                }
+
+                if (doc == null) continue;
+
+                if (!string.IsNullOrWhiteSpace(folderFilter) && !IsPathInFolder(doc.CurrentPath, folderFilter))
+                {
+                    continue;
+                }
+
+                DocumentMetadata? docxMeta = null;
+                MarkdownDocumentMetadata? mdMeta = null;
+                if (_metadataRepository != null)
+                {
+                    docxMeta = await _metadataRepository.GetDocxMetadataAsync(doc.Id);
+                    mdMeta = await _metadataRepository.GetMarkdownMetadataAsync(doc.Id);
+                }
+
+                if (!filterPredicate(doc, docxMeta, mdMeta))
+                {
+                    continue;
+                }
+
+                evaluatedTuples.Add((doc, docxMeta, mdMeta));
+
+                double rankScore = CalculateRankScore(doc.Filename, searchTerms, ftsItem);
+
+                var snippets = new List<string>();
+                if (!string.IsNullOrWhiteSpace(ftsItem.Snippet))
+                {
+                    snippets.Add(ftsItem.Snippet);
+                }
+
+                finalResults.Add(new SearchResult(
+                    DocumentId: doc.Id,
+                    Filename: doc.Filename,
+                    Score: rankScore,
+                    MatchSources: ftsItem.MatchSources ?? Array.Empty<string>(),
+                    Snippets: snippets,
+                    MetadataSummary: options.IncludeMetadataSummary ? BuildMetadataSummary(doc) : null,
+                    Path: doc.CurrentPath
+                ));
+            }
+        }
+        else
+        {
+            // Pure Metadata / Filter Search Path (no text query terms)
+            IEnumerable<Document> candidateDocs;
+            if (candidateDocsMap != null)
             {
-                continue;
+                candidateDocs = candidateDocsMap.Values;
             }
-
-            // Calculate deterministic score
-            double rankScore = CalculateRankScore(doc.Filename, searchTerms, ftsItem);
-
-            var snippets = new List<string>();
-            if (!string.IsNullOrWhiteSpace(ftsItem.Snippet))
+            else
             {
-                snippets.Add(ftsItem.Snippet);
+                candidateDocs = await _documentRepository.GetByWorkspaceAsync("");
             }
 
-            finalResults.Add(new SearchResult(
-                DocumentId: doc.Id,
-                Filename: doc.Filename,
-                Score: rankScore,
-                MatchSources: ftsItem.MatchSources ?? Array.Empty<string>(),
-                Snippets: snippets,
-                MetadataSummary: options.IncludeMetadataSummary ? BuildMetadataSummary(doc) : null,
-                Path: doc.CurrentPath
-            ));
+            foreach (var doc in candidateDocs)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (options.AllowedDocumentIds != null && !options.AllowedDocumentIds.Contains(doc.Id))
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(folderFilter) && !IsPathInFolder(doc.CurrentPath, folderFilter))
+                {
+                    continue;
+                }
+
+                DocumentMetadata? docxMeta = null;
+                MarkdownDocumentMetadata? mdMeta = null;
+                if (_metadataRepository != null)
+                {
+                    docxMeta = await _metadataRepository.GetDocxMetadataAsync(doc.Id);
+                    mdMeta = await _metadataRepository.GetMarkdownMetadataAsync(doc.Id);
+                }
+
+                if (!filterPredicate(doc, docxMeta, mdMeta))
+                {
+                    continue;
+                }
+
+                evaluatedTuples.Add((doc, docxMeta, mdMeta));
+
+                double rankScore = 1000.0;
+                finalResults.Add(new SearchResult(
+                    DocumentId: doc.Id,
+                    Filename: doc.Filename,
+                    Score: rankScore,
+                    MatchSources: new[] { "metadata" },
+                    Snippets: Array.Empty<string>(),
+                    MetadataSummary: options.IncludeMetadataSummary ? BuildMetadataSummary(doc) : null,
+                    Path: doc.CurrentPath
+                ));
+            }
         }
 
-        // Rank exact filename > filename partial > heading > body > table > header/footer
         var rankedResults = finalResults
             .OrderByDescending(r => r.Score)
             .ThenBy(r => r.Filename, StringComparer.OrdinalIgnoreCase)
@@ -201,13 +252,16 @@ public class DocumentSearchService : IDocumentSearchService
             .Take(limit)
             .ToList();
 
+        var activeChips = MetadataFilterCompiler.ExtractActiveFilterChips(query, evaluatedTuples);
+
         stopwatch.Stop();
 
         return new SearchExecutionResult(
             Results: rankedResults,
             TotalCount: rankedResults.Count,
             ExecutionTimeMs: stopwatch.Elapsed.TotalMilliseconds,
-            Query: query
+            Query: query,
+            ActiveFilterChips: activeChips
         );
     }
 
@@ -235,16 +289,8 @@ public class DocumentSearchService : IDocumentSearchService
         );
         bool isFrontmatter = ftsResult.MatchSources != null && ftsResult.MatchSources.Contains("frontmatter", StringComparer.OrdinalIgnoreCase);
 
-        // Score Tiers:
-        // Rank exact filename > filename partial > heading > body > table > header/footer
-        if (isExactFilename)
-        {
-            tierScore += 10000.0;
-        }
-        else if (isPartialFilename)
-        {
-            tierScore += 5000.0;
-        }
+        if (isExactFilename) tierScore += 10000.0;
+        else if (isPartialFilename) tierScore += 5000.0;
 
         if (isHeading) tierScore += 2500.0;
         if (isBody) tierScore += 1000.0;
@@ -252,7 +298,6 @@ public class DocumentSearchService : IDocumentSearchService
         if (isHeaderOrFooter) tierScore += 250.0;
         if (isFrontmatter) tierScore += 100.0;
 
-        // FTS score adjustment for tie breaking
         double secondaryScore = 1.0 / (1.0 + Math.Max(0.0, ftsResult.Score));
         return tierScore + secondaryScore;
     }

@@ -85,8 +85,8 @@ Rules:
 | CAN-06 | Position Persistence & Pinning | BLOCKED | CAN-05, FS-05 |  |  |
 | SHR-05 | Membership-Safe Live Share | BLOCKED | SHR-04, FS-03 |  |  |
 | SHR-07 | Share Download Permissions | BLOCKED | SHR-04, PDF-01 |  |  |
-| AI-02 | Local Embedding Provider | DONE | AI-01 | feat/ai-02-local-embedding-provider (90c3d39) | docs/sprints/handoffs/AI-02-HANDOFF.md |
-| SRCH-03 | Metadata Filters | READY | SRCH-02 |  |  |
+| AI-02 | Local Embedding Provider | DONE | AI-01 | feat/ai-02-local-embedding-provider (d28bdb7) | docs/sprints/handoffs/AI-02-HANDOFF.md |
+| SRCH-03 | Metadata Filters | DONE | SRCH-02 | feat/srch-03-metadata-filters | docs/sprints/handoffs/SRCH-03-HANDOFF.md |
 | SRCH-04 | Fuzzy Exploratory Search | READY | SRCH-02 |  |  |
 | CTX-02 | Explicit Dependency Expansion | DONE | CTX-01, GR-02 | feat/ctx-02-explicit-dependency-expansion (8aa5e85) | docs/sprints/handoffs/CTX-02-HANDOFF.md |
 | CTX-03 | DOCX Context Representation | DONE | CTX-01, IDX-02 | feat/ctx-03-docx-context-representation (0cd43a4) | docs/sprints/handoffs/CTX-03-HANDOFF.md |

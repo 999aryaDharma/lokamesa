@@ -2,7 +2,7 @@
 
 **Status:** DONE  
 **Branch:** `feat/ai-02-local-embedding-provider`  
-**Commits:** `90c3d39`
+**Commits:** `d28bdb7`
 
 ## What changed
 - Implemented `LocalEmbeddingProvider` implementing `IEmbeddingProvider` for local offline vector embedding generation. Uses deterministic n-gram & word feature hashing vectorizer with sublinear TF scaling and L2 normalization.
