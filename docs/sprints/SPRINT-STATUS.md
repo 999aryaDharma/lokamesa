@@ -71,7 +71,7 @@ Rules:
 | IDX-06 | Incremental Index Scheduler | BLOCKED | IDX-05, FS-03 |  |  |
 | SRCH-01 | Structured Query Parser | BLOCKED | IDX-05 |  |  |
 | QA-05 | Public Share Security Audit | BLOCKED | SHR-08, SHR-10 |  |  |
-| GR-02 | Backlinks & Reference Inspector | READY | GR-01, MD-04 |  |  |
+| GR-02 | Backlinks & Reference Inspector | DONE | GR-01, MD-04 | feat/gr-02-backlinks-reference-inspector | docs/sprints/handoffs/GR-02-HANDOFF.md |
 | PDF-03 | Streaming Ordered PDF Merge | BLOCKED | PDF-02 |  |  |
 | BAT-01 | Batch Operation Plan Domain | READY | FND-03, DOCX-03 |  |  |
 | QA-01 | Golden DOCX Regression Corpus | READY | DOCX-03 |  |  |
@@ -80,8 +80,8 @@ Rules:
 | AI-01 | Embedding Provider Abstraction | BLOCKED | FND-05, IDX-06 |  |  |
 | QA-02 | Filesystem & Indexing Soak | BLOCKED | FS-08, IDX-06 |  |  |
 | SRCH-02 | Exact Ranked Search | BLOCKED | SRCH-01 |  |  |
-| CTX-01 | Context Pack Core | BLOCKED | MD-03, GR-02 |  |  |
-| GR-03 | Graph View | BLOCKED | GR-02, CAN-01 |  |  |
+| CTX-01 | Context Pack Core | READY | MD-03, GR-02 |  |  |
+| GR-03 | Graph View | READY | GR-02, CAN-01 |  |  |
 | CAN-06 | Position Persistence & Pinning | BLOCKED | CAN-05, FS-05 |  |  |
 | SHR-05 | Membership-Safe Live Share | BLOCKED | SHR-04, FS-03 |  |  |
 | SHR-07 | Share Download Permissions | BLOCKED | SHR-04, PDF-01 |  |  |
