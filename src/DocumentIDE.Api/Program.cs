@@ -55,4 +55,4 @@ app.MapGet("/", () => "Hello World!");
 
 app.Run();
 
-internal partial class Program { }
+public partial class Program { }

@@ -24,7 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\DocumentIDE.Api\DocumentIDE.Api.csproj" />
     <ProjectReference Include="..\..\src\DocumentIDE.Desktop\DocumentIDE.Desktop.csproj" />
-    <ProjectReference Include="..\..\src\DocumentIDE.ShareHost\DocumentIDE.ShareHost.csproj" />
+    <ProjectReference Include="..\..\src\DocumentIDE.ShareHost\DocumentIDE.ShareHost.csproj" Aliases="ShareHostApp" />
   </ItemGroup>
 
 </Project>

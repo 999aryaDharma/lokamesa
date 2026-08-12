@@ -2,6 +2,7 @@ using System.Net;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using DocumentIDE.Api;
 
 namespace DocumentIDE.IntegrationTests.Security;
 
