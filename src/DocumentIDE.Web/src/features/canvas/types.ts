@@ -46,6 +46,18 @@ export interface CanvasObject {
   title: string;
   /** Whether this object represents a folder source or a document. */
   type: 'folder' | 'document';
+  /** Optional document type decoration. */
+  docType?: 'docx' | 'md' | 'unknown';
+  /** Optional thumbnail cache state. */
+  thumbnailState?: 'loading' | 'ready' | 'stale' | 'missing' | 'failed';
+  /** Optional thumbnail image Data URL or path. */
+  thumbnailUrl?: string;
+  /** Optional text content preview snippet. */
+  thumbnailContent?: string;
+  /** Whether referenced file is missing on disk. */
+  isMissing?: boolean;
+  /** Optional status marker text. */
+  statusText?: string;
 }
 
 /** Canvas store state shape. */

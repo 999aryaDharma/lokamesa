@@ -16,11 +16,14 @@ import React, {
   memo,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useSyncExternalStore,
 } from 'react';
 import { openInWord } from '../files/OpenInWordAction';
+import { useSearchStore } from '../search/searchStore';
 import { canvasStoreInstance, useCanvasStore } from './canvasStore';
+import DocumentNode from './nodes/DocumentNode';
 import type { CanvasObject } from './types';
 import { ZOOM_MAX, ZOOM_MIN } from './types';
 
@@ -35,26 +38,69 @@ function useCanvasState() {
   );
 }
 
+function useSearchState() {
+  return useSyncExternalStore(
+    useSearchStore.subscribe,
+    useSearchStore.getState,
+    useSearchStore.getState,
+  );
+}
+
 // ---------------------------------------------------------------------------
 // CanvasCard — memoized object card
 // ---------------------------------------------------------------------------
 interface CanvasCardProps {
   object: CanvasObject;
   isSelected: boolean;
+  isSearchActive?: boolean;
+  isMatch?: boolean;
+  isFaded?: boolean;
   onSelect: (id: string) => void;
   onDoubleClick?: (object: CanvasObject) => void;
 }
 
-const CanvasCard = memo(function CanvasCard({ object, isSelected, onSelect, onDoubleClick }: CanvasCardProps) {
+const CanvasCard = memo(function CanvasCard({
+  object,
+  isSelected,
+  isSearchActive = false,
+  isMatch = false,
+  isFaded = false,
+  onSelect,
+  onDoubleClick,
+}: CanvasCardProps) {
   const handleDoubleClick = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
+    (e?: React.MouseEvent) => {
+      e?.stopPropagation();
       if (onDoubleClick) {
         onDoubleClick(object);
       }
     },
     [onDoubleClick, object]
   );
+
+  if (object.type === 'document') {
+    return (
+      <DocumentNode
+        id={object.id}
+        title={object.title}
+        x={object.x}
+        y={object.y}
+        width={object.width}
+        height={object.height}
+        isSelected={isSelected}
+        isMissing={object.isMissing}
+        isFaded={isFaded}
+        isMatch={isMatch}
+        docType={object.docType}
+        thumbnailState={object.thumbnailState}
+        thumbnailUrl={object.thumbnailUrl}
+        thumbnailContent={object.thumbnailContent}
+        statusText={object.statusText}
+        onSelect={onSelect}
+        onDoubleClick={() => handleDoubleClick()}
+      />
+    );
+  }
 
   return (
     <div
@@ -70,12 +116,15 @@ const CanvasCard = memo(function CanvasCard({ object, isSelected, onSelect, onDo
         width: object.width,
         height: object.height,
         willChange: 'transform',
+        opacity: isFaded ? 0.35 : 1.0,
       }}
       className={[
         'rounded-lg border select-none cursor-pointer',
         'bg-white shadow-sm flex flex-col items-start justify-start p-3',
-        'transition-shadow duration-100',
-        isSelected
+        'transition-all duration-100',
+        isMatch
+          ? 'border-blue-500 ring-2 ring-blue-400 shadow-md'
+          : isSelected
           ? 'border-blue-400 ring-2 ring-blue-200 shadow-md'
           : 'border-slate-200 hover:border-slate-300 hover:shadow-md',
       ].join(' ')}
@@ -83,6 +132,15 @@ const CanvasCard = memo(function CanvasCard({ object, isSelected, onSelect, onDo
       onDoubleClick={handleDoubleClick}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelect(object.id); }}
     >
+      {/* Search match pill indicator */}
+      {isMatch && (
+        <span
+          data-testid={`match-badge-${object.id}`}
+          className="absolute top-1.5 right-1.5 text-[9px] font-bold bg-blue-500 text-white px-1.5 py-0.5 rounded shadow-xs"
+        >
+          MATCH
+        </span>
+      )}
       {/* Object type icon */}
       <span className="text-xl mb-1" aria-hidden="true">
         {object.type === 'folder' ? '📁' : '📄'}
@@ -152,7 +210,14 @@ const WHEEL_SENSITIVITY = 0.001;
 
 export default function DocumentCanvas() {
   const state = useCanvasState();
+  const searchState = useSearchState();
   const { viewport, objects, selectedIds, setViewport, toggleSelect, loadPersistedViewport } = state;
+
+  const isSearchHighlighting = searchState.isSearchActive && searchState.query.trim().length > 0;
+  const matchingDocIds = useMemo(() => {
+    if (!isSearchHighlighting) return new Set<string>();
+    return new Set(searchState.results.map((r) => r.documentId));
+  }, [isSearchHighlighting, searchState.results]);
 
   // Load persisted viewport on first mount
   useEffect(() => {
@@ -334,15 +399,22 @@ export default function DocumentCanvas() {
             willChange: 'transform',
           }}
         >
-          {objects.map((obj: CanvasObject) => (
-            <CanvasCard
-              key={obj.id}
-              object={obj}
-              isSelected={selectedIds.has(obj.id)}
-              onSelect={handleObjectSelect}
-              onDoubleClick={handleCardDoubleClick}
-            />
-          ))}
+          {objects.map((obj: CanvasObject) => {
+            const isMatch = isSearchHighlighting && obj.type === 'document' && matchingDocIds.has(obj.id);
+            const isFaded = isSearchHighlighting && obj.type === 'document' && !isMatch;
+            return (
+              <CanvasCard
+                key={obj.id}
+                object={obj}
+                isSelected={selectedIds.has(obj.id)}
+                isSearchActive={isSearchHighlighting}
+                isMatch={isMatch}
+                isFaded={isFaded}
+                onSelect={handleObjectSelect}
+                onDoubleClick={handleCardDoubleClick}
+              />
+            );
+          })}
         </div>
 
         {/* Empty state — only shown when no objects on canvas */}

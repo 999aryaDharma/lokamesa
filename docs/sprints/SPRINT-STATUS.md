@@ -58,7 +58,7 @@ Rules:
 | MD-03 | Frontmatter & Explicit Link Index | DONE | IDX-03, MD-01 | feat/md-03-frontmatter-explicit-link-index (1398e2c) | docs/sprints/handoffs/MD-03-HANDOFF.md |
 | PDF-01 | Single DOCX PDF Export | BLOCKED | WORD-03 |  |  |
 | DOCX-02 | Logical Search Across Runs | DONE | DOCX-01 | feat/docx-02-logical-search-across-runs (ee88815) | docs/sprints/handoffs/DOCX-02-HANDOFF.md |
-| CAN-03 | Document Paper Object & Thumbnail Shell | READY | IDX-04, CAN-01 |  |  |
+| CAN-03 | Document Paper Object & Thumbnail Shell | DONE | IDX-04, CAN-01 | feat/can-03-document-paper-object-thumbnail-shell | docs/sprints/handoffs/CAN-03-HANDOFF.md |
 | DOCX-04 | Document Lens Metadata | READY | IDX-04 |  |  |
 | IDX-05 | FTS5 Search Index | DONE | IDX-04 | feat/idx-05-fts5-search-index | docs/sprints/handoffs/IDX-05-HANDOFF.md |
 | SHR-08 | Share CSP, Sanitization & Rate Limits | BLOCKED | SHR-03, MD-02 |  |  |
@@ -66,7 +66,7 @@ Rules:
 | MD-04 | Wikilink Resolution & Backlink Inputs | DONE | MD-03 | feat/md-04-wikilink-resolution-backlink-inputs (b6ace97) | docs/sprints/handoffs/MD-04-HANDOFF.md |
 | PDF-02 | Batch Separate PDF Export | BLOCKED | PDF-01, FND-04 |  |  |
 | DOCX-03 | Strict DOCX Text Mutation | DONE | DOCX-02 | feat/docx-03-strict-docx-text-mutation (d58d337) | docs/sprints/handoffs/DOCX-03-HANDOFF.md |
-| CAN-04 | Folder Picker & File Release | BLOCKED | CAN-02, CAN-03 |  |  |
+| CAN-04 | Folder Picker & File Release | READY | CAN-02, CAN-03 |  |  |
 | WORD-04 | High-Fidelity Quick Look | BLOCKED | WORD-03, DOCX-04 |  |  |
 | IDX-06 | Incremental Index Scheduler | DONE | IDX-05, FS-03 | feat/idx-06-incremental-index-scheduler | docs/sprints/handoffs/IDX-06-HANDOFF.md |
 | SRCH-01 | Structured Query Parser | DONE | IDX-05 | feat/srch-01-structured-query-parser | docs/sprints/handoffs/SRCH-01-HANDOFF.md |
@@ -95,11 +95,11 @@ Rules:
 | CAN-07 | Multi-Select, Group Drag & Tidy | BLOCKED | CAN-06 |  |  |
 | SHR-06 | Share-Scoped Search & Graph | BLOCKED | SHR-05, SRCH-02, GR-03 |  |  |
 | SHR-11 | Owner Share Management UI | BLOCKED | SHR-05, SHR-07, SHR-09 |  |  |
-| SRCH-05 | Realtime Search UI & Selection | READY | SRCH-03, SRCH-04, FND-07 |  |  |
+| SRCH-05 | Realtime Search UI & Selection | DONE | SRCH-03, SRCH-04, FND-07 | feat/srch-05-realtime-search-ui-selection | docs/sprints/handoffs/SRCH-05-HANDOFF.md |
 | CTX-04 | Token Estimate & Context Export | DONE | CTX-02, CTX-03 | feat/ctx-04-token-estimate-context-export | docs/sprints/handoffs/CTX-04-HANDOFF.md |
 | AI-04 | Semantic Graph Suggestions | DONE | AI-02, GR-05 | feat/ai-04-semantic-graph-suggestions | docs/sprints/handoffs/AI-04-HANDOFF.md |
-| AI-03 | Semantic Search Mode | BLOCKED | AI-02, SRCH-05 |  |  |
-| BAT-02 | Batch Scope Resolver | BLOCKED | FS-01, SRCH-05, BAT-01 |  |  |
+| AI-03 | Semantic Search Mode | READY | AI-02, SRCH-05 |  |  |
+| BAT-02 | Batch Scope Resolver | READY | FS-01, SRCH-05, BAT-01 |  |  |
 | CAN-08 | List View & View Switch | BLOCKED | CAN-03, SRCH-05 |  |  |
 | QA-06 | Performance Benchmark Gate | BLOCKED | CAN-07, SRCH-05, GR-05, PDF-03 |  |  |
 | BAT-03 | Batch Preview API & Review Shell | BLOCKED | BAT-01, BAT-02 |  |  |
