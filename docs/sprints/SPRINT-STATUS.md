@@ -65,7 +65,7 @@ Rules:
 | GR-01 | Relation Store & Extraction | DONE | MD-03, FND-03 | feat/gr-01-relation-store-extraction | docs/sprints/handoffs/GR-01-HANDOFF.md |
 | MD-04 | Wikilink Resolution & Backlink Inputs | DONE | MD-03 | feat/md-04-wikilink-resolution-backlink-inputs (b6ace97) | docs/sprints/handoffs/MD-04-HANDOFF.md |
 | PDF-02 | Batch Separate PDF Export | BLOCKED | PDF-01, FND-04 |  |  |
-| DOCX-03 | Strict DOCX Text Mutation | READY | DOCX-02 |  |  |
+| DOCX-03 | Strict DOCX Text Mutation | DONE | DOCX-02 | feat/docx-03-strict-docx-text-mutation (d58d337) | docs/sprints/handoffs/DOCX-03-HANDOFF.md |
 | CAN-04 | Folder Picker & File Release | BLOCKED | CAN-02, CAN-03 |  |  |
 | WORD-04 | High-Fidelity Quick Look | BLOCKED | WORD-03, DOCX-04 |  |  |
 | IDX-06 | Incremental Index Scheduler | BLOCKED | IDX-05, FS-03 |  |  |
@@ -73,8 +73,8 @@ Rules:
 | QA-05 | Public Share Security Audit | BLOCKED | SHR-08, SHR-10 |  |  |
 | GR-02 | Backlinks & Reference Inspector | READY | GR-01, MD-04 |  |  |
 | PDF-03 | Streaming Ordered PDF Merge | BLOCKED | PDF-02 |  |  |
-| BAT-01 | Batch Operation Plan Domain | BLOCKED | FND-03, DOCX-03 |  |  |
-| QA-01 | Golden DOCX Regression Corpus | BLOCKED | DOCX-03 |  |  |
+| BAT-01 | Batch Operation Plan Domain | READY | FND-03, DOCX-03 |  |  |
+| QA-01 | Golden DOCX Regression Corpus | READY | DOCX-03 |  |  |
 | CAN-05 | Spatially Indexed Assisted Placement | BLOCKED | CAN-04 |  |  |
 | SHR-04 | Snapshot Share | BLOCKED | SHR-03, WORD-04, MD-02 |  |  |
 | AI-01 | Embedding Provider Abstraction | BLOCKED | FND-05, IDX-06 |  |  |
