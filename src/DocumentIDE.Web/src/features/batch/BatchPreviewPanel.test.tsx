@@ -19,7 +19,7 @@ beforeEach(() => {
   Object.assign(window, { __DOCUMENTIDE_API_URL__: 'http://localhost:5000', __DOCUMENTIDE_SESSION_TOKEN__: 'secret' });
   vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
     requests.push({ url, init });
-    const data = url.endsWith('/workspaces') ? [{ id: 'w1', name: 'Office' }] : url.endsWith('/preview') ? { planId: 'p1', jobId: 'j1' } : getPlan;
+    const data = url.endsWith('/workspaces') ? [{ id: 'w1', name: 'Office' }] : url.endsWith('/scope-options') ? { documents: [{ id: 'trusted-id', fileName: 'Trusted.md' }], collections: [] } : url.endsWith('/preview') ? { planId: 'p1', jobId: 'j1' } : getPlan;
     const status = url.endsWith('/selection') ? saveStatus : url.endsWith('/cancel') ? 204 : 200;
     return { ok: status < 400, status, json: async () => data } as Response;
   }));
@@ -74,8 +74,8 @@ it('renders failed and expired terminal outcomes', async () => {
 it('shows frozen workspace and membership rather than edited request fields', async () => {
   getPlan = { ...completed, scope: { ...completed.scope, type: 0, documentIds: ['trusted-id'] } };
   await start();
-  expect(await screen.findByText('Workspace ID: w1')).toBeInTheDocument();
-  expect(screen.getByText('Document IDs: trusted-id')).toBeInTheDocument();
+  expect(await screen.findByText('Workspace: Office')).toBeInTheDocument();
+  expect(screen.getByText('Documents: Trusted.md')).toBeInTheDocument();
 });
 it('polls to completion and stops polling at terminal status', async () => {
   getPlan = { ...completed, status: 'Running', progress: 40 };
@@ -139,4 +139,21 @@ it('reports request errors without showing arbitrary server error text', async (
   expect(await screen.findByRole('alert')).toHaveTextContent('Batch request failed (500).');
   expect(screen.queryByText('secret internal path')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Preview' })).toBeEnabled();
+});
+it('offers trusted document and collection names and resets membership on workspace change', async () => {
+  const original = globalThis.fetch;
+  vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => url.endsWith('/scope-options') ? Promise.resolve({ ok: true, status: 200, json: async () => ({ documents: [{ id: 'trusted', fileName: 'Selected.md' }], collections: [{ id: 'collection', name: 'Final documents' }] }) } as Response) : original(url, init)));
+  render(<BatchPreviewPanel />);
+  await screen.findByRole('option', { name: 'Office' });
+  fireEvent.change(screen.getByLabelText('Workspace'), { target: { value: 'w1' } });
+  fireEvent.change(screen.getByLabelText('Scope'), { target: { value: '0' } });
+  fireEvent.click(await screen.findByLabelText('Selected.md'));
+  fireEvent.change(screen.getByLabelText('Exact find'), { target: { value: 'needle' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+  await screen.findByText('Completed: 100%');
+  expect(JSON.parse(requests.find(r => r.url.endsWith('/preview'))!.init!.body as string).scope.documentIds).toEqual(['trusted']);
+  fireEvent.change(screen.getByLabelText('Scope'), { target: { value: '3' } });
+  fireEvent.change(screen.getByLabelText('Collection'), { target: { value: 'collection' } });
+  fireEvent.change(screen.getByLabelText('Workspace'), { target: { value: '' } });
+  expect(screen.getByLabelText('Collection')).toHaveValue('');
 });
