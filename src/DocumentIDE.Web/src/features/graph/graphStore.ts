@@ -3,7 +3,7 @@
 /**
  * Graph state store – persists node coordinates independently from canvas.
  */
-import { type Listener } from "../canvas/types"; // Reuse Listener type if needed
+type Listener = () => void;
 
 
 const POSITION_STORAGE_KEY = "graphNodePositions";

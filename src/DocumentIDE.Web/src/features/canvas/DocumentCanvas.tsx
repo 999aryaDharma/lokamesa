@@ -62,7 +62,6 @@ interface CanvasCardProps {
 const CanvasCard = memo(function CanvasCard({
   object,
   isSelected,
-  isSearchActive = false,
   isMatch = false,
   isFaded = false,
   onSelect,

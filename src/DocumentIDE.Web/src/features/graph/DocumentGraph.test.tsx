@@ -1,8 +1,7 @@
 // src/DocumentIDE.Web/src/features/graph/DocumentGraph.test.tsx
 
-import { render, act } from '@testing-library/react';
+import { act } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import DocumentGraph from './DocumentGraph';
 import { useGraphStore } from './graphStore';
 import { useCanvasStore } from '../canvas/canvasStore';
 

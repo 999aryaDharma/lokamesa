@@ -95,8 +95,7 @@ public class ShareHostIsolationTests
         Assert.NotEmpty(report.TestedPaths);
 
         // Share root should be allowed
-        var shareRootResult = report.TestedPaths.FirstOrDefault(p => p.Path.Contains("shares") || p.Path.Contains("DocumentIDE"));
-        Assert.NotNull(shareRootResult);
+        var shareRootResult = Assert.Single(report.TestedPaths, p => p.Path == report.ShareRootPath);
         Assert.True(shareRootResult.Allowed);
 
         // User profile / Temp should be probed and recorded

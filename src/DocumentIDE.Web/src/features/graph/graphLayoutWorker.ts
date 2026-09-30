@@ -88,7 +88,7 @@ export function computeBoundedGraph(
  */
 export async function computeLayoutAsync(
   nodes: GraphNode[],
-  edges: GraphEdge[]
+  _edges: GraphEdge[]
 ): Promise<Map<string, { x: number; y: number }>> {
   return new Promise((resolve) => {
     // Off-thread asynchronous positioning (can also dispatch to WebWorker if available)

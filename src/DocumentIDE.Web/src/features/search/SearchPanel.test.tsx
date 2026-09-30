@@ -1,8 +1,7 @@
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import React from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import SearchPanel from './SearchPanel.tsx';
-import { useSearchStore, SearchResult } from './searchStore';
+import { useSearchStore, type SearchResult } from './searchStore';
 import { useCanvasStore } from '../canvas/canvasStore';
 
 describe('SearchPanel & Realtime Search UI', () => {

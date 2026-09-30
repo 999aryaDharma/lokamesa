@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { computeBoundedGraph, computeLayoutAsync } from './graphLayoutWorker';
-import { defaultGraphScopeOptions, filterSemanticEdgesTopK } from './GraphScopeControls';
+import { filterSemanticEdgesTopK } from './GraphScopeControls';
 
 describe('GR-05 — Bounded Graph Rendering', () => {
   it('defaults >250 nodes to bounded neighborhood mode unless full graph is explicitly requested', () => {
     const nodes = Array.from({ length: 300 }, (_, i) => ({ id: `node-${i}` }));
-    const edges = nodes.slice(1).map((n, i) => ({ source: 'node-0', target: n.id }));
+    const edges = nodes.slice(1).map((n) => ({ source: 'node-0', target: n.id }));
 
     // Default threshold is 250
     const bounded = computeBoundedGraph(nodes, edges, 'node-0', false, 250);

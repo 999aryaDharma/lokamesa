@@ -6,7 +6,7 @@
  * result selection, filter chips, and batch scope creation.
  */
 import { canvasStoreInstance } from '../canvas/canvasStore';
-import { toggleFilterQuery, FilterChipData } from './MetadataFilterChips';
+import { toggleFilterQuery, type FilterChipData } from './MetadataFilterChips';
 
 export interface SearchResult {
   documentId: string;

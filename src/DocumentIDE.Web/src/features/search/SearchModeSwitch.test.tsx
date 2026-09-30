@@ -1,7 +1,6 @@
-import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import { SearchModeSwitch, SearchMode } from './SearchModeSwitch';
+import { SearchModeSwitch } from './SearchModeSwitch';
 
 describe('SearchModeSwitch Component', () => {
   it('renders Exact, Fuzzy, and Smart mode buttons', () => {

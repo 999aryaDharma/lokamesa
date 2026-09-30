@@ -6,8 +6,8 @@
  */
 import React, { useSyncExternalStore, useCallback } from 'react';
 import { MetadataFilterChips } from './MetadataFilterChips';
-import { SearchModeSwitch, SearchMode } from './SearchModeSwitch';
-import { searchStoreInstance, useSearchStore, SearchResult, SearchBatchScope } from './searchStore';
+import { SearchModeSwitch, type SearchMode } from './SearchModeSwitch';
+import { useSearchStore, type SearchResult, type SearchBatchScope } from './searchStore';
 
 export interface SearchPanelProps {
   onInvokeBatchOperation?: (scope: SearchBatchScope) => void;
