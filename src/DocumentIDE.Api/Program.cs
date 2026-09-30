@@ -48,6 +48,7 @@ builder.Services.AddScoped<ISemanticSearchService, SemanticSearchService>();
 builder.Services.AddScoped<IDocumentSearchService, DocumentSearchService>();
 
 builder.Services.AddControllers();
+DocumentIDE.Api.BatchPreviewRegistration.AddBatchPreviewServices(builder.Services);
 
 var app = builder.Build();
 

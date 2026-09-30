@@ -24,7 +24,8 @@ public class MigrationRunner
             new Migration_006_RelationStore(),
             new Migration_007_BatchOperationPlans(),
             new Migration_008_FtsIndex(),
-            new Migration_009_EmbeddingStore()
+            new Migration_009_EmbeddingStore(),
+            new Migration_010_Collections()
         }.OrderBy(m => m.Version).ToList();
     }
 
