@@ -99,7 +99,7 @@ Rules:
 | CTX-04 | Token Estimate & Context Export | DONE | CTX-02, CTX-03 | feat/ctx-04-token-estimate-context-export | docs/sprints/handoffs/CTX-04-HANDOFF.md |
 | AI-04 | Semantic Graph Suggestions | DONE | AI-02, GR-05 | feat/ai-04-semantic-graph-suggestions | docs/sprints/handoffs/AI-04-HANDOFF.md |
 | AI-03 | Semantic Search Mode | DONE | AI-02, SRCH-05 | feat/ai-03-semantic-search-mode | docs/sprints/handoffs/AI-03-HANDOFF.md |
-| BAT-02 | Batch Scope Resolver | DONE | FS-01, SRCH-05, BAT-01 | feat/bat-02-batch-scope-resolver | docs/sprints/handoffs/BAT-02-HANDOFF.md |
+| BAT-02 | Batch Scope Resolver | DONE | FS-01, SRCH-05, BAT-01 | feat/bat-02-batch-scope-resolver (60593a1) | docs/sprints/handoffs/BAT-02-HANDOFF.md |
 | CAN-08 | List View & View Switch | READY | CAN-03, SRCH-05 |  |  |
 | QA-06 | Performance Benchmark Gate | BLOCKED | CAN-07, SRCH-05, GR-05, PDF-03 |  |  |
 | BAT-03 | Batch Preview API & Review Shell | READY | BAT-01, BAT-02 |  |  |
