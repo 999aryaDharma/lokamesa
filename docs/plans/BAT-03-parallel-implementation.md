@@ -49,3 +49,15 @@ Implement accessible BatchPreviewPanel and smallest API client/types. Add a reac
 Follow strict TDD with frontend tests before each behavior; mock API contract. Cover counts/origins, unavailable Apply while pending, per-file/occurrence edits and persistence, errors/stale/cancellation. Use current dependencies/native controls; no packages. Poll without leaked timers or late requests changing another plan. Run npm test and npm run build in src/DocumentIDE.Web, report exact outputs and RED/GREEN evidence. Avoid editing existing tests except where integration requires it.
 
 Self-review and write report listing files, commands/results, TDD evidence, acceptance mapping, deviations and concerns. Return DONE/DONE_WITH_CONCERNS/NEEDS_CONTEXT/BLOCKED; no commits until controller grants turn.
+
+### Task 3: Desktop host reachability
+
+Own src/DocumentIDE.Desktop/WebView/WebAppHost.cs and focused tests/DocumentIDE.IntegrationTests/Desktop/BatchPreviewHostTests.cs only. No backend/Web/docs changes or subagents. Read AGENTS.md, BAT-03 sprint required reading and host/security/test patterns.
+
+Global constraints: preview never mutates source, privileged guard retains Host/Origin/startup-secret enforcement, no public ShareHost dependency or changed Word concurrency, no unrelated routes broadened, strict TDD. API contract is frozen in Shared wire contract of docs/plans/BAT-03-parallel-implementation.md; read that section only alongside this brief.
+
+Backend worker will expose DocumentIDE.Api.BatchPreviewRegistration.AddBatchPreviewServices(this IServiceCollection services) in src/DocumentIDE.Api/BatchPreviewRegistration.cs. It registers AppDb and batch dependencies with TryAdd. Integrate that helper into desktop host, register only BatchPreviewController from Api assembly (small controller feature provider/filter if necessary), initialize AppDb and MapControllers behind existing PrivilegedRequestGuard. Preserve health/status routes and existing startup lifecycle. Never start tests against user's app.db: add smallest optional injected AppDb seam or equivalent test-only host configuration that avoids real user storage.
+
+Write failing integration proof first: actual WebAppHost starts on dynamic loopback port, temp AppDb is seeded, missing session denied, authorized workspaces/preview/poll succeeds and source bytes unchanged. Unknown unrelated controller route stays absent. Existing host/security tests must pass. Production helper can be absent initially (compile RED), then runtime RED before reachability implementation. Coordinate helper dependency with controller; do not duplicate backend DI registrations. Use SDK C:/Users/User/AppData/Local/Programs/FlyEnv-Data/app/dotnet/10.0.302/dotnet.exe; focused tests only, no concurrent full suite. If backend is building, coordinate sequential .NET builds through controller to avoid generated-file locks.
+
+Write detailed report files/tests/exact commands/results, RED/GREEN evidence, acceptance mapping and concerns. No commits until controller grants serialized turn. Return DONE/DONE_WITH_CONCERNS/NEEDS_CONTEXT/BLOCKED with concise test summary.
