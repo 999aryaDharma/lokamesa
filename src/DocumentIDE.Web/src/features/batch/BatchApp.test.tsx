@@ -10,3 +10,10 @@ it('opens review beside a usable canvas and closes it', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Batch operations' }));
   expect(screen.queryByRole('region', { name: 'Batch operations' })).not.toBeInTheDocument();
 });
+it('leaves Tools Space default activation available with real canvas mounted', () => {
+  render(<App />);
+  const button = screen.getByRole('button', { name: 'Batch operations' });
+  button.focus();
+  expect(fireEvent.keyDown(button, { code: 'Space', key: ' ', bubbles: true, cancelable: true })).toBe(true);
+  expect(screen.getByTestId('canvas-surface')).not.toHaveStyle({ cursor: 'grab' });
+});

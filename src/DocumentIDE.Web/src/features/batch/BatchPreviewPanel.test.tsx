@@ -157,3 +157,67 @@ it('offers trusted document and collection names and resets membership on worksp
   fireEvent.change(screen.getByLabelText('Workspace'), { target: { value: '' } });
   expect(screen.getByLabelText('Collection')).toHaveValue('');
 });
+it.each(['close', 'restart'])('keeps failed-poll remote activity cancellable on %s', async action => {
+  getPlan = { ...completed, status: 'Running', progress: 40 };
+  const original = globalThis.fetch;
+  let reads = 0;
+  vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
+    if (url.endsWith('/p1') && ++reads > 1) return Promise.resolve({ ok: false, status: 503 } as Response);
+    return original(url, init);
+  }));
+  await start(); await screen.findByText('Running: 40%');
+  await screen.findByText('Batch request failed (503).');
+  expect(screen.getByRole('button', { name: 'Retry preview status' })).toBeEnabled();
+  if (action === 'close') {
+    const { cleanup } = await import('@testing-library/react'); cleanup();
+  } else {
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  expect(requests.some(r => r.url.endsWith('/p1/cancel'))).toBe(true);
+  if (action === 'restart') {
+    const cancelIndex = requests.findIndex(r => r.url.endsWith('/p1/cancel'));
+    const previewIndices = requests.flatMap((r, i) => r.url.endsWith('/preview') ? [i] : []);
+    expect(previewIndices).toHaveLength(2);
+    expect(cancelIndex).toBeLessThan(previewIndices[1]);
+  }
+});
+it('recovers a failed poll through retry without replacing the plan', async () => {
+  getPlan = { ...completed, status: 'Running', progress: 40 };
+  const original = globalThis.fetch;
+  let reads = 0;
+  vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => url.endsWith('/p1') && ++reads === 2 ? Promise.resolve({ ok: false, status: 503 } as Response) : original(url, init)));
+  await start(); await screen.findByText('Batch request failed (503).');
+  getPlan = completed;
+  fireEvent.click(screen.getByRole('button', { name: 'Retry preview status' }));
+  await screen.findByText('Completed: 100%');
+  expect(requests.filter(r => r.url.endsWith('/preview'))).toHaveLength(1);
+});
+it('blocks replacement when predecessor cancellation fails', async () => {
+  getPlan = { ...completed, status: 'Running', progress: 40 };
+  const original = globalThis.fetch;
+  let reads = 0;
+  vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => (url.endsWith('/p1') && ++reads > 1) || url.endsWith('/cancel') ? Promise.resolve({ ok: false, status: 503 } as Response) : original(url, init)));
+  await start(); await screen.findByText('Batch request failed (503).');
+  fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(requests.filter(r => r.url.endsWith('/preview'))).toHaveLength(1);
+  expect(screen.getByRole('button', { name: 'Cancel preview' })).toBeEnabled();
+});
+it('does not start a replacement after closing during predecessor cancellation', async () => {
+  getPlan = { ...completed, status: 'Running', progress: 40 };
+  const original = globalThis.fetch;
+  let reads = 0;
+  let finishCancel!: (response: Response) => void;
+  vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
+    if (url.endsWith('/p1') && ++reads > 1) return Promise.resolve({ ok: false, status: 503 } as Response);
+    if (url.endsWith('/cancel') && !finishCancel) return new Promise<Response>(resolve => { finishCancel = resolve; });
+    return original(url, init);
+  }));
+  await start(); await screen.findByText('Batch request failed (503).');
+  fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+  const { cleanup } = await import('@testing-library/react'); cleanup();
+  finishCancel({ ok: true, status: 204 } as Response);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(requests.filter(r => r.url.endsWith('/preview'))).toHaveLength(1);
+});

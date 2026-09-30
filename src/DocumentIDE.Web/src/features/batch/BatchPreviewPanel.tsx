@@ -21,11 +21,13 @@ export default function BatchPreviewPanel() {
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
   const [stale, setStale] = useState(false);
+  const [pollFailed, setPollFailed] = useState(false);
   const active = useRef<{ controller: AbortController; planId?: string; timer?: ReturnType<typeof setTimeout>; running: boolean } | null>(null);
   const editable = preview?.status === 'Completed' && !busy && !stale;
   useEffect(() => () => {
     const job = active.current;
     if (!job) return;
+    active.current = null;
     job.controller.abort(); clearTimeout(job.timer);
     if (job.running && job.planId) void batchRequest(`/${encodeURIComponent(job.planId)}/cancel`, { method: 'POST' }).catch(() => {});
   }, []);
@@ -42,25 +44,39 @@ export default function BatchPreviewPanel() {
       .catch(() => { if (!controller.signal.aborted) setError('Unable to load scope choices.'); });
     return () => controller.abort();
   }, [workspaceId]);
+  async function poll(job: NonNullable<typeof active.current>) {
+    const controller = job.controller;
+    try {
+      const data = await batchRequest<Preview>(`/${encodeURIComponent(job.planId!)}`, { signal: controller.signal });
+      if (controller.signal.aborted || active.current !== job) return;
+      job.running = data.status === 'Pending' || data.status === 'Running';
+      setPreview(data); setBusy(false); setPollFailed(false);
+      if (job.running) job.timer = setTimeout(() => void poll(job), 750);
+    } catch (e) {
+      if (!controller.signal.aborted && active.current === job) {
+        setError((e as Error).message); setBusy(false); setPollFailed(true);
+      }
+    }
+  }
+  function retry() {
+    const job = active.current;
+    if (!job?.planId) return;
+    job.controller.abort(); clearTimeout(job.timer);
+    job.controller = new AbortController();
+    setError(''); setPollFailed(false); setBusy(true);
+    void poll(job);
+  }
   async function start() {
+    if (active.current?.running && active.current.planId && !await cancel()) return;
     if (active.current) { active.current.controller.abort(); clearTimeout(active.current.timer); }
     const job = { controller: new AbortController(), running: true, planId: undefined as string | undefined, timer: undefined as ReturnType<typeof setTimeout> | undefined };
     active.current = job;
-    setError(''); setPreview(null); setBusy(true); setDirty(false); setSaved(false); setStale(false);
+    setError(''); setPreview(null); setBusy(true); setDirty(false); setSaved(false); setStale(false); setPollFailed(false);
     try {
       const result = await batchRequest<{ planId: string }>('/preview', { method: 'POST', signal: job.controller.signal, body: JSON.stringify({ scope: { workspaceId, type: Number(type), documentIds: type === '0' ? documentIds : [], folderPath: type === '1' ? folderPath : null, collectionId: type === '3' ? collectionId : null, includeSubfolders, excludedBranches: lines(excludedBranches) }, find, replacement }) });
       if (job.controller.signal.aborted) return;
       job.planId = result.planId;
-      const poll = async () => {
-        try {
-          const data = await batchRequest<Preview>(`/${encodeURIComponent(result.planId)}`, { signal: job.controller.signal });
-          if (job.controller.signal.aborted) return;
-          job.running = data.status === 'Pending' || data.status === 'Running';
-          setPreview(data); setBusy(false);
-          if (job.running) job.timer = setTimeout(() => void poll(), 750);
-        } catch (e) { if (!job.controller.signal.aborted) { job.running = false; setError((e as Error).message); setBusy(false); } }
-      };
-      await poll();
+      await poll(job);
     } catch (e) { if (!job.controller.signal.aborted) { job.running = false; setError((e as Error).message); setBusy(false); } }
   }
   async function cancel() {
@@ -69,10 +85,11 @@ export default function BatchPreviewPanel() {
     job.controller.abort(); clearTimeout(job.timer); setBusy(true);
     try {
       await batchRequest(`/${encodeURIComponent(job.planId)}/cancel`, { method: 'POST' });
-      if (active.current !== job) return;
-      job.running = false;
+      if (active.current !== job) return false;
+      job.running = false; setPollFailed(false); setError('');
       setPreview(p => p && { ...p, status: 'Cancelled' });
-    } catch (e) { if (active.current === job) setError((e as Error).message); }
+      return true;
+    } catch (e) { if (active.current === job) { setError((e as Error).message); setPollFailed(true); } return false; }
     finally { if (active.current === job) setBusy(false); }
   }
   async function save() {
@@ -103,9 +120,11 @@ export default function BatchPreviewPanel() {
       <label>Excluded branches (one per line)<textarea value={excludedBranches} onChange={e => setExcludedBranches(e.target.value)} /></label>
       <label>Exact find<textarea required value={find} onChange={e => setFind(e.target.value)} /></label>
       <label>Replacement<textarea value={replacement} onChange={e => setReplacement(e.target.value)} /></label>
-      <button disabled={busy || !!active.current?.running || !workspaceId || type === '' || !find || (type === '0' && documentIds.length === 0) || (type === '3' && !collectionId)} type="submit">Preview</button>
+      <button disabled={busy || (!!active.current?.running && !pollFailed) || !workspaceId || type === '' || !find || (type === '0' && documentIds.length === 0) || (type === '3' && !collectionId)} type="submit">Preview</button>
     </form>
     {error && <p role="alert">{error}</p>}
+    {pollFailed && active.current?.planId && <button disabled={busy} onClick={retry}>Retry preview status</button>}
+    {!preview && active.current?.planId && active.current.running && <button disabled={busy} onClick={() => void cancel()}>Cancel preview</button>}
     {preview && <div>
       <p role="status">{preview.status}: {preview.progress}%</p><progress aria-label="Preview progress" value={preview.progress} max={100} />{preview.errorCode && <p role="alert">{preview.errorCode}</p>}{preview.status === 'Expired' && <p role="alert">Plan expired. Re-preview required.</p>}{(preview.status === 'Running' || preview.status === 'Pending') && <button disabled={busy} onClick={() => void cancel()}>Cancel preview</button>}
       <p>{preview.filesScanned} files scanned; {preview.filesAffected} files affected; {preview.occurrenceCount} occurrences</p>
