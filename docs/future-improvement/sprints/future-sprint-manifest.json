@@ -1,0 +1,331 @@
+{
+  "schema_version": "1.0",
+  "roadmap": "1.1.0-1.6.0",
+  "active_v1_sprint_count_unchanged": true,
+  "branch_management_in_product_scope": false,
+  "sprints": [
+    {
+      "id": "PAL-01",
+      "title": "Command Registry & Capability Model",
+      "version": "v1.1.0",
+      "priority": "P0",
+      "depends_on": [],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "PAL-02",
+      "title": "Command Palette Keyboard UX",
+      "version": "v1.1.0",
+      "priority": "P0",
+      "depends_on": [
+        "PAL-01"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "PAL-03",
+      "title": "Quick Open Documents & Recent Items",
+      "version": "v1.1.0",
+      "priority": "P0",
+      "depends_on": [
+        "PAL-01"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "PAL-04",
+      "title": "Command Palette & Quick Open Integration Hardening",
+      "version": "v1.1.0",
+      "priority": "P1",
+      "depends_on": [
+        "PAL-02",
+        "PAL-03"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "REV-01",
+      "title": "Review Session Domain & Baseline Contract",
+      "version": "v1.2.0",
+      "priority": "P0",
+      "depends_on": [
+        "SCM-08",
+        "SCM-05",
+        "HIST-01"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "REV-02",
+      "title": "Review Workspace Shell & Queue",
+      "version": "v1.2.0",
+      "priority": "P0",
+      "depends_on": [
+        "REV-01"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "REV-03",
+      "title": "Review Diff Orchestration",
+      "version": "v1.2.0",
+      "priority": "P0",
+      "depends_on": [
+        "REV-02",
+        "SCM-04",
+        "SCM-05"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "REV-04",
+      "title": "Review Approval & Commit Preparation",
+      "version": "v1.2.0",
+      "priority": "P1",
+      "depends_on": [
+        "REV-03",
+        "SCM-06"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "REV-05",
+      "title": "Review Regression & Safety Hardening",
+      "version": "v1.2.0",
+      "priority": "P0",
+      "depends_on": [
+        "REV-04",
+        "HIST-02"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "VIEW-01",
+      "title": "Saved View Domain & Query Snapshot",
+      "version": "v1.3.0",
+      "priority": "P0",
+      "depends_on": [
+        "SRCH-05",
+        "CAN-08"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "VIEW-02",
+      "title": "Smart Collection Predicate & Membership",
+      "version": "v1.3.0",
+      "priority": "P0",
+      "depends_on": [
+        "VIEW-01",
+        "IDX-04"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "VIEW-03",
+      "title": "Saved View & Smart Collection Canvas Objects",
+      "version": "v1.3.0",
+      "priority": "P1",
+      "depends_on": [
+        "VIEW-02",
+        "CAN-07"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "VIEW-04",
+      "title": "Views & Collections Regression Hardening",
+      "version": "v1.3.0",
+      "priority": "P1",
+      "depends_on": [
+        "VIEW-03",
+        "SRCH-03",
+        "SRCH-04"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "HLTH-01",
+      "title": "Health Report & Check Registry",
+      "version": "v1.4.0",
+      "priority": "P0",
+      "depends_on": [
+        "IDX-06",
+        "FS-06"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "HLTH-02",
+      "title": "Markdown Health Checks",
+      "version": "v1.4.0",
+      "priority": "P0",
+      "depends_on": [
+        "HLTH-01",
+        "MD-04"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "HLTH-03",
+      "title": "DOCX Health & Consistency Checks",
+      "version": "v1.4.0",
+      "priority": "P0",
+      "depends_on": [
+        "HLTH-01",
+        "DOCX-04"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "HLTH-04",
+      "title": "Health UI & Safe Repair Routing",
+      "version": "v1.4.0",
+      "priority": "P0",
+      "depends_on": [
+        "HLTH-02",
+        "HLTH-03",
+        "BAT-03"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "HLTH-05",
+      "title": "Health Policy & Regression Hardening",
+      "version": "v1.4.0",
+      "priority": "P1",
+      "depends_on": [
+        "HLTH-04",
+        "QA-01"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "WS-01",
+      "title": "Work Session Domain & Persistence",
+      "version": "v1.5.0",
+      "priority": "P0",
+      "depends_on": [
+        "HIST-02",
+        "CAN-06",
+        "SCM-09"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "WS-02",
+      "title": "Work Session Resume & Context Restoration",
+      "version": "v1.5.0",
+      "priority": "P0",
+      "depends_on": [
+        "WS-01"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "WS-03",
+      "title": "Work Session Activity Aggregation",
+      "version": "v1.5.0",
+      "priority": "P1",
+      "depends_on": [
+        "WS-01",
+        "SCM-08",
+        "REV-02"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "WS-04",
+      "title": "Work Session UX & Retention Hardening",
+      "version": "v1.5.0",
+      "priority": "P1",
+      "depends_on": [
+        "WS-02",
+        "WS-03"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "NOTE-01",
+      "title": "Canvas Note Domain & Persistence",
+      "version": "v1.6.0",
+      "priority": "P0",
+      "depends_on": [
+        "CAN-06",
+        "FND-03"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "NOTE-02",
+      "title": "Canvas Note Object & Document Anchoring",
+      "version": "v1.6.0",
+      "priority": "P0",
+      "depends_on": [
+        "NOTE-01",
+        "CAN-07"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "NOTE-03",
+      "title": "Note Editor, Status & Review Integration",
+      "version": "v1.6.0",
+      "priority": "P0",
+      "depends_on": [
+        "NOTE-02",
+        "REV-02"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "NOTE-04",
+      "title": "Note Search & Navigation Integration",
+      "version": "v1.6.0",
+      "priority": "P1",
+      "depends_on": [
+        "NOTE-03",
+        "SRCH-05"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "NOTE-05",
+      "title": "Canvas Note Regression & Release Hardening",
+      "version": "v1.6.0",
+      "priority": "P1",
+      "depends_on": [
+        "NOTE-04",
+        "QA-06"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    }
+  ]
+}
