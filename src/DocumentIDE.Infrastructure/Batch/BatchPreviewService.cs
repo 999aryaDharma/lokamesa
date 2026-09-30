@@ -75,7 +75,7 @@ public sealed class BatchPreviewService(IBatchPlanRepository plans)
                     using var stream = new MemoryStream(bytes, writable: false);
                     var preflight = new DocxPackagePreflight().ValidatePackage(stream);
                     if (!preflight.IsValid) failure = preflight.ErrorCode.ToString();
-                    else occurrences = new LogicalTextMatcher(new DocxPackagePreflight()).Search(stream, request.Find)
+                    else occurrences = new LogicalTextMatcher(new DocxPackagePreflight()).Search(stream, request.Find, new() { MaxMatches = 10000, CancellationToken = cancellationToken })
                         .Select(m => new BatchPreviewOccurrence(m.OccurrenceId, m.Origin.ToString(), m.PreviewContext)).ToArray();
                 }
                 else

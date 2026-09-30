@@ -32,6 +32,41 @@ public sealed class BatchPreviewTests : IDisposable
     }
 
     [Fact]
+    public async Task Preview_LargePersistedSelectionMapsOrdinalIdsAndFileSelection()
+    {
+        var (plan, _, _) = await Fixture(("doc", "notes.md", Encoding.UTF8.GetBytes("target")));
+        var occurrences = Enumerable.Range(0, 10000).Select(i => new BatchPreviewOccurrence($"occ:{i}", "Body", "target")).ToArray();
+        plan.ScopeJson = JsonSerializer.Serialize(new BatchPreviewState(new BatchPreviewScope { WorkspaceId = "ws", Type = BatchScopeType.Selection }, null));
+        plan.Status = BatchPlanStatus.Previewed;
+        plan.Files.Add(new BatchOperationPlanFile {
+            DocumentId = "doc", Selected = false, MatchCount = occurrences.Length,
+            SelectedChangeIds = occurrences.Where((_, i) => i % 2 == 0).Select(o => o.Id).Append("OCC:1").ToList(),
+            PlanPayloadJson = JsonSerializer.Serialize(new BatchPreviewFile("doc", "notes.md", true, "Unknown", null, occurrences)) });
+        await _plans.SavePlanAsync(plan);
+        using var scheduler = new DocumentIDE.Infrastructure.Jobs.LocalJobScheduler();
+        var result = (await new BatchPreviewCoordinator(_db, scheduler, new BatchPreviewService(_plans)).GetAsync(plan.Id))!;
+        var file = Assert.Single(result.Files);
+        Assert.False(file.Selected);
+        Assert.Equal(10000, file.Occurrences.Count);
+        for (var i = 0; i < file.Occurrences.Count; i++) Assert.Equal(i % 2 == 0, file.Occurrences[i].Selected);
+    }
+
+    [Fact]
+    public async Task Preview_ValidDocxExceedingOccurrenceBudgetHasTypedFailureWithoutMutation()
+    {
+        var bytes = DocxTestFixtureBuilder.CreateValidDocxPackage(documentXml:
+            "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body><w:p><w:r><w:t>" + string.Concat(Enumerable.Repeat("target ", 10001)) + "</w:t></w:r></w:p></w:body></w:document>");
+        var (plan, request, scope) = await Fixture(("doc", "large.docx", bytes));
+        await new BatchPreviewService(_plans).BuildAsync(plan.Id, request, scope, CancellationToken.None);
+        var file = Assert.Single((await _plans.GetByIdAsync(plan.Id))!.Files);
+        Assert.Equal("ResourceLimit", JsonSerializer.Deserialize<BatchPreviewFile>(file.PlanPayloadJson!)!.FailureCode);
+        Assert.Equal(0, file.MatchCount);
+        Assert.Empty(file.SelectedChangeIds);
+        Assert.False(file.Selected);
+        Assert.Equal(bytes, await File.ReadAllBytesAsync(Path.Combine(_root, "large.docx")));
+    }
+
+    [Fact]
     public async Task Preview_PerformsNoSourceMutation_AndPersistsFingerprintAndExactOccurrences()
     {
         var path = Path.Combine(_root, "notes.md");

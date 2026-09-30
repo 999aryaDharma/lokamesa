@@ -10,6 +10,51 @@ namespace DocumentIDE.Core.Tests.Docx;
 
 public class LogicalTextMatcherTests
 {
+    [Fact]
+    public void Search_MatchBudgetIsExact_AndDefaultRemainsUnlimited()
+    {
+        var bytes = CreateDocxPackage("<document><p><r><t>xxx</t></r></p></document>");
+        using var stream = new MemoryStream(bytes);
+        var matcher = new LogicalTextMatcher();
+        Assert.Equal(3, matcher.Search(stream, "x").Count);
+        stream.Position = 0;
+        Assert.Equal(3, matcher.Search(stream, "x", new() { MaxMatches = 3 }).Count);
+        stream.Position = 0;
+        var error = Assert.Throws<InvalidDataException>(() => matcher.Search(stream, "x", new() { MaxMatches = 2 }));
+        Assert.Equal("OccurrenceBudgetExceeded", error.Message);
+    }
+
+    [Fact]
+    public void Search_CancellationDuringPartReadStopsTraversalWithoutChangingBytes()
+    {
+        var bytes = CreateDocxPackage("<document><p><r><t>xxx</t></r></p></document>");
+        using var cancellation = new System.Threading.CancellationTokenSource();
+        using var stream = new CancelOnReadStream(bytes, cancellation);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        _ = archive.Entries.Count;
+        stream.Armed = true;
+        Assert.ThrowsAny<OperationCanceledException>(() => new LogicalTextMatcher().Search(archive, "x", new() { CancellationToken = cancellation.Token }));
+        Assert.True(cancellation.IsCancellationRequested);
+        Assert.Equal(bytes, stream.ToArray());
+    }
+
+    private sealed class CancelOnReadStream(byte[] bytes, System.Threading.CancellationTokenSource cancellation) : MemoryStream(bytes, writable: false)
+    {
+        public bool Armed { get; set; }
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            var read = base.Read(buffer, offset, count);
+            if (Armed && read > 0) cancellation.Cancel();
+            return read;
+        }
+        public override int Read(Span<byte> buffer)
+        {
+            var read = base.Read(buffer);
+            if (Armed && read > 0) cancellation.Cancel();
+            return read;
+        }
+    }
+
     private static byte[] CreateDocxPackage(
         string documentXml,
         string? headerXml = null,

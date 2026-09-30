@@ -63,7 +63,8 @@ public sealed class BatchPreviewCoordinator(AppDb db, LocalJobScheduler schedule
         var status = plan.IsExpired(DateTimeOffset.UtcNow) ? "Expired" : plan.Status == BatchPlanStatus.Previewed ? "Completed" : job?.State.ToString() ?? "Failed";
         var files = plan.Files.Select(file => {
             var payload = JsonSerializer.Deserialize<BatchPreviewFile>(file.PlanPayloadJson!)!;
-            return payload with { Selected = file.Selected, Occurrences = payload.Occurrences.Select(o => o with { Selected = file.SelectedChangeIds.Contains(o.Id, StringComparer.Ordinal) }).ToArray() };
+            var selectedIds = file.SelectedChangeIds.ToHashSet(StringComparer.Ordinal);
+            return payload with { Selected = file.Selected, Occurrences = payload.Occurrences.Select(o => o with { Selected = selectedIds.Contains(o.Id) }).ToArray() };
         }).ToArray();
         var occurrences = files.SelectMany(f => f.Occurrences).ToArray();
         return new(plan.Id, state.JobId, status, status == "Completed" ? 100 : Math.Clamp(job?.ProgressPercentage ?? 0, 0, 100),

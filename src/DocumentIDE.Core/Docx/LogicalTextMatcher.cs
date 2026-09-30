@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Xml;
 using System.Xml.Linq;
 
@@ -43,6 +44,8 @@ public class DocxMatchResult
 public class DocxSearchOptions
 {
     public StringComparison Comparison { get; set; } = StringComparison.Ordinal;
+    public int? MaxMatches { get; set; }
+    public CancellationToken CancellationToken { get; set; }
     public int ContextRadius { get; set; } = 30;
     public DocxPreflightOptions? PreflightOptions { get; set; }
 }
@@ -88,6 +91,7 @@ public class LogicalTextMatcher
             return Array.Empty<DocxMatchResult>();
 
         options ??= new DocxSearchOptions();
+        options.CancellationToken.ThrowIfCancellationRequested();
 
         if (!skipPreflightCheck && _preflight != null)
         {
@@ -123,11 +127,12 @@ public class LogicalTextMatcher
             return Array.Empty<DocxMatchResult>();
 
         options ??= new DocxSearchOptions();
+        options.CancellationToken.ThrowIfCancellationRequested();
 
         var matches = new List<DocxMatchResult>();
 
         // Identify target XML parts in the archive (document.xml, header*.xml, footer*.xml)
-        var partsToSearch = IdentifyPartsToSearch(archive);
+        var partsToSearch = IdentifyPartsToSearch(archive, options.CancellationToken);
 
         var xmlSettings = new XmlReaderSettings
         {
@@ -139,6 +144,7 @@ public class LogicalTextMatcher
 
         foreach (var entry in partsToSearch)
         {
+            options.CancellationToken.ThrowIfCancellationRequested();
             string partName = entry.FullName.Replace('\\', '/');
             XDocument xdoc;
             try
@@ -152,13 +158,15 @@ public class LogicalTextMatcher
                 throw new InvalidOperationException($"Malformed or corrupted XML in part '{partName}': {ex.Message}", ex);
             }
 
+            options.CancellationToken.ThrowIfCancellationRequested();
             SearchPart(xdoc, partName, query, options, matches);
         }
 
+        options.CancellationToken.ThrowIfCancellationRequested();
         return matches;
     }
 
-    private static List<ZipArchiveEntry> IdentifyPartsToSearch(ZipArchive archive)
+    private static List<ZipArchiveEntry> IdentifyPartsToSearch(ZipArchive archive, CancellationToken cancellationToken)
     {
         var parts = new List<ZipArchiveEntry>();
 
@@ -173,6 +181,7 @@ public class LogicalTextMatcher
         // Header and footer parts
         foreach (var entry in archive.Entries)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             string normPath = entry.FullName.Replace('\\', '/').ToLowerInvariant();
             if (normPath.StartsWith("word/header") && normPath.EndsWith(".xml"))
             {
@@ -197,21 +206,26 @@ public class LogicalTextMatcher
         if (xdoc.Root == null) return;
 
         // Find all paragraph elements <w:p>
-        var paragraphs = xdoc.Descendants().Where(e => e.Name.LocalName == "p").ToList();
-
-        for (int pIdx = 0; pIdx < paragraphs.Count; pIdx++)
+        int pIdx = -1;
+        foreach (var pElem in xdoc.Descendants())
         {
-            var pElem = paragraphs[pIdx];
+            options.CancellationToken.ThrowIfCancellationRequested();
+            if (pElem.Name.LocalName != "p") continue;
+            pIdx++;
             var origin = ResolveOrigin(pElem, partName);
 
-            var (logicalText, runSegments) = ExtractLogicalTextAndRunSegments(pElem);
+            var (logicalText, runSegments) = ExtractLogicalTextAndRunSegments(pElem, options.CancellationToken);
             if (string.IsNullOrEmpty(logicalText)) continue;
 
             int matchPos = 0;
             while (matchPos < logicalText.Length)
             {
+                options.CancellationToken.ThrowIfCancellationRequested();
                 int foundIndex = logicalText.IndexOf(query, matchPos, options.Comparison);
                 if (foundIndex < 0) break;
+
+                if (options.MaxMatches is int limit && matches.Count >= limit)
+                    throw new InvalidDataException("OccurrenceBudgetExceeded");
 
                 int queryLen = query.Length;
 
@@ -229,7 +243,7 @@ public class LogicalTextMatcher
                 string previewContext = $"{prefixEllipsis}{contextBefore}{matchedSubstring}{contextAfter}{suffixEllipsis}";
 
                 // Identify overlapping run segments
-                var matchedRunSegments = GetOverlappingRunSegments(runSegments, foundIndex, queryLen);
+                var matchedRunSegments = GetOverlappingRunSegments(runSegments, foundIndex, queryLen, options.CancellationToken);
 
                 // Build stable occurrence ID
                 string occurrenceId = $"occ_{partName}_{origin}_p{pIdx}_idx{foundIndex}_len{queryLen}";
@@ -288,7 +302,7 @@ public class LogicalTextMatcher
         public required string Text { get; init; }
     }
 
-    private static (string LogicalText, List<InternalSegment> Segments) ExtractLogicalTextAndRunSegments(XElement pElem)
+    private static (string LogicalText, List<InternalSegment> Segments) ExtractLogicalTextAndRunSegments(XElement pElem, CancellationToken cancellationToken)
     {
         var sb = new StringBuilder();
         var segments = new List<InternalSegment>();
@@ -299,6 +313,7 @@ public class LogicalTextMatcher
         // Traverse child elements of paragraph in document order
         foreach (var node in pElem.DescendantsAndSelf())
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (node is XElement elem)
             {
                 string localName = elem.Name.LocalName;
@@ -329,7 +344,7 @@ public class LogicalTextMatcher
 
         foreach (var child in pElem.Elements())
         {
-            ProcessElementForText(child, sb, segments, ref runIndexCounter, ref currentFieldDepth);
+            ProcessElementForText(child, sb, segments, ref runIndexCounter, ref currentFieldDepth, cancellationToken);
         }
 
         return (sb.ToString(), segments);
@@ -340,8 +355,10 @@ public class LogicalTextMatcher
         StringBuilder sb,
         List<InternalSegment> segments,
         ref int runIndexCounter,
-        ref int fieldDepth)
+        ref int fieldDepth,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         string localName = element.Name.LocalName;
 
         if (localName == "fldChar")
@@ -380,6 +397,7 @@ public class LogicalTextMatcher
 
             foreach (var rChild in element.Elements())
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 string rChildName = rChild.Name.LocalName;
 
                 if (rChildName == "fldChar")
@@ -441,20 +459,22 @@ public class LogicalTextMatcher
         // Recurse into child containers (e.g. w:hyperlink, w:sdt, w:fldSimple)
         foreach (var child in element.Elements())
         {
-            ProcessElementForText(child, sb, segments, ref runIndexCounter, ref fieldDepth);
+            ProcessElementForText(child, sb, segments, ref runIndexCounter, ref fieldDepth, cancellationToken);
         }
     }
 
     private static List<DocxRunSegmentMatch> GetOverlappingRunSegments(
         List<InternalSegment> segments,
         int matchStart,
-        int matchLength)
+        int matchLength,
+        CancellationToken cancellationToken)
     {
         var result = new List<DocxRunSegmentMatch>();
         int matchEnd = matchStart + matchLength;
 
         foreach (var seg in segments)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             int segStart = seg.GlobalStartIndex;
             int segEnd = segStart + seg.Length;
 
