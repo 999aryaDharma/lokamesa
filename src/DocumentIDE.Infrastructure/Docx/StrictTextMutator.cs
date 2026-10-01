@@ -7,6 +7,7 @@ using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 using DocumentIDE.Core.Docx;
+using DocumentIDE.Infrastructure.Filesystem;
 
 namespace DocumentIDE.Infrastructure.Docx;
 
@@ -522,7 +523,7 @@ public class StrictTextMutator
     {
         try
         {
-            File.Replace(tempFilePath, targetFilePath, destinationBackupFileName: null, ignoreMetadataErrors: true);
+            AtomicFileReplacer.ReplaceAtomically(tempFilePath, targetFilePath);
         }
         catch
         {
