@@ -109,7 +109,7 @@ Rules:
 | BAT-08 | Strict Font & Font-Size Operations | READY | BAT-04, DOCX-03 |  |  |
 | BAT-09 | Strict Page-Layout Operations | READY | BAT-04, DOCX-03 |  |  |
 | BAT-10 | Strict Batch Rename | READY | BAT-04, FS-07 |  |  |
-| HIST-02 | Conflict-Aware Undo | READY | HIST-01, BAT-04, FS-03 |  |  |
+| HIST-02 | Conflict-Aware Undo | IN_PROGRESS | HIST-01, BAT-04, FS-03 |  |  |
 | BAT-06 | Occurrence Review UX | DONE | BAT-05 | feat/bat-06-occurrence-review-ux (2bda93a) | docs/sprints/handoffs/BAT-06-HANDOFF.md |
 | BAT-11 | Batch Results & History UI | BLOCKED | BAT-10, HIST-02 |  |  |
 | QA-04 | Batch Safety Regression Suite | BLOCKED | BAT-10, HIST-02 |  |  |
