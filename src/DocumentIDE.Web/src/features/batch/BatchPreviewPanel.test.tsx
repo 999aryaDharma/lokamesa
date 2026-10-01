@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import BatchPreviewPanel from './BatchPreviewPanel';
 
@@ -57,6 +57,30 @@ it('keeps edits local until Save selection and requires re-preview on stale save
   fireEvent.click(screen.getByLabelText('Body occurrence o0'));
   fireEvent.click(screen.getByRole('button', { name: 'Save selection' }));
   expect(await screen.findByRole('alert')).toHaveTextContent(/Re-preview required/);
+});
+it('Unchecked occurrence is not applied: marks it excluded, omits it from the saved plan using only preview-returned IDs, and prompts re-preview when the save goes stale', async () => {
+  await start(); await screen.findByText('Completed: 100%');
+  fireEvent.click(screen.getByLabelText('Body occurrence o0'));
+  const file = screen.getByText('one.docx').closest('div')!;
+  expect(within(file).getByText('Not applied')).toBeInTheDocument();
+  expect(within(file).getAllByText('Not applied')).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Save selection' }));
+  await screen.findByText('Selection saved.');
+  const payload: { files: { documentId: string; selectedOccurrenceIds: string[] }[] } = JSON.parse(requests.find(r => r.init?.method === 'PUT')!.init!.body as string);
+  expect(payload.files).toMatchObject([
+    { documentId: 'd1', selected: true, selectedOccurrenceIds: ['o1', 'o2', 'o3'] },
+    { documentId: 'd2', selected: false, selectedOccurrenceIds: [] },
+  ]);
+  const returnedIds = completed.files.flatMap(f => f.occurrences.map(o => o.id));
+  const sentIds = payload.files.flatMap(f => f.selectedOccurrenceIds);
+  expect(payload.files.map(f => f.documentId)).toEqual(completed.files.map(f => f.documentId));
+  expect(sentIds.every(id => returnedIds.includes(id))).toBe(true);
+  saveStatus = 409;
+  fireEvent.click(screen.getByLabelText('Table occurrence o1'));
+  fireEvent.click(screen.getByRole('button', { name: 'Save selection' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent(/Re-preview required/);
+  expect(screen.getByLabelText('Table occurrence o1')).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Save selection' })).toBeDisabled();
 });
 it('shows pending progress, disables editing and cancels through the API', async () => {
   getPlan = { ...completed, status: 'Running', progress: 40 };

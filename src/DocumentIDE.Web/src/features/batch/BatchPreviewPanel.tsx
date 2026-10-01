@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { batchRequest, type Preview } from './batchApi';
+import SearchReplaceReview from './SearchReplaceReview';
 
 const scopeNames = ['Selection', 'Folder', 'Workspace', 'Collection'];
 const lines = (value: string) => value.split(/\r?\n/).map(v => v.trim()).filter(Boolean);
@@ -130,19 +131,17 @@ export default function BatchPreviewPanel() {
     {!preview && active.current?.planId && active.current.running && <button disabled={busy} onClick={() => void cancel()}>Cancel preview</button>}
     {preview && <div>
       <p role="status">{preview.status}: {preview.progress}%</p><progress aria-label="Preview progress" value={preview.progress} max={100} />{preview.errorCode && <p role="alert">{preview.errorCode}</p>}{preview.status === 'Expired' && <p role="alert">Plan expired. Re-preview required.</p>}{(preview.status === 'Running' || preview.status === 'Pending') && <button disabled={busy} onClick={() => void cancel()}>Cancel preview</button>}
-      <p>{preview.filesScanned} files scanned; {preview.filesAffected} files affected; {preview.occurrenceCount} occurrences</p>
-      {Object.entries(preview.breakdown).map(([origin, count]) => <p key={origin}>{origin[0].toUpperCase() + origin.slice(1)}: {count}</p>)}
-      <h3>Resolved scope: {scopeNames[preview.scope.type]}</h3>
-      <p>Workspace: {workspaces.find(w => w.id === preview.scope.workspaceId)?.name || 'Unavailable workspace'}</p>
-      <p>Documents: {preview.scope.documentIds.map(id => preview.files.find(f => f.documentId === id)?.fileName || options.documents.find(d => d.id === id)?.fileName || 'Unavailable document').join(', ') || 'None explicitly requested'}</p>
-      <p>Collection: {preview.scope.collectionId ? options.collections.find(c => c.id === preview.scope.collectionId)?.name || 'Unavailable collection' : 'None'}</p>
-      <p>Include subfolders: {preview.scope.type === 1 ? (preview.scope.includeSubfolders ? 'On' : 'Off') : 'Not applicable'}</p>
-      <p>Root folder: {preview.scope.folderPath || 'Not a folder scope'}</p>
-      <p>{preview.scope.subfolderCount} included subfolders</p>
-      <ul>{preview.scope.includedSubfolders.map(path => <li key={path}>{path}</li>)}</ul>
-      <p>Excluded branches: {preview.scope.type === 1 ? (preview.scope.excludedBranches.join(', ') || 'None') : 'Not applicable'}</p>
-      {preview.scope.failures.map((failure, i) => <p key={i}>Scope failure: {failure.failureCode} {failure.documentId}</p>)}
-      {preview.files.map(file => <div key={file.documentId}><h3>{file.fileName}</h3><label><input type="checkbox" aria-label={`Select ${file.fileName}`} disabled={!editable || !!file.failureCode} checked={file.selected} onChange={() => edit(file.documentId)} />Select file</label><p>Lock: {file.lockState}; Failure: {file.failureCode || 'None'}</p>{file.occurrences.map(o => <label className="block" key={o.id}><input type="checkbox" aria-label={`${o.origin} occurrence ${o.id}`} disabled={!editable || !!file.failureCode} checked={o.selected} onChange={() => edit(file.documentId, o.id)} />{o.origin}: {o.context}</label>)}</div>)}
+      <SearchReplaceReview
+        preview={preview}
+        find={find}
+        replacement={replacement}
+        editable={editable}
+        scopeLabel={scopeNames[preview.scope.type]}
+        workspaceName={workspaces.find(w => w.id === preview.scope.workspaceId)?.name || 'Unavailable workspace'}
+        collectionLabel={preview.scope.collectionId ? options.collections.find(c => c.id === preview.scope.collectionId)?.name || 'Unavailable collection' : 'None'}
+        documentName={id => preview.files.find(f => f.documentId === id)?.fileName || options.documents.find(d => d.id === id)?.fileName || 'Unavailable document'}
+        onEdit={edit}
+      />
     </div>}
     <button disabled={!editable || !dirty} onClick={() => void save()}>Save selection</button>{saved && <p role="status">Selection saved.</p>}
     <button disabled title="Applying changes is not available yet">Apply</button><p>Preview and review only. Applying changes is not available yet.</p>
