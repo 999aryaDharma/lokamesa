@@ -61,7 +61,7 @@ Rules:
 | CAN-03 | Document Paper Object & Thumbnail Shell | DONE | IDX-04, CAN-01 | feat/can-03-document-paper-object-thumbnail-shell | docs/sprints/handoffs/CAN-03-HANDOFF.md |
 | DOCX-04 | Document Lens Metadata | READY | IDX-04 |  |  |
 | IDX-05 | FTS5 Search Index | DONE | IDX-04 | feat/idx-05-fts5-search-index | docs/sprints/handoffs/IDX-05-HANDOFF.md |
-| SHR-08 | Share CSP, Sanitization & Rate Limits | BLOCKED | SHR-03, MD-02 |  |  |
+| SHR-08 | Share CSP, Sanitization & Rate Limits | READY | SHR-03, MD-02 |  |  |
 | GR-01 | Relation Store & Extraction | DONE | MD-03, FND-03 | feat/gr-01-relation-store-extraction | docs/sprints/handoffs/GR-01-HANDOFF.md |
 | MD-04 | Wikilink Resolution & Backlink Inputs | DONE | MD-03 | feat/md-04-wikilink-resolution-backlink-inputs (b6ace97) | docs/sprints/handoffs/MD-04-HANDOFF.md |
 | PDF-02 | Batch Separate PDF Export | BLOCKED | PDF-01, FND-04 |  |  |
@@ -102,9 +102,9 @@ Rules:
 | BAT-02 | Batch Scope Resolver | DONE | FS-01, SRCH-05, BAT-01 | feat/bat-02-batch-scope-resolver (60593a1) | docs/sprints/handoffs/BAT-02-HANDOFF.md |
 | CAN-08 | List View & View Switch | READY | CAN-03, SRCH-05 |  |  |
 | QA-06 | Performance Benchmark Gate | BLOCKED | CAN-07, SRCH-05, GR-05, PDF-03 |  |  |
-| BAT-03 | Batch Preview API & Review Shell | READY | BAT-01, BAT-02 |  |  |
+| BAT-03 | Batch Preview API & Review Shell | DONE | BAT-01, BAT-02 | feat/bat-03-batch-preview-api-review-shell (4899761) | docs/sprints/handoffs/BAT-03-HANDOFF.md |
 | PDF-04 | PDF Finalization UX | BLOCKED | CAN-08, PDF-03 |  |  |
-| BAT-04 | Transactional Safe Apply Engine | BLOCKED | BAT-03, HIST-01, FS-07 |  |  |
+| BAT-04 | Transactional Safe Apply Engine | READY | BAT-03, HIST-01, FS-07 |  |  |
 | BAT-05 | Exact Search & Replace Operation | BLOCKED | BAT-04, DOCX-03 |  |  |
 | BAT-08 | Strict Font & Font-Size Operations | BLOCKED | BAT-04, DOCX-03 |  |  |
 | BAT-09 | Strict Page-Layout Operations | BLOCKED | BAT-04, DOCX-03 |  |  |
