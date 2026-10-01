@@ -211,6 +211,26 @@ public sealed class BatchPreviewTests : IDisposable
     }
 
     [Fact]
+    public async Task Preview_ApiNonFolderScopeNormalizesInapplicableExclusionFields()
+    {
+        await Fixture(("doc", "notes.md", Encoding.UTF8.GetBytes("target")));
+        await new FolderSourceRepository(_db).CreateAsync(new FolderSource { Id = "source", WorkspaceId = "ws", CanonicalPath = _root });
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+        { services.RemoveAll<AppDb>(); services.AddSingleton(_db); }));
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("Origin", "http://localhost:5173");
+        client.DefaultRequestHeaders.Add("X-DocumentIDE-Session-Token", factory.Services.GetRequiredService<ISessionTokenProvider>().SessionToken);
+        var request = new BatchPreviewRequest(new() { WorkspaceId = "ws", Type = BatchScopeType.Workspace, IncludeSubfolders = false, ExcludedBranches = new[] { "excluded" } }, "target", "new");
+        var response = await client.PostAsJsonAsync("/api/batch-operations/preview", request);
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var started = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var planId = started.GetProperty("planId").GetString();
+        var preview = await client.GetFromJsonAsync<JsonElement>($"/api/batch-operations/{planId}");
+        Assert.Empty(preview.GetProperty("scope").GetProperty("excludedBranches").EnumerateArray());
+        Assert.True(preview.GetProperty("scope").GetProperty("includeSubfolders").GetBoolean());
+    }
+
+    [Fact]
     public async Task Preview_CollectionSchemaHasForeignKeysAndTrustedWorkspaceMembership()
     {
         await Fixture(("doc", "notes.md", Encoding.UTF8.GetBytes("target")));

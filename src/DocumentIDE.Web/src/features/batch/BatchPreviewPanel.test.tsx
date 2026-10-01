@@ -204,6 +204,47 @@ it('blocks replacement when predecessor cancellation fails', async () => {
   expect(requests.filter(r => r.url.endsWith('/preview'))).toHaveLength(1);
   expect(screen.getByRole('button', { name: 'Cancel preview' })).toBeEnabled();
 });
+it('sends neutral exclusion fields and marks them not applicable when switching Folder to Workspace', async () => {
+  getPlan = { ...completed, scope: { ...completed.scope, type: 2, folderPath: null, excludedBranches: [], includeSubfolders: true, includedSubfolders: [], subfolderCount: 0 } };
+  render(<BatchPreviewPanel />);
+  await screen.findByRole('option', { name: 'Office' });
+  fireEvent.change(screen.getByLabelText('Workspace'), { target: { value: 'w1' } });
+  fireEvent.change(screen.getByLabelText('Scope'), { target: { value: '1' } });
+  fireEvent.change(screen.getByLabelText('Root folder'), { target: { value: 'root' } });
+  fireEvent.change(screen.getByLabelText('Excluded branches (one per line)'), { target: { value: 'Archive' } });
+  fireEvent.change(screen.getByLabelText('Exact find'), { target: { value: 'needle' } });
+  fireEvent.change(screen.getByLabelText('Scope'), { target: { value: '2' } });
+  expect(screen.queryByLabelText('Excluded branches (one per line)')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+  await screen.findByText('Workspace: Office');
+  const request = requests.find(r => r.url.endsWith('/preview'))!;
+  expect(JSON.parse(request.init!.body as string).scope).toMatchObject({ type: 2, includeSubfolders: true, excludedBranches: [] });
+  expect(screen.getByText('Include subfolders: Not applicable')).toBeInTheDocument();
+  expect(screen.getByText('Excluded branches: Not applicable')).toBeInTheDocument();
+});
+it('cancels the returned plan exactly once when initial creation resolves after close', async () => {
+  const original = globalThis.fetch;
+  let finishCreate!: (response: Response) => void;
+  vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
+    if (url.endsWith('/preview')) return new Promise<Response>(resolve => { finishCreate = resolve; });
+    return original(url, init);
+  }));
+  const view = render(<BatchPreviewPanel />);
+  await screen.findByRole('option', { name: 'Office' });
+  fireEvent.change(screen.getByLabelText('Workspace'), { target: { value: 'w1' } });
+  fireEvent.change(screen.getByLabelText('Scope'), { target: { value: '2' } });
+  fireEvent.change(screen.getByLabelText('Exact find'), { target: { value: 'needle' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  view.unmount();
+  finishCreate({ ok: true, status: 202, json: async () => ({ planId: 'p9', jobId: 'j9' }) } as Response);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(requests.filter(r => r.url.endsWith('/p9/cancel') && r.init?.method === 'POST')).toHaveLength(1);
+  expect(requests.filter(r => r.url.endsWith('/p9'))).toHaveLength(0);
+  const count = requests.length;
+  await new Promise(resolve => setTimeout(resolve, 800));
+  expect(requests).toHaveLength(count);
+});
 it('does not start a replacement after closing during predecessor cancellation', async () => {
   getPlan = { ...completed, status: 'Running', progress: 40 };
   const original = globalThis.fetch;

@@ -73,8 +73,11 @@ export default function BatchPreviewPanel() {
     active.current = job;
     setError(''); setPreview(null); setBusy(true); setDirty(false); setSaved(false); setStale(false); setPollFailed(false);
     try {
-      const result = await batchRequest<{ planId: string }>('/preview', { method: 'POST', signal: job.controller.signal, body: JSON.stringify({ scope: { workspaceId, type: Number(type), documentIds: type === '0' ? documentIds : [], folderPath: type === '1' ? folderPath : null, collectionId: type === '3' ? collectionId : null, includeSubfolders, excludedBranches: lines(excludedBranches) }, find, replacement }) });
-      if (job.controller.signal.aborted) return;
+      const result = await batchRequest<{ planId: string }>('/preview', { method: 'POST', body: JSON.stringify({ scope: { workspaceId, type: Number(type), documentIds: type === '0' ? documentIds : [], folderPath: type === '1' ? folderPath : null, collectionId: type === '3' ? collectionId : null, includeSubfolders: type === '1' ? includeSubfolders : true, excludedBranches: type === '1' ? lines(excludedBranches) : [] }, find, replacement }) });
+      if (active.current !== job) {
+        if (result.planId) void batchRequest(`/${encodeURIComponent(result.planId)}/cancel`, { method: 'POST' }).catch(() => {});
+        return;
+      }
       job.planId = result.planId;
       await poll(job);
     } catch (e) { if (!job.controller.signal.aborted) { job.running = false; setError((e as Error).message); setBusy(false); } }
@@ -116,8 +119,8 @@ export default function BatchPreviewPanel() {
       {type === '0' && <fieldset><legend>Documents</legend>{options.documents.map(doc => <label className="block" key={doc.id}><input type="checkbox" checked={documentIds.includes(doc.id)} onChange={e => setDocumentIds(ids => e.target.checked ? [...ids, doc.id] : ids.filter(id => id !== doc.id))} />{doc.fileName}</label>)}</fieldset>}
       {type === '1' && <label>Root folder<input required value={folderPath} onChange={e => setFolderPath(e.target.value)} /></label>}
       {type === '3' && <label>Collection<select required value={collectionId} onChange={e => setCollectionId(e.target.value)}><option value="">Choose collection</option>{options.collections.map(collection => <option key={collection.id} value={collection.id}>{collection.name}</option>)}</select></label>}
-      <label><input type="checkbox" checked={includeSubfolders} onChange={e => setIncludeSubfolders(e.target.checked)} />Include subfolders</label>
-      <label>Excluded branches (one per line)<textarea value={excludedBranches} onChange={e => setExcludedBranches(e.target.value)} /></label>
+      {type === '1' && <label><input type="checkbox" checked={includeSubfolders} onChange={e => setIncludeSubfolders(e.target.checked)} />Include subfolders</label>}
+      {type === '1' && <label>Excluded branches (one per line)<textarea value={excludedBranches} onChange={e => setExcludedBranches(e.target.value)} /></label>}
       <label>Exact find<textarea required value={find} onChange={e => setFind(e.target.value)} /></label>
       <label>Replacement<textarea value={replacement} onChange={e => setReplacement(e.target.value)} /></label>
       <button disabled={busy || (!!active.current?.running && !pollFailed) || !workspaceId || type === '' || !find || (type === '0' && documentIds.length === 0) || (type === '3' && !collectionId)} type="submit">Preview</button>
@@ -133,11 +136,11 @@ export default function BatchPreviewPanel() {
       <p>Workspace: {workspaces.find(w => w.id === preview.scope.workspaceId)?.name || 'Unavailable workspace'}</p>
       <p>Documents: {preview.scope.documentIds.map(id => preview.files.find(f => f.documentId === id)?.fileName || options.documents.find(d => d.id === id)?.fileName || 'Unavailable document').join(', ') || 'None explicitly requested'}</p>
       <p>Collection: {preview.scope.collectionId ? options.collections.find(c => c.id === preview.scope.collectionId)?.name || 'Unavailable collection' : 'None'}</p>
-      <p>Include subfolders: {preview.scope.includeSubfolders ? 'On' : 'Off'}</p>
+      <p>Include subfolders: {preview.scope.type === 1 ? (preview.scope.includeSubfolders ? 'On' : 'Off') : 'Not applicable'}</p>
       <p>Root folder: {preview.scope.folderPath || 'Not a folder scope'}</p>
       <p>{preview.scope.subfolderCount} included subfolders</p>
       <ul>{preview.scope.includedSubfolders.map(path => <li key={path}>{path}</li>)}</ul>
-      <p>Excluded branches: {preview.scope.excludedBranches.join(', ') || 'None'}</p>
+      <p>Excluded branches: {preview.scope.type === 1 ? (preview.scope.excludedBranches.join(', ') || 'None') : 'Not applicable'}</p>
       {preview.scope.failures.map((failure, i) => <p key={i}>Scope failure: {failure.failureCode} {failure.documentId}</p>)}
       {preview.files.map(file => <div key={file.documentId}><h3>{file.fileName}</h3><label><input type="checkbox" aria-label={`Select ${file.fileName}`} disabled={!editable || !!file.failureCode} checked={file.selected} onChange={() => edit(file.documentId)} />Select file</label><p>Lock: {file.lockState}; Failure: {file.failureCode || 'None'}</p>{file.occurrences.map(o => <label className="block" key={o.id}><input type="checkbox" aria-label={`${o.origin} occurrence ${o.id}`} disabled={!editable || !!file.failureCode} checked={o.selected} onChange={() => edit(file.documentId, o.id)} />{o.origin}: {o.context}</label>)}</div>)}
     </div>}

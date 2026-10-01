@@ -28,10 +28,11 @@ public sealed class BatchPreviewCoordinator(AppDb db, LocalJobScheduler schedule
         var scope = await ResolveAsync(request.Scope);
         if (scope.Documents.Count > 1000) throw new ArgumentException("ScopeLimit");
         var tree = EnumerateSubfolders(request.Scope);
+        var folderScope = request.Scope.Type == BatchScopeType.Folder;
         var previewScope = new BatchPreviewScope {
             WorkspaceId = request.Scope.WorkspaceId, Type = request.Scope.Type, DocumentIds = request.Scope.DocumentIds.ToArray(),
-            FolderPath = request.Scope.FolderPath, IncludeSubfolders = request.Scope.IncludeSubfolders,
-            ExcludedBranches = request.Scope.ExcludedBranches.ToArray(), CollectionId = request.Scope.CollectionId,
+            FolderPath = request.Scope.FolderPath, IncludeSubfolders = folderScope ? request.Scope.IncludeSubfolders : true,
+            ExcludedBranches = folderScope ? request.Scope.ExcludedBranches.ToArray() : Array.Empty<string>(), CollectionId = request.Scope.CollectionId,
             IncludedSubfolders = tree, Failures = scope.Failures.Select(f => new BatchPreviewScopeFailure(f.DocumentId, f.Reason.ToString())).ToArray() };
         var plan = new BatchOperationPlan { WorkspaceId = request.Scope.WorkspaceId,
             ScopeJson = JsonSerializer.Serialize(new BatchPreviewState(previewScope, null)),
