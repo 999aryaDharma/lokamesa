@@ -110,7 +110,7 @@ Rules:
 | BAT-09 | Strict Page-Layout Operations | READY | BAT-04, DOCX-03 |  |  |
 | BAT-10 | Strict Batch Rename | READY | BAT-04, FS-07 |  |  |
 | HIST-02 | Conflict-Aware Undo | READY | HIST-01, BAT-04, FS-03 |  |  |
-| BAT-06 | Occurrence Review UX | READY | BAT-05 |  |  |
+| BAT-06 | Occurrence Review UX | IN_PROGRESS | BAT-05 |  |  |
 | BAT-11 | Batch Results & History UI | BLOCKED | BAT-10, HIST-02 |  |  |
 | QA-04 | Batch Safety Regression Suite | BLOCKED | BAT-10, HIST-02 |  |  |
 | QA-07 | Crash & Interrupted-Operation Recovery | BLOCKED | FND-04, HIST-02 |  |  |
