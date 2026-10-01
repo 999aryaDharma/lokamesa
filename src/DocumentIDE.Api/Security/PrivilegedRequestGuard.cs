@@ -43,7 +43,9 @@ public class PrivilegedRequestGuard
         // 2. Fetch-Metadata Defense-in-Depth Check
         if (context.Request.Headers.TryGetValue("Sec-Fetch-Site", out var secFetchSite))
         {
-            if (string.Equals(secFetchSite, "cross-site", StringComparison.OrdinalIgnoreCase))
+            // Native WebView HTTPS assets fetch the dynamic HTTP loopback API cross-site.
+            if (string.Equals(secFetchSite, "cross-site", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(context.Request.Headers["Origin"].ToString(), "https://appassets.html2sav", StringComparison.OrdinalIgnoreCase))
             {
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
                 await context.Response.WriteAsync("Forbidden: Cross-site requests rejected.");
