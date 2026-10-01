@@ -212,6 +212,151 @@ public sealed class SafeApplyTests : IDisposable
     }
 
     [Fact]
+    public async Task Apply_MutationFailureGetsHistoryRecord()
+    {
+        var original = Encoding.UTF8.GetBytes("target content");
+        var (planId, path) = await SeedAsync("doc", "notes.md", original);
+
+        async Task FailAfterTouchingTemp(string tempPath, CancellationToken token)
+        {
+            await File.AppendAllTextAsync(tempPath, "partial mutation", token);
+            throw new InvalidOperationException("injected mutation failure");
+        }
+
+        var result = await _engine.ApplyAsync(planId, FailAfterTouchingTemp);
+
+        var failure = Assert.Single(result.Files);
+        Assert.Equal(BatchApplyFileOutcome.Failure, failure.Outcome);
+        Assert.Equal("MutationFailed", failure.ReasonCode);
+
+        // Step 6 requires a persistent record for failure outcomes too.
+        var record = Assert.Single(_recorder.Records);
+        Assert.Equal("doc", record.DocumentId);
+        Assert.Equal(BatchApplyFileOutcome.Failure, record.Outcome);
+        Assert.Equal("MutationFailed", record.ReasonCode);
+        Assert.Equal(original, await File.ReadAllBytesAsync(path));
+    }
+
+    [Fact]
+    public async Task Apply_RecorderFailureOnMutationFailureStillCompletes()
+    {
+        var original = Encoding.UTF8.GetBytes("target content");
+        var (planId, path) = await SeedAsync("doc", "notes.md", original);
+        var failingRecorder = new FakeFailingHistoryRecorder();
+        var engine = new BatchApplyEngine(_plans, _documents, _snapshots, new WordEditStateProbe(), new AtomicFileReplacer(), failingRecorder, _reindex);
+
+        async Task FailAfterTouchingTemp(string tempPath, CancellationToken token)
+        {
+            await File.AppendAllTextAsync(tempPath, "partial mutation", token);
+            throw new InvalidOperationException("injected mutation failure");
+        }
+
+        // A recorder failure must not escape or strand the plan; the typed outcome stands.
+        var result = await engine.ApplyAsync(planId, FailAfterTouchingTemp);
+
+        var failure = Assert.Single(result.Files);
+        Assert.Equal(BatchApplyFileOutcome.Failure, failure.Outcome);
+        Assert.Equal("MutationFailed", failure.ReasonCode);
+        Assert.Equal(original, await File.ReadAllBytesAsync(path));
+        Assert.Equal(BatchPlanStatus.Completed, (await _plans.GetByIdAsync(planId))!.Status);
+    }
+
+    [Fact]
+    public async Task Apply_GenuineTokenCancellationReturnsTypedCanceledResult()
+    {
+        var first = Encoding.UTF8.GetBytes("target one");
+        var second = Encoding.UTF8.GetBytes("target two");
+        var (planId, firstPath) = await SeedAsync("doc1", "one.md", first);
+        var (_, secondPath) = await SeedAsync("doc2", "two.md", second, planId);
+
+        using var cts = new CancellationTokenSource();
+        var tokenHonoringRecorder = new FakeTokenHonoringHistoryRecorder();
+        var engine = new BatchApplyEngine(_plans, _documents, _snapshots, new WordEditStateProbe(), new AtomicFileReplacer(), tokenHonoringRecorder, _reindex);
+
+        async Task MutateThenCancel(string tempPath, CancellationToken token)
+        {
+            var text = await File.ReadAllTextAsync(tempPath, token);
+            await File.WriteAllTextAsync(tempPath, text.Replace("target", "replaced"), token);
+            cts.Cancel();
+            throw new OperationCanceledException("injected cancellation", cts.Token);
+        }
+
+        // The real token is canceled mid-apply and the recorder honors it: the typed
+        // Canceled result and plan→Failed transition must still complete.
+        var result = await engine.ApplyAsync(planId, MutateThenCancel, null, cts.Token);
+
+        Assert.Equal(BatchApplyResultStatus.Canceled, result.Status);
+        Assert.Equal(2, result.Files.Count);
+        Assert.Equal(BatchApplyFileOutcome.Failure, result.Files.Single(f => f.DocumentId == "doc1").Outcome);
+        Assert.Equal("Cancelled", result.Files.Single(f => f.DocumentId == "doc1").ReasonCode);
+        Assert.Equal(BatchApplyFileOutcome.Skipped, result.Files.Single(f => f.DocumentId == "doc2").Outcome);
+        Assert.Equal("Cancelled", result.Files.Single(f => f.DocumentId == "doc2").ReasonCode);
+        Assert.Equal(first, await File.ReadAllBytesAsync(firstPath));
+        Assert.Equal(second, await File.ReadAllBytesAsync(secondPath));
+        Assert.Equal(BatchPlanStatus.Failed, (await _plans.GetByIdAsync(planId))!.Status);
+    }
+
+    [Fact]
+    public async Task Apply_CancellationDuringCheckPhaseEvictsFileLocks()
+    {
+        var first = Encoding.UTF8.GetBytes("target one");
+        var second = Encoding.UTF8.GetBytes("target two");
+        var (planId, firstPath) = await SeedAsync("doc1", "one.md", first);
+        var (_, secondPath) = await SeedAsync("doc2", "two.md", second, planId);
+
+        using var cts = new CancellationTokenSource();
+        // Cancel while doc1 is being checked: doc1 passes its checks and holds its
+        // lock, then the loop's cancellation gate fires for doc2 — so doc1's lock is
+        // still held when ApplyAsync unwinds. It must be released AND evicted from
+        // the static dictionary, or entries leak for every canceled apply.
+        var cancelDuringCheckProbe = new FakeCallbackProbe(() => cts.Cancel());
+        var engine = new BatchApplyEngine(_plans, _documents, _snapshots, cancelDuringCheckProbe, new AtomicFileReplacer(), _recorder, _reindex);
+
+        async Task ReplaceTarget(string tempPath, CancellationToken token)
+        {
+            var text = await File.ReadAllTextAsync(tempPath, token);
+            await File.WriteAllTextAsync(tempPath, text.Replace("target", "replaced"), token);
+        }
+
+        var result = await engine.ApplyAsync(planId, ReplaceTarget, null, cts.Token);
+
+        Assert.Equal(BatchApplyResultStatus.Canceled, result.Status);
+        Assert.Equal(BatchPlanStatus.Failed, (await _plans.GetByIdAsync(planId))!.Status);
+
+        var fileLocks = (IDictionary<string, SemaphoreSlim>)typeof(BatchApplyEngine)
+            .GetField("_fileLocks", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+            .GetValue(null)!;
+        Assert.False(fileLocks.ContainsKey(firstPath), "doc1's lock entry must be evicted after release.");
+        Assert.False(fileLocks.ContainsKey(secondPath), "doc2's lock entry must be evicted after release.");
+    }
+
+    [Fact]
+    public async Task Apply_SelectedFileWithoutFingerprintGetsTypedSkip()
+    {
+        var original = Encoding.UTF8.GetBytes("target content");
+        var (planId, path) = await SeedAsync("doc", "notes.md", original);
+        var plan = (await _plans.GetByIdAsync(planId))!;
+        plan.Files.Single().ExpectedFingerprint = string.Empty;
+        await _plans.SavePlanAsync(plan);
+
+        async Task ReplaceTarget(string tempPath, CancellationToken token)
+        {
+            var text = await File.ReadAllTextAsync(tempPath, token);
+            await File.WriteAllTextAsync(tempPath, text.Replace("target", "replaced"), token);
+        }
+
+        var result = await _engine.ApplyAsync(planId, ReplaceTarget);
+
+        var skipped = Assert.Single(result.Files);
+        Assert.Equal(BatchApplyFileOutcome.Skipped, skipped.Outcome);
+        Assert.Equal("Unavailable", skipped.ReasonCode);
+        Assert.Equal(original, await File.ReadAllBytesAsync(path));
+        var record = Assert.Single(_recorder.Records);
+        Assert.Equal(BatchApplyFileOutcome.Skipped, record.Outcome);
+        Assert.Equal("Unavailable", record.ReasonCode);
+    }
+
+    [Fact]
     public async Task Apply_PartialFailureReportsPerFileOutcomes()
     {
         var stale = Encoding.UTF8.GetBytes("target stale");
@@ -386,8 +531,9 @@ public sealed class SafeApplyTests : IDisposable
         using var replaced = ZipFile.OpenRead(path);
         using var entry = replaced.GetEntry("word/document.xml")!.Open();
         using var reader = new StreamReader(entry);
-        Assert.Contains("replaced", await reader.ReadToEndAsync());
-        Assert.DoesNotContain("target", await reader.ReadToEndAsync());
+        var documentXml = await reader.ReadToEndAsync();
+        Assert.Contains("replaced", documentXml);
+        Assert.DoesNotContain("target", documentXml);
     }
 
     private async Task<(string PlanId, string Path)> SeedAsync(string docId, string fileName, byte[] content, string? planId = null)
@@ -457,8 +603,34 @@ public sealed class SafeApplyTests : IDisposable
         }
     }
 
+    private sealed class FakeCallbackProbe(Action onProbe) : IExternalEditStateProbe
+    {
+        public Task<ExternalEditState> ProbeAsync(string filePath, CancellationToken cancellationToken = default)
+        {
+            onProbe();
+            return Task.FromResult(ExternalEditState.NotLocked);
+        }
+    }
+
     private sealed class FakeProbe(ExternalEditState state) : IExternalEditStateProbe
     {
         public Task<ExternalEditState> ProbeAsync(string filePath, CancellationToken cancellationToken = default) => Task.FromResult(state);
+    }
+
+    private sealed class FakeTokenHonoringHistoryRecorder : IBatchApplyHistoryRecorder
+    {
+        public List<BatchApplyHistoryRecord> Records { get; } = new();
+        public Task RecordAsync(BatchApplyHistoryRecord record, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Records.Add(record);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class FakeFailingHistoryRecorder : IBatchApplyHistoryRecorder
+    {
+        public Task RecordAsync(BatchApplyHistoryRecord record, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("recorder unavailable");
     }
 }

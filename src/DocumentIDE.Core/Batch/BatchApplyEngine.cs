@@ -147,7 +147,7 @@ public sealed class BatchApplyEngine
         await _plans.UpdateStatusAsync(plan.Id, BatchPlanStatus.Executing);
 
         var outcomes = new List<BatchApplyFileResult>();
-        var heldLocks = new List<SemaphoreSlim>();
+        var heldLocks = new List<HeldLock>();
         string? snapshotId = null;
         var canceled = false;
         var selected = SelectedFiles(plan).ToArray();
@@ -162,8 +162,9 @@ public sealed class BatchApplyEngine
                 var check = await CheckFileAsync(file, heldLocks, cancellationToken);
                 if (check.Outcome != null)
                 {
-                    // Step 6: record per-file success/skipped/failure.
-                    await RecordOutcomeAsync(plan, check.Outcome, null, cancellationToken);
+                    // Step 6: record per-file success/skipped/failure. Recording uses
+                    // CancellationToken.None so a canceled apply still persists its records.
+                    await RecordOutcomeAsync(plan, check.Outcome, null, CancellationToken.None);
                     outcomes.Add(check.Outcome);
                 }
                 else
@@ -180,12 +181,17 @@ public sealed class BatchApplyEngine
                 {
                     snapshotId = (await _snapshots.CreateSnapshotAsync(plan.Id, ready.Select(r => r.Path))).SnapshotId;
                 }
+                catch (OperationCanceledException)
+                {
+                    // Cancellation must stay typed; never report it as a recovery block.
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     foreach (var entry in ready)
                     {
                         var blocked = new BatchApplyFileResult(entry.File.DocumentId, entry.Path, BatchApplyFileOutcome.Failure, "RecoveryBlocked", ex.Message);
-                        await RecordOutcomeAsync(plan, blocked, null, cancellationToken);
+                        await RecordOutcomeAsync(plan, blocked, null, CancellationToken.None);
                         outcomes.Add(blocked);
                     }
 
@@ -210,7 +216,7 @@ public sealed class BatchApplyEngine
                     prepared = await _replacer.PrepareAsync(entry.Path, mutate, validate, cancellationToken);
                     await _replacer.CommitAsync(prepared, cancellationToken);
                     var success = new BatchApplyFileResult(entry.File.DocumentId, entry.Path, BatchApplyFileOutcome.Success, null, null);
-                    await RecordOutcomeAsync(plan, success, snapshotId, cancellationToken);
+                    await RecordOutcomeAsync(plan, success, snapshotId, CancellationToken.None);
                     await TriggerReindexAsync(entry.File.DocumentId, cancellationToken);
                     outcomes.Add(success);
                 }
@@ -219,7 +225,7 @@ public sealed class BatchApplyEngine
                     if (prepared != null)
                         await _replacer.RollbackAsync(prepared, CancellationToken.None);
                     var cancelled = new BatchApplyFileResult(entry.File.DocumentId, entry.Path, BatchApplyFileOutcome.Failure, "Cancelled", "Apply cancelled before commit; original unchanged.");
-                    await RecordOutcomeAsync(plan, cancelled, snapshotId, cancellationToken);
+                    await RecordOutcomeAsync(plan, cancelled, snapshotId, CancellationToken.None);
                     outcomes.Add(cancelled);
                     canceled = true;
                     break;
@@ -228,12 +234,20 @@ public sealed class BatchApplyEngine
                 {
                     if (prepared != null)
                         await _replacer.RollbackAsync(prepared, CancellationToken.None);
-                    outcomes.Add(new(entry.File.DocumentId, entry.Path, BatchApplyFileOutcome.Failure, "MutationFailed", ex.Message));
+                    var failure = new BatchApplyFileResult(entry.File.DocumentId, entry.Path, BatchApplyFileOutcome.Failure, "MutationFailed", ex.Message);
+                    outcomes.Add(failure);
+                    try
+                    {
+                        await RecordOutcomeAsync(plan, failure, snapshotId, CancellationToken.None);
+                    }
+                    catch
+                    {
+                        // A recorder failure must not mask the typed mutation failure or re-enter the catch chain.
+                    }
                 }
                 finally
                 {
-                    entry.Lock.Release();
-                    heldLocks.Remove(entry.Lock);
+                    ReleaseLock(entry.Lock, entry.Path, heldLocks);
                 }
             }
 
@@ -242,7 +256,7 @@ public sealed class BatchApplyEngine
                 foreach (var entry in pending)
                 {
                     var skipped = new BatchApplyFileResult(entry.File.DocumentId, entry.Path, BatchApplyFileOutcome.Skipped, "Cancelled", "Apply cancelled before this file was attempted.");
-                    await RecordOutcomeAsync(plan, skipped, snapshotId, cancellationToken);
+                    await RecordOutcomeAsync(plan, skipped, snapshotId, CancellationToken.None);
                     outcomes.Add(skipped);
                 }
             }
@@ -256,14 +270,19 @@ public sealed class BatchApplyEngine
             {
                 var path = ready.FirstOrDefault(r => r.File.DocumentId == file.DocumentId)?.Path ?? string.Empty;
                 var skipped = new BatchApplyFileResult(file.DocumentId, path, BatchApplyFileOutcome.Skipped, "Cancelled", "Apply cancelled before this file was processed.");
-                await RecordOutcomeAsync(plan, skipped, snapshotId, cancellationToken);
+                await RecordOutcomeAsync(plan, skipped, snapshotId, CancellationToken.None);
                 outcomes.Add(skipped);
             }
         }
         finally
         {
+            // Locks still held here (cancellation during check/apply unwind) must be
+            // released and evicted too, or every canceled apply leaks a dictionary entry.
             foreach (var held in heldLocks)
-                held.Release();
+            {
+                held.Lock.Release();
+                EvictIfIdle(held.Path, held.Lock);
+            }
         }
 
         if (canceled)
@@ -278,7 +297,7 @@ public sealed class BatchApplyEngine
         return new(plan.Id, snapshotId, BatchApplyResultStatus.Completed, outcomes);
     }
 
-    private async Task<FileCheckResult> CheckFileAsync(BatchOperationPlanFile file, List<SemaphoreSlim> heldLocks, CancellationToken cancellationToken)
+    private async Task<FileCheckResult> CheckFileAsync(BatchOperationPlanFile file, List<HeldLock> heldLocks, CancellationToken cancellationToken)
     {
         var document = await _documents.GetByIdAsync(file.DocumentId);
         if (document == null)
@@ -296,10 +315,14 @@ public sealed class BatchApplyEngine
             return Failure(file.DocumentId, document.CurrentPath, "InvalidPath", ex.Message);
         }
 
+        // A selected plan file without a preview fingerprint cannot be verified → typed skip.
+        if (string.IsNullOrEmpty(file.ExpectedFingerprint))
+            return Skipped(file.DocumentId, path, "Unavailable", "Plan file has no preview fingerprint; skipped.");
+
         // Step 1: document-level application lock for this file.
         var fileLock = _fileLocks.GetOrAdd(path, _ => new SemaphoreSlim(1, 1));
         await fileLock.WaitAsync(cancellationToken);
-        heldLocks.Add(fileLock);
+        heldLocks.Add(new HeldLock(fileLock, path));
 
         // Step 2: current fingerprint must equal the preview fingerprint.
         string fingerprint;
@@ -310,13 +333,13 @@ public sealed class BatchApplyEngine
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
-            ReleaseLock(fileLock, heldLocks);
+            ReleaseLock(fileLock, path, heldLocks);
             return Failure(file.DocumentId, path, "Unavailable", ex.Message);
         }
 
         if (!string.Equals(fingerprint, file.ExpectedFingerprint, StringComparison.Ordinal))
         {
-            ReleaseLock(fileLock, heldLocks);
+            ReleaseLock(fileLock, path, heldLocks);
             return Skipped(file.DocumentId, path, "Stale", "File changed after preview; re-preview required.");
         }
 
@@ -333,23 +356,38 @@ public sealed class BatchApplyEngine
 
         if (state == ExternalEditState.Locked)
         {
-            ReleaseLock(fileLock, heldLocks);
+            ReleaseLock(fileLock, path, heldLocks);
             return Skipped(file.DocumentId, path, "OpenInWord", "Document appears to be open in an external editor.");
         }
 
         if (state == ExternalEditState.Unknown)
         {
-            ReleaseLock(fileLock, heldLocks);
+            ReleaseLock(fileLock, path, heldLocks);
             return Skipped(file.DocumentId, path, "LockUnknown", "External editing state could not be determined; file skipped safely.");
         }
 
         return new FileCheckResult(null, new ReadyFile(file, path, fileLock));
     }
 
-    private static void ReleaseLock(SemaphoreSlim fileLock, List<SemaphoreSlim> heldLocks)
+    private static void ReleaseLock(SemaphoreSlim fileLock, string path, List<HeldLock> heldLocks)
     {
         fileLock.Release();
-        heldLocks.Remove(fileLock);
+        heldLocks.RemoveAll(h => h.Lock == fileLock);
+        EvictIfIdle(path, fileLock);
+    }
+
+    private static void EvictIfIdle(string path, SemaphoreSlim fileLock)
+    {
+        // Evict the entry once this exact semaphore is fully released (count back to
+        // 1, no waiter), so the process-wide dictionary cannot grow unbounded across
+        // a session. Removal is conditional on identity, so a semaphore a concurrent
+        // apply already replaced is never evicted. The check is inherently racy: an
+        // apply arriving right after eviction gets a fresh semaphore; content safety
+        // remains guaranteed independently by the fingerprint stale-check and the
+        // atomic replace.
+        if (fileLock.CurrentCount == 1)
+            ((ICollection<KeyValuePair<string, SemaphoreSlim>>)_fileLocks)
+                .Remove(new KeyValuePair<string, SemaphoreSlim>(path, fileLock));
     }
 
     private async Task RecordOutcomeAsync(BatchOperationPlan plan, BatchApplyFileResult fileResult, string? snapshotId, CancellationToken cancellationToken)
@@ -395,6 +433,8 @@ public sealed class BatchApplyEngine
 
     private sealed record ReadyFile(BatchOperationPlanFile File, string Path, SemaphoreSlim Lock);
 
+    private readonly record struct HeldLock(SemaphoreSlim Lock, string Path);
+
     // Mirrors BatchPreviewService.ReadBoundedAsync so apply-time fingerprints match preview-time fingerprints.
     private static async Task<byte[]> ReadBoundedAsync(string path, CancellationToken cancellationToken)
     {
@@ -410,6 +450,6 @@ public sealed class BatchApplyEngine
     }
 
     private static IEnumerable<BatchOperationPlanFile> SelectedFiles(BatchOperationPlan plan) =>
-        plan.Files.Where(f => f.Selected && !string.IsNullOrEmpty(f.ExpectedFingerprint))
+        plan.Files.Where(f => f.Selected)
             .OrderBy(f => f.DocumentId, StringComparer.Ordinal);
 }
