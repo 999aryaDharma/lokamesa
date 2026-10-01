@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
+using DocumentIDE.Core.Batch.Operations;
 using DocumentIDE.Core.Docx;
 
 namespace DocumentIDE.Infrastructure.Docx;
@@ -27,7 +28,7 @@ public class DocxMutationResult
     public string? MutatedFilePath { get; init; }
 }
 
-public class StrictTextMutator
+public class StrictTextMutator : IDocxOccurrenceMutator
 {
     private readonly IDocxPackagePreflight? _preflight;
     private static readonly XNamespace WNs = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -36,6 +37,179 @@ public class StrictTextMutator
     public StrictTextMutator(IDocxPackagePreflight? preflight = null)
     {
         _preflight = preflight;
+    }
+
+    /// <summary>
+    /// BAT-05: replaces exactly the given reviewed occurrences (identified by
+    /// paragraph index and logical offset from <see cref="LogicalTextMatcher"/>)
+    /// instead of every match of a target string. Occurrences that do not align
+    /// with the package's logical text block the mutation (fail closed).
+    /// The recovery snapshot for batch apply is owned by the BAT-04 engine, so
+    /// no per-call snapshot is created here.
+    /// </summary>
+    void IDocxOccurrenceMutator.MutateOccurrences(
+        string filePath,
+        IReadOnlyList<DocxMatchResult> occurrences,
+        string replacementText)
+    {
+        MutateOccurrencesCore(filePath, occurrences, replacementText);
+    }
+
+    private DocxMutationResult MutateOccurrencesCore(
+        string filePath,
+        IReadOnlyList<DocxMatchResult> occurrences,
+        string replacementText)
+    {
+        if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
+            throw new ArgumentException($"File does not exist or invalid path: '{filePath}'", nameof(filePath));
+        ArgumentNullException.ThrowIfNull(occurrences);
+
+        var selected = occurrences.ToList();
+        if (selected.Count == 0)
+        {
+            return new DocxMutationResult
+            {
+                Success = true,
+                ReplacementsApplied = 0,
+                MutatedFilePath = filePath
+            };
+        }
+
+        var options = new StrictMutationOptions { CreateRecoverySnapshot = false };
+
+        if (_preflight != null)
+        {
+            var preflightResult = _preflight.ValidatePackage(filePath, options.PreflightOptions);
+            if (!preflightResult.IsValid)
+            {
+                throw new InvalidOperationException($"Package preflight validation failed: {preflightResult.ErrorMessage} (Code: {preflightResult.ErrorCode})");
+            }
+        }
+
+        string tempFilePath = Path.Combine(Path.GetTempPath(), $"docx_mutocc_{Guid.NewGuid():N}.docx");
+        try
+        {
+            File.Copy(filePath, tempFilePath, overwrite: true);
+
+            int totalReplacements = MutatePackageOccurrences(tempFilePath, selected, replacementText);
+
+            if (_preflight != null)
+            {
+                var postValidation = _preflight.ValidatePackage(tempFilePath, options.PreflightOptions);
+                if (!postValidation.IsValid)
+                {
+                    throw new InvalidOperationException($"Mutated package failed preflight validation: {postValidation.ErrorMessage} (Code: {postValidation.ErrorCode})");
+                }
+            }
+
+            VerifyPackageIntegrity(tempFilePath);
+            AtomicReplaceFile(tempFilePath, filePath);
+
+            return new DocxMutationResult
+            {
+                Success = true,
+                ReplacementsApplied = totalReplacements,
+                MutatedFilePath = filePath
+            };
+        }
+        catch
+        {
+            if (File.Exists(tempFilePath))
+            {
+                try { File.Delete(tempFilePath); } catch { }
+            }
+            throw;
+        }
+    }
+
+    private static int MutatePackageOccurrences(
+        string tempFilePath,
+        List<DocxMatchResult> occurrences,
+        string replacementText)
+    {
+        int totalReplacements = 0;
+        var partGroups = occurrences.GroupBy(o => o.PartName, StringComparer.OrdinalIgnoreCase).ToList();
+
+        using (var archive = ZipFile.Open(tempFilePath, ZipArchiveMode.Update))
+        {
+            var xmlSettings = new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Prohibit,
+                XmlResolver = null,
+                IgnoreComments = false,
+                IgnoreWhitespace = false
+            };
+
+            foreach (var partGroup in partGroups)
+            {
+                var entry = archive.Entries.FirstOrDefault(e =>
+                    string.Equals(
+                        e.FullName.Replace('\\', '/'),
+                        partGroup.Key.Replace('\\', '/'),
+                        StringComparison.OrdinalIgnoreCase));
+                if (entry == null)
+                    throw new InvalidOperationException($"Occurrence part '{partGroup.Key}' was not found in the package.");
+
+                XDocument xdoc;
+                using (var entryStream = entry.Open())
+                using (var xmlReader = XmlReader.Create(entryStream, xmlSettings))
+                {
+                    xdoc = XDocument.Load(xmlReader);
+                }
+
+                if (xdoc.Root == null)
+                    throw new InvalidOperationException($"Occurrence part '{partGroup.Key}' has no XML root; mutation blocked.");
+
+                var paragraphs = xdoc.Descendants(WNs + "p").ToList();
+                int partReplacements = 0;
+
+                foreach (var paragraphGroup in partGroup.GroupBy(m => m.ParagraphIndex))
+                {
+                    if (paragraphGroup.Key < 0 || paragraphGroup.Key >= paragraphs.Count)
+                        throw new InvalidOperationException(
+                            $"Occurrence paragraph p{paragraphGroup.Key} was not found in part '{partGroup.Key}'; mutation blocked.");
+
+                    var pElem = paragraphs[paragraphGroup.Key];
+                    var charMap = BuildCharMapping(pElem);
+                    var logicalText = new string(charMap.Select(c => c.CharValue).ToArray());
+
+                    // Right-to-left within the paragraph so earlier logical offsets stay valid.
+                    foreach (var match in paragraphGroup.OrderByDescending(m => m.LogicalStartIndex))
+                    {
+                        if (match.LogicalStartIndex < 0 ||
+                            match.LogicalStartIndex + match.LogicalLength > logicalText.Length ||
+                            !string.Equals(
+                                logicalText.Substring(match.LogicalStartIndex, match.LogicalLength),
+                                match.MatchedText,
+                                StringComparison.Ordinal))
+                        {
+                            throw new InvalidOperationException(
+                                $"Occurrence '{match.OccurrenceId}' does not align with the document's logical text; mutation blocked.");
+                        }
+
+                        ApplySingleMatchReplacement(pElem, charMap, match.LogicalStartIndex, match.LogicalLength, replacementText);
+                        partReplacements++;
+                        totalReplacements++;
+                    }
+
+                    CleanRedundantEmptiedRuns(pElem);
+                }
+
+                if (partReplacements > 0)
+                {
+                    string entryName = entry.FullName;
+                    entry.Delete();
+                    var newEntry = archive.CreateEntry(entryName, CompressionLevel.Fastest);
+                    using (var newStream = newEntry.Open())
+                    using (var writer = XmlWriter.Create(newStream, new XmlWriterSettings { Encoding = Encoding.UTF8, Indent = false }))
+                    {
+                        xdoc.Save(writer);
+                    }
+                }
+            }
+        }
+
+        return totalReplacements;
     }
 
     public DocxMutationResult MutateText(
