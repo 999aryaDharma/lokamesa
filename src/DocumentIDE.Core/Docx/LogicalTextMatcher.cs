@@ -48,6 +48,14 @@ public class DocxSearchOptions
     public CancellationToken CancellationToken { get; set; }
     public int ContextRadius { get; set; } = 30;
     public DocxPreflightOptions? PreflightOptions { get; set; }
+
+    /// <summary>
+    /// BAT-07: when set, each paragraph's logical text (across runs) is scanned
+    /// with this compiled regex instead of the ordinal query. The instance's
+    /// match timeout bounds evaluation; <see cref="Comparison"/> is ignored.
+    /// The query argument is unused in this mode.
+    /// </summary>
+    public System.Text.RegularExpressions.Regex? Pattern { get; set; }
 }
 
 public class LogicalTextMatcher
@@ -87,10 +95,10 @@ public class LogicalTextMatcher
         if (stream == null || !stream.CanRead)
             throw new ArgumentException("Stream is null or unreadable.", nameof(stream));
 
-        if (string.IsNullOrEmpty(query))
+        options ??= new DocxSearchOptions();
+        if (string.IsNullOrEmpty(query) && options.Pattern == null)
             return Array.Empty<DocxMatchResult>();
 
-        options ??= new DocxSearchOptions();
         options.CancellationToken.ThrowIfCancellationRequested();
 
         if (!skipPreflightCheck && _preflight != null)
@@ -123,10 +131,10 @@ public class LogicalTextMatcher
         if (archive == null)
             throw new ArgumentNullException(nameof(archive));
 
-        if (string.IsNullOrEmpty(query))
+        options ??= new DocxSearchOptions();
+        if (string.IsNullOrEmpty(query) && options.Pattern == null)
             return Array.Empty<DocxMatchResult>();
 
-        options ??= new DocxSearchOptions();
         options.CancellationToken.ThrowIfCancellationRequested();
 
         var matches = new List<DocxMatchResult>();
@@ -217,17 +225,12 @@ public class LogicalTextMatcher
             var (logicalText, runSegments) = ExtractLogicalTextAndRunSegments(pElem, options.CancellationToken);
             if (string.IsNullOrEmpty(logicalText)) continue;
 
-            int matchPos = 0;
-            while (matchPos < logicalText.Length)
+            // Builds one DocxMatchResult for a found span (budget + context +
+            // run segments + stable occurrence id), shared by both scan modes.
+            void AddMatch(int foundIndex, int queryLen)
             {
-                options.CancellationToken.ThrowIfCancellationRequested();
-                int foundIndex = logicalText.IndexOf(query, matchPos, options.Comparison);
-                if (foundIndex < 0) break;
-
                 if (options.MaxMatches is int limit && matches.Count >= limit)
                     throw new InvalidDataException("OccurrenceBudgetExceeded");
-
-                int queryLen = query.Length;
 
                 // Calculate preview context
                 int contextStart = Math.Max(0, foundIndex - options.ContextRadius);
@@ -265,7 +268,30 @@ public class LogicalTextMatcher
                 };
 
                 matches.Add(matchResult);
+            }
 
+            if (options.Pattern != null)
+            {
+                // BAT-07 regex scan over the paragraph's logical text (crosses
+                // run boundaries). The compiled instance's match timeout bounds
+                // evaluation; RegexMatchTimeoutException propagates typed.
+                foreach (System.Text.RegularExpressions.Match regexMatch in options.Pattern.Matches(logicalText))
+                {
+                    options.CancellationToken.ThrowIfCancellationRequested();
+                    AddMatch(regexMatch.Index, regexMatch.Length);
+                }
+                continue;
+            }
+
+            int matchPos = 0;
+            while (matchPos < logicalText.Length)
+            {
+                options.CancellationToken.ThrowIfCancellationRequested();
+                int foundIndex = logicalText.IndexOf(query, matchPos, options.Comparison);
+                if (foundIndex < 0) break;
+
+                int queryLen = query.Length;
+                AddMatch(foundIndex, queryLen);
                 matchPos = foundIndex + Math.Max(1, queryLen);
             }
         }

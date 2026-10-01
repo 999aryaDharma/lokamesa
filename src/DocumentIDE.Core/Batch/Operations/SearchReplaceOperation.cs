@@ -62,7 +62,9 @@ public sealed class SearchReplaceOperation
     /// <summary>Markdown/text context radius, identical to the BAT-03 preview window.</summary>
     private const int TextContextRadius = 30;
 
-    private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+    // internal: shared with the BAT-07 RegexReplaceOperation so preview/apply
+    // byte semantics and safety gates stay single-sourced (visibility only).
+    internal static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
     private readonly IDocxOccurrenceMutator _docxMutator;
     private readonly LogicalTextMatcher _matcher = new();
@@ -180,17 +182,17 @@ public sealed class SearchReplaceOperation
     /// verified) file, otherwise the correct selection cannot be honored and the
     /// mutation must not guess.
     /// </summary>
-    private static void EnsureAllSelectedFound(int chosenCount, HashSet<string> selected, int totalFound)
+    internal static void EnsureAllSelectedFound(int chosenCount, HashSet<string> selected, int totalFound)
     {
         if (chosenCount != selected.Count)
             throw new InvalidOperationException(
                 $"SelectedOccurrenceNotFound: {selected.Count - chosenCount} of {selected.Count} reviewed occurrence IDs were not found ({totalFound} exact matches present).");
     }
 
-    private static bool IsDocx(string filePath) =>
+    internal static bool IsDocx(string filePath) =>
         Path.GetExtension(filePath).Equals(".docx", StringComparison.OrdinalIgnoreCase);
 
-    private static string TextPreviewContext(string text, int index, int findLength)
+    internal static string TextPreviewContext(string text, int index, int findLength)
     {
         var start = Math.Max(0, index - TextContextRadius);
         var end = Math.Min(text.Length, index + findLength + TextContextRadius);
@@ -215,7 +217,7 @@ public sealed class SearchReplaceOperation
         return matches;
     }
 
-    private static SearchReplaceTarget ResolveTarget(string tempPath, IReadOnlyList<SearchReplaceTarget> targets)
+    internal static SearchReplaceTarget ResolveTarget(string tempPath, IReadOnlyList<SearchReplaceTarget> targets)
     {
         var tempDirectory = Path.GetDirectoryName(Path.GetFullPath(tempPath))
             ?? throw new InvalidOperationException("Cannot determine the directory of the file being mutated.");
@@ -257,7 +259,8 @@ public sealed class SearchReplaceOperation
 
     // Mirrors BatchPreviewService.ReadBoundedAsync / BatchApplyEngine.ReadBoundedAsync
     // so preview-time fingerprints and bounded reads stay byte-identical.
-    private static async Task<byte[]> ReadBoundedAsync(string path, CancellationToken cancellationToken)
+    // internal: shared with the BAT-07 RegexReplaceOperation.
+    internal static async Task<byte[]> ReadBoundedAsync(string path, CancellationToken cancellationToken)
     {
         for (string? component = path; component != null; component = Path.GetDirectoryName(component))
             if ((File.GetAttributes(component) & FileAttributes.ReparsePoint) != 0) throw new IOException("ReparsePoint");
