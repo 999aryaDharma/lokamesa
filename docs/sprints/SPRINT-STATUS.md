@@ -104,7 +104,7 @@ Rules:
 | QA-06 | Performance Benchmark Gate | BLOCKED | CAN-07, SRCH-05, GR-05, PDF-03 |  |  |
 | BAT-03 | Batch Preview API & Review Shell | DONE | BAT-01, BAT-02 | feat/bat-03-batch-preview-api-review-shell (4899761) | docs/sprints/handoffs/BAT-03-HANDOFF.md |
 | PDF-04 | PDF Finalization UX | BLOCKED | CAN-08, PDF-03 |  |  |
-| BAT-04 | Transactional Safe Apply Engine | READY | BAT-03, HIST-01, FS-07 |  |  |
+| BAT-04 | Transactional Safe Apply Engine | IN_PROGRESS | BAT-03, HIST-01, FS-07 |  |  |
 | BAT-05 | Exact Search & Replace Operation | BLOCKED | BAT-04, DOCX-03 |  |  |
 | BAT-08 | Strict Font & Font-Size Operations | BLOCKED | BAT-04, DOCX-03 |  |  |
 | BAT-09 | Strict Page-Layout Operations | BLOCKED | BAT-04, DOCX-03 |  |  |
