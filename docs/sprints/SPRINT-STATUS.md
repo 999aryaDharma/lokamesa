@@ -105,7 +105,7 @@ Rules:
 | BAT-03 | Batch Preview API & Review Shell | DONE | BAT-01, BAT-02 | feat/bat-03-batch-preview-api-review-shell (4899761) | docs/sprints/handoffs/BAT-03-HANDOFF.md |
 | PDF-04 | PDF Finalization UX | BLOCKED | CAN-08, PDF-03 |  |  |
 | BAT-04 | Transactional Safe Apply Engine | DONE | BAT-03, HIST-01, FS-07 | fix/bat-04-transactional-safe-apply-engine (02f236e) | docs/sprints/handoffs/BAT-04-HANDOFF.md |
-| BAT-05 | Exact Search & Replace Operation | READY | BAT-04, DOCX-03 |  |  |
+| BAT-05 | Exact Search & Replace Operation | IN_PROGRESS | BAT-04, DOCX-03 |  |  |
 | BAT-08 | Strict Font & Font-Size Operations | READY | BAT-04, DOCX-03 |  |  |
 | BAT-09 | Strict Page-Layout Operations | READY | BAT-04, DOCX-03 |  |  |
 | BAT-10 | Strict Batch Rename | READY | BAT-04, FS-07 |  |  |
