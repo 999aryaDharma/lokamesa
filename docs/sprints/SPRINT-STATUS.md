@@ -114,6 +114,6 @@ Rules:
 | BAT-11 | Batch Results & History UI | BLOCKED | BAT-10, HIST-02 |  |  |
 | QA-04 | Batch Safety Regression Suite | BLOCKED | BAT-10, HIST-02 |  |  |
 | QA-07 | Crash & Interrupted-Operation Recovery | BLOCKED | FND-04, HIST-02 |  |  |
-| BAT-07 | Regex Advanced Replace | READY | BAT-06 |  |  |
+| BAT-07 | Regex Advanced Replace | IN_PROGRESS | BAT-06 |  |  |
 | REL-02 | Release Verification Pipeline | BLOCKED | REL-01, QA-01, QA-02, QA-04, QA-05, QA-06, QA-07 |  |  |
 | REL-03 | V1 Readiness Gate | BLOCKED | REL-02, SHR-11, CTX-04, AI-04, PDF-04 |  |  |
