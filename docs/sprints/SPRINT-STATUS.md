@@ -110,10 +110,10 @@ Rules:
 | BAT-09 | Strict Page-Layout Operations | READY | BAT-04, DOCX-03 |  |  |
 | BAT-10 | Strict Batch Rename | READY | BAT-04, FS-07 |  |  |
 | HIST-02 | Conflict-Aware Undo | READY | HIST-01, BAT-04, FS-03 |  |  |
-| BAT-06 | Occurrence Review UX | IN_PROGRESS | BAT-05 |  |  |
+| BAT-06 | Occurrence Review UX | DONE | BAT-05 | feat/bat-06-occurrence-review-ux (2bda93a) | docs/sprints/handoffs/BAT-06-HANDOFF.md |
 | BAT-11 | Batch Results & History UI | BLOCKED | BAT-10, HIST-02 |  |  |
 | QA-04 | Batch Safety Regression Suite | BLOCKED | BAT-10, HIST-02 |  |  |
 | QA-07 | Crash & Interrupted-Operation Recovery | BLOCKED | FND-04, HIST-02 |  |  |
-| BAT-07 | Regex Advanced Replace | BLOCKED | BAT-06 |  |  |
+| BAT-07 | Regex Advanced Replace | READY | BAT-06 |  |  |
 | REL-02 | Release Verification Pipeline | BLOCKED | REL-01, QA-01, QA-02, QA-04, QA-05, QA-06, QA-07 |  |  |
 | REL-03 | V1 Readiness Gate | BLOCKED | REL-02, SHR-11, CTX-04, AI-04, PDF-04 |  |  |
