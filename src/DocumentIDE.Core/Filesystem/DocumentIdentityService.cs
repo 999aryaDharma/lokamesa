@@ -86,40 +86,31 @@ public class DocumentIdentityService
 
         if (document != null)
         {
-            // Check if this document has the same Volume/Object ID now (if probed)
-            if (identity != null && !string.IsNullOrEmpty(document.FilesystemVolumeId) && !string.IsNullOrEmpty(document.FilesystemObjectId) &&
-                (document.FilesystemVolumeId != identity.VolumeId || document.FilesystemObjectId != identity.ObjectId))
+            // The file at this path may have been atomically replaced in place (a Word
+            // Ctrl+S writes a temporary file and renames it over the target, which rotates
+            // the NTFS file index) or may not have had a probed identity registered yet.
+            // Both cases are the same logical document being modified: adopt the probed
+            // identity and keep the DocumentId (master spec §14.1 "update identity/path",
+            // 01-system-architecture §10.1 "Word save → mark document Modified"). A
+            // physically distinct copy that appears at a *different* path still receives
+            // its own Document record through the fallback below (FS-02: two distinct
+            // duplicate files receive distinct DocumentIds).
+            if (identity != null)
             {
-                // Two distinct duplicate files receive distinct DocumentIds
-                // Mark the old document at this path as missing, and clear its current path
-                document.AvailabilityStatus = "missing";
-                document.LastKnownPath = document.CurrentPath;
-                document.CurrentPath = "";
-                await _documentRepo.UpdateAsync(document);
-
-                document = null; // Forces creation of a new document record
+                document.FilesystemVolumeId = identity.VolumeId;
+                document.FilesystemObjectId = identity.ObjectId;
             }
-            else
-            {
-                // Found by path and no identity mismatch (or no identity was registered in the database).
-                // Update identity if we successfully probed it this time.
-                if (identity != null)
-                {
-                    document.FilesystemVolumeId = identity.VolumeId;
-                    document.FilesystemObjectId = identity.ObjectId;
-                }
 
-                document.Filename = filename;
-                document.Extension = extension;
-                document.SizeBytes = sizeBytes;
-                document.ModifiedAt = modifiedAt;
-                document.ContentFingerprint = contentFingerprint;
-                document.AvailabilityStatus = "available";
-                document.UpdatedAt = DateTime.UtcNow.ToString("O");
+            document.Filename = filename;
+            document.Extension = extension;
+            document.SizeBytes = sizeBytes;
+            document.ModifiedAt = modifiedAt;
+            document.ContentFingerprint = contentFingerprint;
+            document.AvailabilityStatus = "available";
+            document.UpdatedAt = DateTime.UtcNow.ToString("O");
 
-                await _documentRepo.UpdateAsync(document);
-                return document;
-            }
+            await _documentRepo.UpdateAsync(document);
+            return document;
         }
 
         // 3. Fallback correlation: non-NTFS rename/move

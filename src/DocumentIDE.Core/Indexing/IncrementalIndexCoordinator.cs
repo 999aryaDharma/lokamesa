@@ -263,6 +263,22 @@ public class IncrementalIndexCoordinator : IDisposable
         var docs = await _documentRepo.GetByWorkspaceAsync(workspaceId);
         foreach (var doc in docs)
         {
+            if (doc.AvailabilityStatus == "missing")
+            {
+                // Converge the active index to the filesystem: a document whose file no
+                // longer exists must leave the searchable index instead of keeping stale
+                // rows (or failing a read and publishing an error state). This is the
+                // reindex-time counterpart of a live Deleted watcher event, used after
+                // reconciliation when the original event was lost (watcher overflow).
+                await ProcessFileChangeAsync(new FileChangeEvent
+                {
+                    ChangeType = FileChangeType.Deleted,
+                    DocumentId = doc.Id,
+                    Path = doc.CurrentPath
+                }, cancellationToken);
+                continue;
+            }
+
             await ReindexDocumentAsync(doc.Id, cancellationToken);
         }
     }
