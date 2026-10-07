@@ -242,7 +242,7 @@ public sealed class UndoService
             if (state == ExternalEditState.Unknown)
                 return Skipped(record, path, "LockUnknown", "External editing state could not be determined; file skipped safely.");
 
-            return await RestoreAsync(snapshotId, record, path, cancellationToken);
+            return await RestoreAsync(snapshotId, record, path, postOperation, cancellationToken);
         }
 
         if (FingerprintEquals(current, record.OriginalFingerprint))
@@ -251,7 +251,7 @@ public sealed class UndoService
         return Conflict(record, path, "ExternallyModified", "File changed since the operation; newer content was not overwritten.");
     }
 
-    private async Task<UndoFileResult> RestoreAsync(string snapshotId, SnapshotFileRecord record, string path, CancellationToken cancellationToken)
+    private async Task<UndoFileResult> RestoreAsync(string snapshotId, SnapshotFileRecord record, string path, string postOperationFingerprint, CancellationToken cancellationToken)
     {
         var snapshotFileName = record.SnapshotFileName;
         if (string.IsNullOrWhiteSpace(snapshotFileName) ||
@@ -277,7 +277,7 @@ public sealed class UndoService
             // Narrow the check→replace window: the target must still hold exactly the
             // post-operation content at commit time, otherwise newer work wins.
             var beforeCommit = await FingerprintAsync(path, CancellationToken.None);
-            if (!FingerprintEquals(beforeCommit, record.PostOperationFingerprint))
+            if (!FingerprintEquals(beforeCommit, postOperationFingerprint))
             {
                 await _replacer.RollbackAsync(prepared, CancellationToken.None);
                 return Conflict(record, path, "ExternallyModified", "File changed while the restore was prepared; newer content was not overwritten.");
