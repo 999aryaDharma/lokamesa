@@ -581,7 +581,7 @@ public sealed class RegexReplaceTests : IDisposable
         public long CapacityBytes { get; }
 
         public string GetSnapshotRootPath(string snapshotId) => Path.Combine(_snapshotRoot, snapshotId);
-        public Task SaveMetadataAsync(SnapshotMetadata metadata) { _metadata.Add(metadata); return Task.CompletedTask; }
+        public Task SaveMetadataAsync(SnapshotMetadata metadata) { _metadata.RemoveAll(m => m.SnapshotId == metadata.SnapshotId); _metadata.Add(metadata); return Task.CompletedTask; }
         public Task<IReadOnlyCollection<SnapshotMetadata>> GetAllMetadataAsync() => Task.FromResult<IReadOnlyCollection<SnapshotMetadata>>(_metadata);
         public Task DeleteSnapshotAsync(string snapshotId) { _metadata.RemoveAll(m => m.SnapshotId == snapshotId); return Task.CompletedTask; }
         public Task<long> GetTotalSizeAsync() => Task.FromResult(0L);

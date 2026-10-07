@@ -149,6 +149,7 @@ public sealed class BatchApplyEngine
         var outcomes = new List<BatchApplyFileResult>();
         var heldLocks = new List<HeldLock>();
         string? snapshotId = null;
+        SnapshotMetadata? snapshotMetadata = null;
         var canceled = false;
         var selected = SelectedFiles(plan).ToArray();
         var ready = new List<ReadyFile>();
@@ -179,7 +180,9 @@ public sealed class BatchApplyEngine
             {
                 try
                 {
-                    snapshotId = (await _snapshots.CreateSnapshotAsync(plan.Id, ready.Select(r => r.Path))).SnapshotId;
+                    snapshotMetadata = await _snapshots.CreateSnapshotAsync(
+                        plan.Id, ready.Select(r => new SnapshotSourceFile(r.File.DocumentId, r.Path)));
+                    snapshotId = snapshotMetadata.SnapshotId;
                 }
                 catch (OperationCanceledException)
                 {
@@ -215,6 +218,7 @@ public sealed class BatchApplyEngine
                 {
                     prepared = await _replacer.PrepareAsync(entry.Path, mutate, validate, cancellationToken);
                     await _replacer.CommitAsync(prepared, cancellationToken);
+                    await RecordPostOperationFingerprintAsync(snapshotMetadata, entry.File.DocumentId, entry.Path);
                     var success = new BatchApplyFileResult(entry.File.DocumentId, entry.Path, BatchApplyFileOutcome.Success, null, null);
                     await RecordOutcomeAsync(plan, success, snapshotId, CancellationToken.None);
                     await TriggerReindexAsync(entry.File.DocumentId, cancellationToken);
@@ -408,6 +412,25 @@ public sealed class BatchApplyEngine
         {
             // History recording must never fail silently; surface as a typed failure.
             throw new InvalidOperationException($"History record failed for document '{fileResult.DocumentId}'.", ex);
+        }
+    }
+
+    private async Task RecordPostOperationFingerprintAsync(SnapshotMetadata? snapshot, string documentId, string filePath)
+    {
+        if (snapshot == null) return;
+        try
+        {
+            // Post-commit bookkeeping uses CancellationToken.None on purpose: the file is
+            // already consistently committed, so a token cancel must not misreport it.
+            var bytes = await ReadBoundedAsync(filePath, CancellationToken.None);
+            await _snapshots.RecordPostOperationFingerprintAsync(
+                snapshot, documentId, Convert.ToHexString(SHA256.HashData(bytes)));
+        }
+        catch (Exception ex)
+        {
+            // Without the post-operation fingerprint a later undo cannot verify this file,
+            // so the failure is surfaced typed instead of silently claiming a safe apply.
+            throw new InvalidOperationException($"Post-operation fingerprint recording failed for document '{documentId}'.", ex);
         }
     }
 
