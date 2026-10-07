@@ -226,6 +226,15 @@ function ZoomToolbar({ zoom, onZoomIn, onZoomOut, onReset }: ZoomToolbarProps) {
 const ZOOM_STEP = 0.1;
 const WHEEL_SENSITIVITY = 0.001;
 
+/**
+ * CAN-04: delay used to arbitrate a folder single click vs. double click.
+ * Opening the picker synchronously on the first click would swallow the second
+ * click of a real double-click (the popover overlays the folder card and
+ * intercepts it), so the single-click action is deferred by this window; a
+ * dblclick on the same folder cancels it and runs "Open all" instead.
+ */
+const FOLDER_CLICK_OPEN_DELAY_MS = 250;
+
 export interface DocumentCanvasProps {
   /**
    * CAN-04: supported files per folder object id, supplied by the host.
@@ -245,6 +254,15 @@ export default function DocumentCanvas({ folderFiles, onReleaseDocuments }: Docu
   const searchState = useSearchState();
   const { viewport, objects, selectedIds, setViewport, toggleSelect, loadPersistedViewport } = state;
   const [pickerFolderId, setPickerFolderId] = useState<string | null>(null);
+
+  /**
+   * CAN-04: pending deferred single-click action for one folder, cancelled by
+   * a second click / dblclick on the same folder.
+   */
+  const pendingFolderClickRef = useRef<{
+    folderId: string;
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
 
   const isSearchHighlighting = searchState.isSearchActive && searchState.query.trim().length > 0;
   const matchingDocIds = useMemo(() => {
@@ -384,14 +402,44 @@ export default function DocumentCanvas({ folderFiles, onReleaseDocuments }: Docu
     [toggleSelect],
   );
 
+  // CAN-04: cancel a pending deferred folder single-click action (if any).
+  // Called when the second click of a double click arrives, on dblclick, and
+  // on unmount.
+  const cancelPendingFolderClick = useCallback(() => {
+    if (pendingFolderClickRef.current) {
+      clearTimeout(pendingFolderClickRef.current.timer);
+      pendingFolderClickRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => cancelPendingFolderClick, [cancelPendingFolderClick]);
+
   // CAN-04: single click on a folder opens the lightweight picker instead of
-  // dumping every file onto the canvas.
+  // dumping every file onto the canvas. The action is deferred by a short
+  // window so a real double-click keeps its second click on the card (the
+  // popover would otherwise intercept it) and cancels the deferred open.
   const handleFolderSingleClick = useCallback(
     (id: string) => {
-      toggleSelect(id);
-      setPickerFolderId(id);
+      // Second click of a real double click: cancel the deferred single-click
+      // action; the dblclick handler performs "Open all" instead. Selection is
+      // therefore never toggled twice for one double click.
+      if (pendingFolderClickRef.current?.folderId === id) {
+        cancelPendingFolderClick();
+        return;
+      }
+
+      cancelPendingFolderClick();
+
+      pendingFolderClickRef.current = {
+        folderId: id,
+        timer: setTimeout(() => {
+          pendingFolderClickRef.current = null;
+          toggleSelect(id);
+          setPickerFolderId(id);
+        }, FOLDER_CLICK_OPEN_DELAY_MS),
+      };
     },
-    [toggleSelect],
+    [cancelPendingFolderClick, toggleSelect],
   );
 
   const handlePickerClose = useCallback(() => {
@@ -425,7 +473,10 @@ export default function DocumentCanvas({ folderFiles, onReleaseDocuments }: Docu
   const handleCardDoubleClick = useCallback(
     async (obj: CanvasObject) => {
       if (obj.type === 'folder') {
-        // CAN-04: double-click is the intentional "Open all" fast path.
+        // CAN-04: double-click is the intentional "Open all" fast path. Any
+        // deferred single-click open is cancelled so the picker never opens and
+        // the folder's selection state is left unchanged (no double toggle).
+        cancelPendingFolderClick();
         setPickerFolderId(null);
         onReleaseDocuments?.(obj.id, supportedFolderDocumentIds(obj.id));
         return;
@@ -437,7 +488,7 @@ export default function DocumentCanvas({ folderFiles, onReleaseDocuments }: Docu
         }
       }
     },
-    [onReleaseDocuments, supportedFolderDocumentIds],
+    [cancelPendingFolderClick, onReleaseDocuments, supportedFolderDocumentIds],
   );
 
   // ---------------------------------------------------------------------------

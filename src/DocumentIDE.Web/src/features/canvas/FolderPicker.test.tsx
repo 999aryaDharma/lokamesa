@@ -6,12 +6,19 @@
  *
  * Canvas interactions are workspace metadata only — releasing documents
  * creates workspace objects and NEVER physically moves files.
+ *
+ * Click arbitration: the single-click picker open is deferred by a short
+ * timer so a real double-click never has its second click swallowed by the
+ * popover that its own first click opened. Tests therefore use fake timers.
  */
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import DocumentCanvas from './DocumentCanvas';
 import { useCanvasStore } from './canvasStore';
 import { type CanvasObject } from './types';
+
+// Advance past any reasonable single-click/double-click arbitration window.
+const CLICK_ARBITRATION_SETTLE_MS = 500;
 
 // ---------------------------------------------------------------------------
 // localStorage mock (same pattern as DocumentCanvas.test.tsx)
@@ -35,10 +42,12 @@ const localStorageMock: Storage = {
 beforeEach(() => {
   localStorageStore = {};
   vi.stubGlobal('localStorage', localStorageMock);
+  vi.useFakeTimers();
   useCanvasStore.getState().reset();
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -75,6 +84,16 @@ function renderCanvas() {
   return { onRelease };
 }
 
+const folderCard = () => screen.getByLabelText('Folder: BA Agustus');
+
+/** Single click + settle the click/double-click arbitration window. */
+function openFolderPicker() {
+  fireEvent.click(folderCard());
+  act(() => {
+    vi.advanceTimersByTime(CLICK_ARBITRATION_SETTLE_MS);
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Required behaviors
 // ---------------------------------------------------------------------------
@@ -82,7 +101,7 @@ describe('FolderPicker — CAN-04 required behaviors', () => {
   it('Single click does not dump all files', () => {
     const { onRelease } = renderCanvas();
 
-    fireEvent.click(screen.getByLabelText('Folder: BA Agustus'));
+    openFolderPicker();
 
     // A lightweight picker opens…
     expect(screen.getByTestId('folder-picker')).toBeInTheDocument();
@@ -94,10 +113,30 @@ describe('FolderPicker — CAN-04 required behaviors', () => {
     expect(onRelease).not.toHaveBeenCalled();
   });
 
+  it('single click is deferred, then opens the picker without releasing files', () => {
+    const { onRelease } = renderCanvas();
+
+    fireEvent.click(folderCard());
+
+    // Inside the arbitration window the picker is not open yet — otherwise a
+    // real double-click's second click would land on the popover.
+    expect(screen.queryByTestId('folder-picker')).not.toBeInTheDocument();
+    expect(onRelease).not.toHaveBeenCalled();
+
+    // Once the click is confirmed as a single click it selects the folder and
+    // opens the picker.
+    act(() => {
+      vi.advanceTimersByTime(CLICK_ARBITRATION_SETTLE_MS);
+    });
+    expect(screen.getByTestId('folder-picker')).toBeInTheDocument();
+    expect(useCanvasStore.getState().selectedIds.has(FOLDER_ID)).toBe(true);
+    expect(onRelease).not.toHaveBeenCalled();
+  });
+
   it('Double click opens all supported files', () => {
     const { onRelease } = renderCanvas();
 
-    fireEvent.doubleClick(screen.getByLabelText('Folder: BA Agustus'));
+    fireEvent.doubleClick(folderCard());
 
     // Fast-path shortcut: every supported file is released…
     expect(onRelease).toHaveBeenCalledTimes(1);
@@ -105,10 +144,35 @@ describe('FolderPicker — CAN-04 required behaviors', () => {
     expect(onRelease).toHaveBeenCalledWith(FOLDER_ID, ['doc-a', 'doc-b', 'doc-c']);
   });
 
+  it('realistic double click (click, click, dblclick) never opens the picker', () => {
+    const { onRelease } = renderCanvas();
+
+    // Real browser sequence for a double click.
+    fireEvent.click(folderCard());
+    fireEvent.click(folderCard());
+
+    // The popover must not open during the double-click window; otherwise the
+    // second click would hit the popover and dblclick would never reach the card.
+    expect(screen.queryByTestId('folder-picker')).not.toBeInTheDocument();
+
+    fireEvent.dblClick(folderCard());
+
+    expect(onRelease).toHaveBeenCalledTimes(1);
+    expect(onRelease).toHaveBeenCalledWith(FOLDER_ID, ['doc-a', 'doc-b', 'doc-c']);
+
+    // The deferred single-click action stays cancelled: no picker, selection
+    // unchanged (no double toggle).
+    act(() => {
+      vi.advanceTimersByTime(CLICK_ARBITRATION_SETTLE_MS * 2);
+    });
+    expect(screen.queryByTestId('folder-picker')).not.toBeInTheDocument();
+    expect(useCanvasStore.getState().selectedIds.has(FOLDER_ID)).toBe(false);
+  });
+
   it('Open Selected releases only selected DocumentIds', () => {
     const { onRelease } = renderCanvas();
 
-    fireEvent.click(screen.getByLabelText('Folder: BA Agustus'));
+    openFolderPicker();
 
     // Multi-select two of the supported files.
     fireEvent.click(screen.getByLabelText('Select BA Site A.docx'));
@@ -127,7 +191,7 @@ describe('FolderPicker — CAN-04 required behaviors', () => {
   it('search within folder picker filters the file list', () => {
     renderCanvas();
 
-    fireEvent.click(screen.getByLabelText('Folder: BA Agustus'));
+    openFolderPicker();
     fireEvent.change(screen.getByLabelText('Search files in folder'), {
       target: { value: 'catatan' },
     });
@@ -139,7 +203,7 @@ describe('FolderPicker — CAN-04 required behaviors', () => {
   it('lists only supported .docx/.md files', () => {
     renderCanvas();
 
-    fireEvent.click(screen.getByLabelText('Folder: BA Agustus'));
+    openFolderPicker();
 
     expect(screen.getByText('BA Site A.docx')).toBeInTheDocument();
     expect(screen.getByText('catatan.md')).toBeInTheDocument();
@@ -149,7 +213,7 @@ describe('FolderPicker — CAN-04 required behaviors', () => {
   it('Open all button releases every supported file', () => {
     const { onRelease } = renderCanvas();
 
-    fireEvent.click(screen.getByLabelText('Folder: BA Agustus'));
+    openFolderPicker();
     fireEvent.click(screen.getByRole('button', { name: 'Open all' }));
 
     expect(onRelease).toHaveBeenCalledTimes(1);
@@ -159,7 +223,7 @@ describe('FolderPicker — CAN-04 required behaviors', () => {
   it('Open selected stays disabled until at least one file is checked', () => {
     const { onRelease } = renderCanvas();
 
-    fireEvent.click(screen.getByLabelText('Folder: BA Agustus'));
+    openFolderPicker();
 
     const openSelected = screen.getByRole('button', { name: 'Open selected' });
     expect(openSelected).toBeDisabled();
@@ -176,7 +240,7 @@ describe('FolderPicker — CAN-04 required behaviors', () => {
   it('Escape closes the picker without releasing files', () => {
     const { onRelease } = renderCanvas();
 
-    fireEvent.click(screen.getByLabelText('Folder: BA Agustus'));
+    openFolderPicker();
     fireEvent.keyDown(screen.getByTestId('folder-picker'), { key: 'Escape' });
 
     expect(screen.queryByTestId('folder-picker')).not.toBeInTheDocument();
@@ -186,7 +250,7 @@ describe('FolderPicker — CAN-04 required behaviors', () => {
   it('close button dismisses the picker without releasing files', () => {
     const { onRelease } = renderCanvas();
 
-    fireEvent.click(screen.getByLabelText('Folder: BA Agustus'));
+    openFolderPicker();
     fireEvent.click(screen.getByRole('button', { name: 'Close folder picker' }));
 
     expect(screen.queryByTestId('folder-picker')).not.toBeInTheDocument();
@@ -196,7 +260,7 @@ describe('FolderPicker — CAN-04 required behaviors', () => {
   it('closes the picker when the folder object disappears from the canvas', () => {
     renderCanvas();
 
-    fireEvent.click(screen.getByLabelText('Folder: BA Agustus'));
+    openFolderPicker();
     expect(screen.getByTestId('folder-picker')).toBeInTheDocument();
 
     act(() => {

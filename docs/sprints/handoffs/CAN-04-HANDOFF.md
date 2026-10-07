@@ -11,17 +11,21 @@
   search within the picker, checkbox multi-select, `Open selected`, `Open all`, close button + Escape.
   Purely presentational: all releases flow through `onOpenSelected` / `onOpenAll` callbacks.
 - **Canvas wiring (minimal, additive).** `DocumentCanvas.tsx` — optional `folderFiles` /
-  `onReleaseDocuments` props; folder single click opens the picker (selects the folder, releases nothing);
-  folder double click is the intentional `Open all` fast path; picker closes after release, on Escape,
-  on close, or when the folder object disappears. Documents keep the existing double-click Word behavior.
+  `onReleaseDocuments` props; folder single click is deferred by a 250 ms click/double-click arbitration
+  window, then opens the picker (selects the folder, releases nothing). A second click or double click
+  cancels the pending open so the popover can never swallow a real double-click's second click; the
+  folder double click runs `Open all` and leaves selection unchanged (no double toggle). Picker closes
+  after release, on Escape, on close, or when the folder object disappears. Documents keep the existing
+  double-click Word behavior.
 - **Core release service (new).** `CanvasDocumentService.cs` — pure service that creates/activates
   `WorkspaceDocument` objects from a folder listing; `ReleaseAll` (all supported files) and
   `ReleaseSelected` (only the selected DocumentIds, listing order). Deterministic typed rejections
   (`unsupported-file-type`, `missing-document-id`, `duplicate-document-id`, `not-in-folder-listing`).
   No filesystem surface at all: no move/rename/delete/write/copy, no injected collaborators,
   candidates carry identity + file name only (no physical paths).
-- **Tests.** 10 frontend tests (`FolderPicker.test.tsx`, including all three required behaviors) and
-  10 Core tests (`CanvasDocumentServiceTests.cs`, including explicit no-filesystem / no-move guards).
+- **Tests.** 12 frontend tests (`FolderPicker.test.tsx`, including all three required behaviors and the
+  realistic click/click/dblclick arbitration sequence) and 10 Core tests
+  (`CanvasDocumentServiceTests.cs`, including explicit no-filesystem / no-move guards).
 
 ## Files changed
 
@@ -43,8 +47,8 @@
 
 ## Verification
 
-- `npx vitest run src/features/canvas/FolderPicker.test.tsx` → PASS (10/10)
-- `npx vitest run` in `src/DocumentIDE.Web` → PASS (21 files, 106 tests)
+- `npx vitest run src/features/canvas/FolderPicker.test.tsx` → PASS (12/12)
+- `npx vitest run` in `src/DocumentIDE.Web` → PASS (21 files, 108 tests)
 - `npm run build` in `src/DocumentIDE.Web` (`tsc -b && vite build`) → PASS
 - `dotnet test tests/DocumentIDE.Core.Tests/DocumentIDE.Core.Tests.csproj --filter FullyQualifiedName~CanvasDocumentService` → PASS (10/10)
 - `dotnet test tests/DocumentIDE.Core.Tests/DocumentIDE.Core.Tests.csproj` → PASS (450/450, includes the 10 new)
@@ -69,8 +73,11 @@
   1. **CAN-02 integration:** the worktree base (`e34fb32`) does not contain CAN-02's `FolderNode.tsx`
      (branch `feat/can-02-folder-canvas-object`, `eb7b952`, is not an ancestor of this worktree base).
      Folder click wiring therefore targets the base inline folder card in `DocumentCanvas.tsx`.
-     CAN-02's `FolderNode` exposes the same handler shape (`onSingleClick(id)` / `onDoubleClick(id)`),
-     so the controller can map the handlers 1:1 at integration time.
+     CAN-02's id-based `onSingleClick(id)` maps 1:1 to our `handleFolderSingleClick(id)` — but its
+     `onDoubleClick(id)` is id-based while our card double-click path consumes a `CanvasObject`
+     (`onDoubleClick?: (object: CanvasObject) => void`; unchanged by the arbitration fix). CAN-02
+     reconciliation therefore needs an id→object adapter (look up the folder in `objects`) or an agreed
+     signature change.
   2. **Supported types:** `.docx` and `.md`, mirroring FS-01 `FolderSourceService` and the master spec
      ("supported `.docx` and `.md` content"). `DocumentNode`'s looser `.doc` / `.markdown` inference was
      intentionally not adopted for folder listing.
