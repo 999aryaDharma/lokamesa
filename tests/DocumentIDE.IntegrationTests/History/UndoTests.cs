@@ -202,7 +202,7 @@ namespace DocumentIDE.IntegrationTests.History
             var two = Encoding.UTF8.GetBytes("target two");
             var (planId, onePath) = await SeedAsync("doc1", "one.md", one);
             var (_, twoPath) = await SeedAsync("doc2", "two.md", two, planId);
-            await ApplyReplaceAsync(planId, docIds: new[] { "doc1", "doc2" });
+            await ApplyReplaceAsync(planId);
             _reindex.DocumentIds.Clear();
 
             var newer = Encoding.UTF8.GetBytes("doc2 external edit");
@@ -224,7 +224,174 @@ namespace DocumentIDE.IntegrationTests.History
             Assert.Equal(UndoResultStatus.Partial, record.Status);
         }
 
-        private async Task ApplyReplaceAsync(string planId, string[]? docIds = null)
+        [Fact]
+        public async Task Undo_ExpiredSnapshotIsRefused()
+        {
+            var original = Encoding.UTF8.GetBytes("target content");
+            var (planId, path) = await SeedAsync("doc", "notes.md", original);
+            await ApplyReplaceAsync(planId);
+            _reindex.DocumentIds.Clear();
+            var applied = await File.ReadAllBytesAsync(path);
+
+            var metadata = Assert.Single(await _storage.GetAllMetadataAsync());
+            metadata.ExpiryUtc = DateTime.UtcNow.AddMinutes(-1);
+
+            var result = await CreateUndoService().UndoAsync(planId);
+
+            Assert.Equal(UndoResultStatus.Blocked, result.Status);
+            var file = Assert.Single(result.Files);
+            Assert.Equal(UndoFileOutcome.Failure, file.Outcome);
+            Assert.Equal("SnapshotExpired", file.ReasonCode);
+            Assert.Equal(applied, await File.ReadAllBytesAsync(path));
+            Assert.Empty(_reindex.DocumentIds);
+            Assert.Empty(_undoRecorder.Records);
+        }
+
+        [Fact]
+        public async Task Undo_MissingSnapshotCopyFailsClosed()
+        {
+            var original = Encoding.UTF8.GetBytes("target content");
+            var (planId, path) = await SeedAsync("doc", "notes.md", original);
+            await ApplyReplaceAsync(planId);
+            _reindex.DocumentIds.Clear();
+            var applied = await File.ReadAllBytesAsync(path);
+
+            var metadata = Assert.Single(await _storage.GetAllMetadataAsync());
+            File.Delete(Path.Combine(_storage.GetSnapshotRootPath(metadata.SnapshotId), metadata.Files.Single().SnapshotFileName));
+
+            var result = await CreateUndoService().UndoAsync(planId);
+
+            Assert.Equal(UndoResultStatus.Blocked, result.Status);
+            var file = Assert.Single(result.Files);
+            Assert.Equal(UndoFileOutcome.Failure, file.Outcome);
+            Assert.Equal("SnapshotMissing", file.ReasonCode);
+            Assert.Equal(applied, await File.ReadAllBytesAsync(path));
+            Assert.Empty(_reindex.DocumentIds);
+            Assert.Empty(_undoRecorder.Records);
+        }
+
+        [Fact]
+        public async Task Undo_UnknownOperationThrows()
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(() => CreateUndoService().UndoAsync("does-not-exist"));
+        }
+
+        [Fact]
+        public async Task Undo_UnknownDocumentFailsClosed()
+        {
+            var original = Encoding.UTF8.GetBytes("target content");
+            var (planId, path) = await SeedAsync("doc", "notes.md", original);
+            await ApplyReplaceAsync(planId);
+            _reindex.DocumentIds.Clear();
+            var applied = await File.ReadAllBytesAsync(path);
+
+            await _documents.DeleteAsync("doc");
+
+            var result = await CreateUndoService().UndoAsync(planId);
+
+            Assert.Equal(UndoResultStatus.Blocked, result.Status);
+            var file = Assert.Single(result.Files);
+            Assert.Equal(UndoFileOutcome.Failure, file.Outcome);
+            Assert.Equal("UnknownDocument", file.ReasonCode);
+            Assert.Equal(applied, await File.ReadAllBytesAsync(path));
+        }
+
+        [Fact]
+        public async Task Undo_MovedFileRestoresAtCurrentPath()
+        {
+            var original = Encoding.UTF8.GetBytes("target content");
+            var (planId, path) = await SeedAsync("doc", "notes.md", original);
+            await ApplyReplaceAsync(planId);
+            _reindex.DocumentIds.Clear();
+
+            // Simulate FS-05 rename/move correlation: the document identity now points at a new path.
+            var moved = Path.Combine(_root, "moved.md");
+            File.Move(path, moved);
+            var document = (await _documents.GetByIdAsync("doc"))!;
+            document.CurrentPath = moved;
+            await _documents.UpdateAsync(document);
+
+            var result = await CreateUndoService().UndoAsync(planId);
+
+            Assert.Equal(UndoResultStatus.Completed, result.Status);
+            Assert.Equal(UndoFileOutcome.Restored, Assert.Single(result.Files).Outcome);
+            Assert.False(File.Exists(path));
+            Assert.Equal(original, await File.ReadAllBytesAsync(moved));
+            Assert.Equal(new[] { "doc" }, _reindex.DocumentIds);
+        }
+
+        [Fact]
+        public async Task Undo_ExternalEditDuringRestorePreparationIsNotOverwritten()
+        {
+            var original = Encoding.UTF8.GetBytes("target content");
+            var (planId, path) = await SeedAsync("doc", "notes.md", original);
+            await ApplyReplaceAsync(planId);
+            _reindex.DocumentIds.Clear();
+
+            // The external edit lands after the fingerprint check but before the commit.
+            var newer = Encoding.UTF8.GetBytes("edit during restore");
+            var undo = new UndoService(_storage, _documents, new RacingReplacer(path, newer), _reindex, _undoRecorder);
+
+            var result = await undo.UndoAsync(planId);
+
+            Assert.Equal(UndoResultStatus.Blocked, result.Status);
+            var file = Assert.Single(result.Files);
+            Assert.Equal(UndoFileOutcome.Conflict, file.Outcome);
+            Assert.Equal("ExternallyModified", file.ReasonCode);
+            Assert.Equal(newer, await File.ReadAllBytesAsync(path));
+            AssertNoApplyTempFiles();
+            Assert.Empty(_reindex.DocumentIds);
+        }
+
+        [Fact]
+        public async Task Undo_PreCanceledTokenThrowsAndDoesNotRestore()
+        {
+            var original = Encoding.UTF8.GetBytes("target content");
+            var (planId, path) = await SeedAsync("doc", "notes.md", original);
+            await ApplyReplaceAsync(planId);
+            var applied = await File.ReadAllBytesAsync(path);
+
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => CreateUndoService().UndoAsync(planId, cts.Token));
+            Assert.Equal(applied, await File.ReadAllBytesAsync(path));
+        }
+
+        [Fact]
+        public async Task Undo_CancellationDuringBatchIsTypedAndLeavesNoPartialRestore()
+        {
+            var one = Encoding.UTF8.GetBytes("target one");
+            var two = Encoding.UTF8.GetBytes("target two");
+            var (planId, onePath) = await SeedAsync("doc1", "one.md", one);
+            var (_, twoPath) = await SeedAsync("doc2", "two.md", two, planId);
+            await ApplyReplaceAsync(planId);
+            _reindex.DocumentIds.Clear();
+            var appliedOne = await File.ReadAllBytesAsync(onePath);
+            var appliedTwo = await File.ReadAllBytesAsync(twoPath);
+
+            using var cts = new CancellationTokenSource();
+            var undo = new UndoService(_storage, _documents, new CancelOnPrepareReplacer(cts), _reindex, _undoRecorder);
+
+            var result = await undo.UndoAsync(planId, cts.Token);
+
+            Assert.Equal(UndoResultStatus.Canceled, result.Status);
+            Assert.Equal(2, result.Files.Count);
+            Assert.All(result.Files, f => Assert.Equal(UndoFileOutcome.Skipped, f.Outcome));
+            Assert.All(result.Files, f => Assert.Equal("Cancelled", f.ReasonCode));
+            Assert.Equal(appliedOne, await File.ReadAllBytesAsync(onePath));
+            Assert.Equal(appliedTwo, await File.ReadAllBytesAsync(twoPath));
+            AssertNoApplyTempFiles();
+            Assert.Empty(_reindex.DocumentIds);
+            Assert.Empty(_undoRecorder.Records);
+        }
+
+        private void AssertNoApplyTempFiles() =>
+            Assert.DoesNotContain(
+                Directory.GetFiles(_root, "*", SearchOption.AllDirectories),
+                f => Path.GetFileName(f).StartsWith("~apply-", StringComparison.Ordinal));
+
+        private async Task ApplyReplaceAsync(string planId)
         {
             async Task ReplaceTarget(string tempPath, CancellationToken token)
             {
@@ -297,6 +464,52 @@ namespace DocumentIDE.IntegrationTests.History
                 Records.Add(record);
                 return Task.CompletedTask;
             }
+        }
+
+        private sealed class RacingReplacer : IAtomicFileReplacer
+        {
+            private readonly AtomicFileReplacer _inner = new();
+            private readonly string _victimPath;
+            private readonly byte[] _newerContent;
+
+            public RacingReplacer(string victimPath, byte[] newerContent)
+            {
+                _victimPath = victimPath;
+                _newerContent = newerContent;
+            }
+
+            public async Task<PreparedFileReplacement> PrepareAsync(string sourcePath, Func<string, CancellationToken, Task> mutate, Func<string, CancellationToken, Task>? validate, CancellationToken cancellationToken = default)
+            {
+                var prepared = await _inner.PrepareAsync(sourcePath, mutate, validate, cancellationToken);
+                await File.WriteAllBytesAsync(_victimPath, _newerContent); // external edit lands before commit
+                return prepared;
+            }
+
+            public Task CommitAsync(PreparedFileReplacement replacement, CancellationToken cancellationToken = default) =>
+                _inner.CommitAsync(replacement, cancellationToken);
+
+            public Task RollbackAsync(PreparedFileReplacement replacement, CancellationToken cancellationToken = default) =>
+                _inner.RollbackAsync(replacement, cancellationToken);
+        }
+
+        private sealed class CancelOnPrepareReplacer : IAtomicFileReplacer
+        {
+            private readonly AtomicFileReplacer _inner = new();
+            private readonly CancellationTokenSource _cts;
+
+            public CancelOnPrepareReplacer(CancellationTokenSource cts) => _cts = cts;
+
+            public Task<PreparedFileReplacement> PrepareAsync(string sourcePath, Func<string, CancellationToken, Task> mutate, Func<string, CancellationToken, Task>? validate, CancellationToken cancellationToken = default)
+            {
+                _cts.Cancel(); // cancellation surfaces while the restore still works on the temp copy
+                return _inner.PrepareAsync(sourcePath, mutate, validate, cancellationToken);
+            }
+
+            public Task CommitAsync(PreparedFileReplacement replacement, CancellationToken cancellationToken = default) =>
+                _inner.CommitAsync(replacement, cancellationToken);
+
+            public Task RollbackAsync(PreparedFileReplacement replacement, CancellationToken cancellationToken = default) =>
+                _inner.RollbackAsync(replacement, cancellationToken);
         }
 
         private sealed class FakeHistoryStorage : IHistoryStorage

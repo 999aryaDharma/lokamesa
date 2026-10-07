@@ -90,6 +90,18 @@ public sealed class UndoService
             .FirstOrDefault()
             ?? throw new InvalidOperationException($"Unknown operation '{operationId}': no recovery snapshot exists.");
 
+        // Retention is 30 days: an expired snapshot is not a valid restore source.
+        // Refuse before touching any file and report per-file typed outcomes.
+        if (metadata.ExpiryUtc != default && metadata.ExpiryUtc < _clock.UtcNow)
+        {
+            var expired = metadata.Files
+                .OrderBy(f => f.DocumentId, StringComparer.Ordinal)
+                .ThenBy(f => f.OriginalPath, StringComparer.Ordinal)
+                .Select(f => new UndoFileResult(f.DocumentId, f.OriginalPath, UndoFileOutcome.Failure, "SnapshotExpired", "Snapshot has expired; undo is only available for 30 days."))
+                .ToList();
+            return new UndoResult(operationId, metadata.SnapshotId, UndoResultStatus.Blocked, expired);
+        }
+
         var ordered = metadata.Files
             .OrderBy(f => f.DocumentId, StringComparer.Ordinal)
             .ThenBy(f => f.OriginalPath, StringComparer.Ordinal)
