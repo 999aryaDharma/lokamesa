@@ -3,6 +3,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using DocumentIDE.Core.Batch;
+using DocumentIDE.Core.Filesystem;
 
 namespace DocumentIDE.Infrastructure.Filesystem;
 
@@ -34,8 +35,9 @@ public sealed class AtomicFileReplacer : IAtomicFileReplacer
 
         // Same directory ⇒ same volume, so File.Replace is a true atomic rename.
         // The '~' prefix keeps the temp file ignored by the filesystem watcher's
-        // temporary/lock-file filter while it exists.
-        var tempPath = Path.Combine(directory, $"~apply-{Guid.NewGuid():N}.tmp");
+        // temporary/lock-file filter while it exists. Naming lives in ApplyTempFiles
+        // so startup crash recovery cleans exactly what this replacer creates.
+        var tempPath = ApplyTempFiles.CreatePath(directory);
         try
         {
             File.Copy(fullSource, tempPath, overwrite: false);
