@@ -18,11 +18,13 @@ import React, {
   useEffect,
   useMemo,
   useRef,
+  useState,
   useSyncExternalStore,
 } from 'react';
 import { openInWord } from '../files/OpenInWordAction';
 import { useSearchStore } from '../search/searchStore';
 import { canvasStoreInstance, useCanvasStore } from './canvasStore';
+import FolderPicker, { isSupportedFolderFile, type FolderPickerFile } from './FolderPicker';
 import DocumentNode from './nodes/DocumentNode';
 import type { CanvasObject } from './types';
 import { ZOOM_MAX, ZOOM_MIN } from './types';
@@ -56,6 +58,8 @@ interface CanvasCardProps {
   isMatch?: boolean;
   isFaded?: boolean;
   onSelect: (id: string) => void;
+  /** CAN-04: single-click handler for folder objects (opens the picker). */
+  onSingleClick?: (id: string) => void;
   onDoubleClick?: (object: CanvasObject) => void;
 }
 
@@ -65,6 +69,7 @@ const CanvasCard = memo(function CanvasCard({
   isMatch = false,
   isFaded = false,
   onSelect,
+  onSingleClick,
   onDoubleClick,
 }: CanvasCardProps) {
   const handleDoubleClick = useCallback(
@@ -127,9 +132,23 @@ const CanvasCard = memo(function CanvasCard({
           ? 'border-blue-400 ring-2 ring-blue-200 shadow-md'
           : 'border-slate-200 hover:border-slate-300 hover:shadow-md',
       ].join(' ')}
-      onClick={() => onSelect(object.id)}
+      onClick={() => {
+        if (onSingleClick) {
+          onSingleClick(object.id);
+        } else {
+          onSelect(object.id);
+        }
+      }}
       onDoubleClick={handleDoubleClick}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelect(object.id); }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          if (onSingleClick) {
+            onSingleClick(object.id);
+          } else {
+            onSelect(object.id);
+          }
+        }
+      }}
     >
       {/* Search match pill indicator */}
       {isMatch && (
@@ -207,10 +226,43 @@ function ZoomToolbar({ zoom, onZoomIn, onZoomOut, onReset }: ZoomToolbarProps) {
 const ZOOM_STEP = 0.1;
 const WHEEL_SENSITIVITY = 0.001;
 
-export default function DocumentCanvas() {
+/**
+ * CAN-04: delay used to arbitrate a folder single click vs. double click.
+ * Opening the picker synchronously on the first click would swallow the second
+ * click of a real double-click (the popover overlays the folder card and
+ * intercepts it), so the single-click action is deferred by this window; a
+ * dblclick on the same folder cancels it and runs "Open all" instead.
+ */
+const FOLDER_CLICK_OPEN_DELAY_MS = 250;
+
+export interface DocumentCanvasProps {
+  /**
+   * CAN-04: supported files per folder object id, supplied by the host.
+   * The canvas itself never reads the filesystem.
+   */
+  folderFiles?: Record<string, FolderPickerFile[]>;
+  /**
+   * CAN-04: invoked when the user releases documents from a folder picker.
+   * `documentIds` are the released workspace documents (subset or all);
+   * this never physically moves files.
+   */
+  onReleaseDocuments?: (folderId: string, documentIds: string[]) => void;
+}
+
+export default function DocumentCanvas({ folderFiles, onReleaseDocuments }: DocumentCanvasProps = {}) {
   const state = useCanvasState();
   const searchState = useSearchState();
   const { viewport, objects, selectedIds, setViewport, toggleSelect, loadPersistedViewport } = state;
+  const [pickerFolderId, setPickerFolderId] = useState<string | null>(null);
+
+  /**
+   * CAN-04: pending deferred single-click action for one folder, cancelled by
+   * a second click / dblclick on the same folder.
+   */
+  const pendingFolderClickRef = useRef<{
+    folderId: string;
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
 
   const isSearchHighlighting = searchState.isSearchActive && searchState.query.trim().length > 0;
   const matchingDocIds = useMemo(() => {
@@ -350,14 +402,94 @@ export default function DocumentCanvas() {
     [toggleSelect],
   );
 
-  const handleCardDoubleClick = useCallback(async (obj: CanvasObject) => {
-    if (obj.type === 'document' || obj.title.endsWith('.docx') || obj.title.endsWith('.doc')) {
-      const res = await openInWord(obj.id);
-      if (!res.success) {
-        alert(res.errorMessage);
-      }
+  // CAN-04: cancel a pending deferred folder single-click action (if any).
+  // Called when the second click of a double click arrives, on dblclick, and
+  // on unmount.
+  const cancelPendingFolderClick = useCallback(() => {
+    if (pendingFolderClickRef.current) {
+      clearTimeout(pendingFolderClickRef.current.timer);
+      pendingFolderClickRef.current = null;
     }
   }, []);
+
+  useEffect(() => cancelPendingFolderClick, [cancelPendingFolderClick]);
+
+  // CAN-04: single click on a folder opens the lightweight picker instead of
+  // dumping every file onto the canvas. The action is deferred by a short
+  // window so a real double-click keeps its second click on the card (the
+  // popover would otherwise intercept it) and cancels the deferred open.
+  const handleFolderSingleClick = useCallback(
+    (id: string) => {
+      // Second click of a real double click: cancel the deferred single-click
+      // action; the dblclick handler performs "Open all" instead. Selection is
+      // therefore never toggled twice for one double click.
+      if (pendingFolderClickRef.current?.folderId === id) {
+        cancelPendingFolderClick();
+        return;
+      }
+
+      cancelPendingFolderClick();
+
+      pendingFolderClickRef.current = {
+        folderId: id,
+        timer: setTimeout(() => {
+          pendingFolderClickRef.current = null;
+          toggleSelect(id);
+          setPickerFolderId(id);
+        }, FOLDER_CLICK_OPEN_DELAY_MS),
+      };
+    },
+    [cancelPendingFolderClick, toggleSelect],
+  );
+
+  const handlePickerClose = useCallback(() => {
+    setPickerFolderId(null);
+  }, []);
+
+  const handleReleaseDocuments = useCallback(
+    (folderId: string, documentIds: string[]) => {
+      setPickerFolderId(null);
+      onReleaseDocuments?.(folderId, documentIds);
+    },
+    [onReleaseDocuments],
+  );
+
+  const pickerFolder = useMemo(
+    () =>
+      pickerFolderId
+        ? objects.find((o) => o.id === pickerFolderId && o.type === 'folder')
+        : undefined,
+    [objects, pickerFolderId],
+  );
+
+  const supportedFolderDocumentIds = useCallback(
+    (folderId: string): string[] =>
+      (folderFiles?.[folderId] ?? [])
+        .filter(isSupportedFolderFile)
+        .map((file) => file.documentId),
+    [folderFiles],
+  );
+
+  const handleCardDoubleClick = useCallback(
+    async (obj: CanvasObject) => {
+      if (obj.type === 'folder') {
+        // CAN-04: double-click is the intentional "Open all" fast path. Any
+        // deferred single-click open is cancelled so the picker never opens and
+        // the folder's selection state is left unchanged (no double toggle).
+        cancelPendingFolderClick();
+        setPickerFolderId(null);
+        onReleaseDocuments?.(obj.id, supportedFolderDocumentIds(obj.id));
+        return;
+      }
+      if (obj.type === 'document' || obj.title.endsWith('.docx') || obj.title.endsWith('.doc')) {
+        const res = await openInWord(obj.id);
+        if (!res.success) {
+          alert(res.errorMessage);
+        }
+      }
+    },
+    [cancelPendingFolderClick, onReleaseDocuments, supportedFolderDocumentIds],
+  );
 
   // ---------------------------------------------------------------------------
   // Render
@@ -410,6 +542,7 @@ export default function DocumentCanvas() {
                 isMatch={isMatch}
                 isFaded={isFaded}
                 onSelect={handleObjectSelect}
+                onSingleClick={obj.type === 'folder' ? handleFolderSingleClick : undefined}
                 onDoubleClick={handleCardDoubleClick}
               />
             );
@@ -432,6 +565,22 @@ export default function DocumentCanvas() {
           </div>
         )}
       </div>
+
+      {/* CAN-04: folder picker popover (single click on a folder opens it) */}
+      {pickerFolder && (
+        <div className="absolute top-16 left-6 z-30">
+          <FolderPicker
+            isOpen
+            folderName={pickerFolder.title}
+            files={folderFiles?.[pickerFolder.id] ?? []}
+            onOpenSelected={(documentIds) => handleReleaseDocuments(pickerFolder.id, documentIds)}
+            onOpenAll={() =>
+              handleReleaseDocuments(pickerFolder.id, supportedFolderDocumentIds(pickerFolder.id))
+            }
+            onClose={handlePickerClose}
+          />
+        </div>
+      )}
 
       {/* Zoom toolbar — floating bottom-right */}
       <ZoomToolbar
