@@ -31,6 +31,7 @@ namespace DocumentIDE.IntegrationTests.History
         private readonly BatchPlanRepository _plans;
         private readonly DocumentRepository _documents;
         private readonly FakeHistoryRecorder _recorder;
+        private readonly FakeUndoHistoryRecorder _undoRecorder = new();
         private readonly FakeReindexTrigger _reindex;
         private readonly BatchApplyEngine _engine;
 
@@ -129,6 +130,117 @@ namespace DocumentIDE.IntegrationTests.History
             Assert.NotEqual(file.OriginalFingerprint, file.PostOperationFingerprint);
         }
 
+        [Fact]
+        public async Task Undo_UnchangedFileRestoresOriginalBytes()
+        {
+            var original = Encoding.UTF8.GetBytes("target content");
+            var (planId, path) = await SeedAsync("doc", "notes.md", original);
+            await ApplyReplaceAsync(planId);
+            Assert.Equal("replaced content", await File.ReadAllTextAsync(path));
+            _reindex.DocumentIds.Clear();
+
+            var result = await CreateUndoService().UndoAsync(planId);
+
+            Assert.Equal(UndoResultStatus.Completed, result.Status);
+            var file = Assert.Single(result.Files);
+            Assert.Equal("doc", file.DocumentId);
+            Assert.Equal(UndoFileOutcome.Restored, file.Outcome);
+            Assert.Equal(original, await File.ReadAllBytesAsync(path));
+            Assert.Equal(new[] { "doc" }, _reindex.DocumentIds);
+            var record = Assert.Single(_undoRecorder.Records);
+            Assert.Equal(planId, record.OperationId);
+            Assert.Equal(UndoResultStatus.Completed, record.Status);
+        }
+
+        [Fact]
+        public async Task Undo_SecondUndoIsIdempotent()
+        {
+            var original = Encoding.UTF8.GetBytes("target content");
+            var (planId, path) = await SeedAsync("doc", "notes.md", original);
+            await ApplyReplaceAsync(planId);
+            var undo = CreateUndoService();
+            await undo.UndoAsync(planId);
+            _reindex.DocumentIds.Clear();
+            _undoRecorder.Records.Clear();
+
+            var result = await undo.UndoAsync(planId);
+
+            Assert.Equal(UndoResultStatus.Completed, result.Status);
+            var file = Assert.Single(result.Files);
+            Assert.Equal(UndoFileOutcome.AlreadyRestored, file.Outcome);
+            Assert.Equal(original, await File.ReadAllBytesAsync(path));
+            Assert.Empty(_reindex.DocumentIds);
+        }
+
+        [Fact]
+        public async Task Undo_ExternallyEditedFileIsNotOverwritten()
+        {
+            var original = Encoding.UTF8.GetBytes("target content");
+            var (planId, path) = await SeedAsync("doc", "notes.md", original);
+            await ApplyReplaceAsync(planId);
+            _reindex.DocumentIds.Clear();
+
+            // External edit after the operation: newer content must survive the undo.
+            var newer = Encoding.UTF8.GetBytes("newer external work");
+            await File.WriteAllBytesAsync(path, newer);
+
+            var result = await CreateUndoService().UndoAsync(planId);
+
+            Assert.Equal(UndoResultStatus.Blocked, result.Status);
+            var file = Assert.Single(result.Files);
+            Assert.Equal(UndoFileOutcome.Conflict, file.Outcome);
+            Assert.Equal("ExternallyModified", file.ReasonCode);
+            Assert.Equal(newer, await File.ReadAllBytesAsync(path));
+            Assert.Empty(_reindex.DocumentIds);
+            Assert.Empty(_undoRecorder.Records);
+        }
+
+        [Fact]
+        public async Task Undo_BatchReportsPartialAndConflictOutcomes()
+        {
+            var one = Encoding.UTF8.GetBytes("target one");
+            var two = Encoding.UTF8.GetBytes("target two");
+            var (planId, onePath) = await SeedAsync("doc1", "one.md", one);
+            var (_, twoPath) = await SeedAsync("doc2", "two.md", two, planId);
+            await ApplyReplaceAsync(planId, docIds: new[] { "doc1", "doc2" });
+            _reindex.DocumentIds.Clear();
+
+            var newer = Encoding.UTF8.GetBytes("doc2 external edit");
+            await File.WriteAllBytesAsync(twoPath, newer);
+
+            var result = await CreateUndoService().UndoAsync(planId);
+
+            Assert.Equal(UndoResultStatus.Partial, result.Status);
+            Assert.Equal(2, result.Files.Count);
+            var first = result.Files.Single(f => f.DocumentId == "doc1");
+            var second = result.Files.Single(f => f.DocumentId == "doc2");
+            Assert.Equal(UndoFileOutcome.Restored, first.Outcome);
+            Assert.Equal(one, await File.ReadAllBytesAsync(onePath));
+            Assert.Equal(UndoFileOutcome.Conflict, second.Outcome);
+            Assert.Equal("ExternallyModified", second.ReasonCode);
+            Assert.Equal(newer, await File.ReadAllBytesAsync(twoPath));
+            Assert.Equal(new[] { "doc1" }, _reindex.DocumentIds);
+            var record = Assert.Single(_undoRecorder.Records);
+            Assert.Equal(UndoResultStatus.Partial, record.Status);
+        }
+
+        private async Task ApplyReplaceAsync(string planId, string[]? docIds = null)
+        {
+            async Task ReplaceTarget(string tempPath, CancellationToken token)
+            {
+                var text = await File.ReadAllTextAsync(tempPath, token);
+                await File.WriteAllTextAsync(tempPath, text.Replace("target", "replaced"), token);
+            }
+
+            var result = await _engine.ApplyAsync(planId, ReplaceTarget);
+            Assert.Equal(BatchApplyResultStatus.Completed, result.Status);
+            foreach (var file in result.Files)
+                Assert.Equal(BatchApplyFileOutcome.Success, file.Outcome);
+        }
+
+        private UndoService CreateUndoService() =>
+            new(_storage, _documents, new AtomicFileReplacer(), _reindex, _undoRecorder);
+
         private static string Sha256Hex(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
 
         private async Task<(string PlanId, string Path)> SeedAsync(string docId, string fileName, byte[] content, string? planId = null)
@@ -173,6 +285,16 @@ namespace DocumentIDE.IntegrationTests.History
             public Task TriggerAsync(string documentId, CancellationToken cancellationToken = default)
             {
                 DocumentIds.Add(documentId);
+                return Task.CompletedTask;
+            }
+        }
+
+        private sealed class FakeUndoHistoryRecorder : IUndoHistoryRecorder
+        {
+            public List<UndoRecord> Records { get; } = new();
+            public Task RecordAsync(UndoRecord record, CancellationToken cancellationToken = default)
+            {
+                Records.Add(record);
                 return Task.CompletedTask;
             }
         }
