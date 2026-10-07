@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using DocumentIDE.Core.Domain;
+using DocumentIDE.Core.Filesystem;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -366,6 +367,117 @@ public sealed class FilesystemIndexSoakTests
         _output.WriteLine(
             $"OK: phase1 jobs={phase1.DistinctJobs} records={phase1.DocumentRecords} states={phase1.IndexStates} mem={phase1.ManagedBytes / 1024}KiB; " +
             $"phase2 records={phase2.DocumentRecords} mem-growth={growth / 1024}KiB.");
+    }
+
+    // -------------------------------------------------------------------------
+    // Focused regression pins (task review)
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// The workspace-reindex entry point must re-verify the filesystem before acting on
+    /// an <c>AvailabilityStatus == "missing"</c> snapshot: a record left stale-missing
+    /// while its file exists again (restored without a watcher event) has to go through
+    /// the normal re-read/re-index path, not through the Deleted/eviction path.
+    /// </summary>
+    [Fact]
+    public async Task StaleMissingRecord_WithFilePresent_ReindexReindexesInsteadOfRemoving()
+    {
+        int seed = ResolveSeed();
+        using var rig = new SoakRig(nameof(StaleMissingRecord_WithFilePresent_ReindexReindexesInsteadOfRemoving), seed);
+        rig.Log($"seed={seed} focused=stale-missing-with-file-present");
+
+        string token = Token(seed, "restored", 0);
+        string path = Path.Combine(rig.RootPath, "restored.md");
+        byte[] bytes = Encoding.UTF8.GetBytes($"# Restored\nToken {token}\n");
+        await File.WriteAllBytesAsync(path, bytes);
+
+        var doc = await rig.Identity.ResolveDocumentAsync(path);
+        await rig.Indexer.ProcessFileChangeAsync(new FileChangeEvent
+        {
+            ChangeType = FileChangeType.Created,
+            DocumentId = doc.Id,
+            Path = path
+        });
+
+        bool indexed = await SoakSupport.WaitUntilAsync(
+            async () => (await rig.Fts.SearchAsync(token)).Count == 1,
+            SoakTimeouts.Persist);
+        Assert.True(indexed, $"Initial index did not converge. {RigMessage(rig, seed, "initial index")}");
+
+        // Simulate a stale 'missing' marker left behind while the file is present on disk:
+        // the filesystem is the source of truth, the snapshot must not evict it.
+        var stale = (await rig.Documents.GetByIdAsync(doc.Id))!;
+        stale.AvailabilityStatus = "missing";
+        await rig.Documents.UpdateAsync(stale);
+        rig.Log("forced stale AvailabilityStatus=missing while file exists on disk");
+
+        await rig.Indexer.ReindexWorkspaceAsync(rig.WorkspaceId);
+        await rig.WaitForQuietAsync();
+
+        var after = await rig.Documents.GetByIdAsync(doc.Id);
+        Assert.True(after != null, $"Document record disappeared after reindex. {RigMessage(rig, seed, "reindex")}");
+        Assert.True(after!.IndexStatus == "ready",
+            $"Stale-missing record with a present file was not re-read/re-indexed " +
+            $"(index status={after.IndexStatus}, expected ready). {RigMessage(rig, seed, "reindex")}");
+
+        var hits = await rig.Fts.SearchAsync(token);
+        Assert.True(hits.Count == 1 && string.Equals(hits[0].DocumentId, doc.Id, StringComparison.Ordinal),
+            $"Stale-missing record was evicted from the search index even though its file exists: " +
+            $"hits=[{string.Join(", ", hits.Select(h => h.DocumentId))}], expected={doc.Id}. {RigMessage(rig, seed, "reindex")}");
+    }
+
+    /// <summary>
+    /// Accepted-tradeoff pin: an in-place atomic replacement (same path, different bytes,
+    /// rotated NTFS identity) keeps the existing DocumentId — this is the Word-save
+    /// contract (00-master §14.1, 01-architecture §10.1).
+    /// </summary>
+    [Fact]
+    public async Task SamePathAtomicReplace_KeepsDocumentId()
+    {
+        int seed = ResolveSeed();
+        using var rig = new SoakRig(nameof(SamePathAtomicReplace_KeepsDocumentId), seed);
+
+        string path = Path.Combine(rig.RootPath, "replaced.md");
+        await File.WriteAllBytesAsync(path, Encoding.UTF8.GetBytes("# Versi awal"));
+        var before = await rig.Identity.ResolveDocumentAsync(path);
+
+        SoakSupport.AtomicReplaceFromBytes(path, Encoding.UTF8.GetBytes("# Versi baru"));
+        var after = await rig.Identity.ResolveDocumentAsync(path);
+
+        Assert.True(string.Equals(after.Id, before.Id, StringComparison.Ordinal),
+            $"Same-path atomic replace leaked DocumentId: before={before.Id}, after={after.Id}. {RigMessage(rig, seed, "same-path replace")}");
+        Assert.True(after.AvailabilityStatus == "available" && after.ContentFingerprint == SoakSupport.Sha256Hex(Encoding.UTF8.GetBytes("# Versi baru")),
+            $"Same-path replace was not adopted as a modification. {RigMessage(rig, seed, "same-path replace")}");
+    }
+
+    /// <summary>
+    /// Accepted-tradeoff pin (explicitly recorded, not incidental): delete-then-recreate
+    /// at the same path also keeps the existing DocumentId, because path continuity is the
+    /// only signal that survives the replacement. Canvas position/collections/history stay
+    /// attached to the path's document; distinct files at distinct paths remain distinct
+    /// documents (FS-02).
+    /// </summary>
+    [Fact]
+    public async Task DeleteThenRecreate_SamePath_KeepsDocumentId_AcceptedTradeoff()
+    {
+        int seed = ResolveSeed();
+        using var rig = new SoakRig(nameof(DeleteThenRecreate_SamePath_KeepsDocumentId_AcceptedTradeoff), seed);
+
+        string path = Path.Combine(rig.RootPath, "recreated.md");
+        await File.WriteAllBytesAsync(path, Encoding.UTF8.GetBytes("# Dokumen lama"));
+        var before = await rig.Identity.ResolveDocumentAsync(path);
+
+        File.Delete(path);
+        await File.WriteAllBytesAsync(path, Encoding.UTF8.GetBytes("# Dokumen baru yang berbeda"));
+
+        var after = await rig.Identity.ResolveDocumentAsync(path);
+
+        Assert.True(string.Equals(after.Id, before.Id, StringComparison.Ordinal),
+            $"Delete-then-recreate at the same path did not adopt the existing DocumentId: " +
+            $"before={before.Id}, after={after.Id}. This is the explicitly accepted tradeoff (FS-02). " +
+            $"{RigMessage(rig, seed, "delete-recreate")}");
+        Assert.True(after.AvailabilityStatus == "available",
+            $"Recreated file was not adopted as available. {RigMessage(rig, seed, "delete-recreate")}");
     }
 
     private static async Task<PhaseSnapshot> RunBoundedPhaseAsync(SoakRig rig, ChurnHarness churn, int seed, int phase, int cycles)
