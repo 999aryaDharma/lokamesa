@@ -1,8 +1,10 @@
 using System;
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using DocumentIDE.Core.Sharing;
 using DocumentIDE.ShareHost;
+using DocumentIDE.ShareHost.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,9 +19,13 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 
 builder.Services.AddSingleton<ShareTokenService>();
+builder.Services.AddSingleton<RenderedHtmlSanitizer>();
+builder.Services.AddShareRateLimits();
 
 
 var app = builder.Build();
+app.UseViewerSecurityHeaders();
+app.UseRateLimiter();
 app.UseWhen(context => context.Request.Headers.ContainsKey("X-Share-Token"), appBuilder =>
 {
     appBuilder.UseMiddleware<ShareTokenMiddleware>();
@@ -104,7 +110,7 @@ app.MapGet("/share/{shareId}/documents/{docId}", (string shareId, string docId, 
 });
 
 // Artifact file retrieval endpoint (strictly contained under share root)
-app.MapGet("/share/{shareId}/artifacts/{*relativePath}", (string shareId, string relativePath, ShareTokenService tokenService) =>
+app.MapGet("/share/{shareId}/artifacts/{*relativePath}", (string shareId, string relativePath, ShareTokenService tokenService, RenderedHtmlSanitizer htmlSanitizer) =>
 {
     try
     {
@@ -116,6 +122,24 @@ app.MapGet("/share/{shareId}/artifacts/{*relativePath}", (string shareId, string
         }
 
         var contentType = GetContentType(artifactPath);
+
+        if (contentType == "text/html")
+        {
+            // SHR-08: rendered Markdown/HTML preview artifacts are sanitized with the
+            // maintained sanitizer at the public boundary, even if the owner-side artifact
+            // was already rendered sanitized.
+            var artifactBytes = new FileInfo(artifactPath).Length;
+            if (artifactBytes > RenderedHtmlSanitizer.MaxHtmlArtifactBytes)
+            {
+                return Results.Problem(
+                    statusCode: StatusCodes.Status413PayloadTooLarge,
+                    detail: "HTML artifact exceeds the safe sanitization budget");
+            }
+
+            var sanitized = htmlSanitizer.Sanitize(File.ReadAllText(artifactPath));
+            return Results.Text(sanitized, "text/html", Encoding.UTF8);
+        }
+
         return Results.File(artifactPath, contentType);
     }
     catch (InvalidOperationException)
