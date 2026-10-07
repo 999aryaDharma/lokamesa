@@ -91,10 +91,16 @@ public class DocumentIdentityService
             // the NTFS file index) or may not have had a probed identity registered yet.
             // Both cases are the same logical document being modified: adopt the probed
             // identity and keep the DocumentId (master spec §14.1 "update identity/path",
-            // 01-system-architecture §10.1 "Word save → mark document Modified"). A
-            // physically distinct copy that appears at a *different* path still receives
-            // its own Document record through the fallback below (FS-02: two distinct
-            // duplicate files receive distinct DocumentIds).
+            // 01-system-architecture §10.1 "Word save → mark document Modified").
+            //
+            // Accepted tradeoff (pinned by tests): same-path replacement deliberately keeps
+            // identity — including delete-then-recreate, or a different file placed over
+            // the path. Path continuity is the only signal that survives such a
+            // replacement, so canvas position, groups, collections and history references
+            // stay attached to the path's document instead of being orphaned on every
+            // save. Distinct files at *distinct* paths still receive distinct DocumentIds
+            // through the fallback below (FS-02: two distinct duplicate files receive
+            // distinct DocumentIds).
             if (identity != null)
             {
                 document.FilesystemVolumeId = identity.VolumeId;
