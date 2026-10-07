@@ -122,59 +122,122 @@ public static class PaperSizeTwips
 }
 
 /// <summary>
-/// A previewed per-section margin change: stable occurrence ID, section identity,
-/// display context, and the current→new four-margin values in twips.
+/// How a previewed page-layout target relates to the requested value (spec 07 §19).
+/// <see cref="Changed"/> targets differ from the request and are applicable;
+/// <see cref="Unchanged"/> targets already equal the request (rendered as
+/// “unchanged”, current == new); <see cref="Unspecified"/> targets carry no
+/// explicit geometry/formatting and are outside V1’s mutation scope. Only
+/// <see cref="Changed"/> entries are applicable — the others are preview-only and
+/// never selectable for apply.
+/// </summary>
+public enum PageLayoutTargetStatus
+{
+    Changed,
+    Unchanged,
+    Unspecified
+}
+
+/// <summary>
+/// The reviewed SetMargins preview (spec 07 §19): every section of the document
+/// with a typed status, so the spec’s full shape (“Section 1: old→new”,
+/// “Section 2: unchanged”) is producible. <see cref="AllSectionsTargeted"/>
+/// states whether the operation’s scope covers all sections of the document
+/// (“If operation targets all sections, state so.”).
+/// </summary>
+public sealed record MarginsChangePreview(
+    IReadOnlyList<MarginsChangePreviewOccurrence> Sections,
+    bool AllSectionsTargeted);
+
+/// <summary>
+/// The reviewed SetPaperSize preview (spec 07 §20): every section with a typed
+/// status; <see cref="AllSectionsTargeted"/> states whether the operation’s
+/// scope covers all sections.
+/// </summary>
+public sealed record PaperSizeChangePreview(
+    IReadOnlyList<PaperSizeChangePreviewOccurrence> Sections,
+    bool AllSectionsTargeted);
+
+/// <summary>
+/// The reviewed SetOrientation preview: every section with a typed status;
+/// <see cref="AllSectionsTargeted"/> states whether the operation’s scope covers
+/// all sections.
+/// </summary>
+public sealed record OrientationChangePreview(
+    IReadOnlyList<OrientationChangePreviewOccurrence> Sections,
+    bool AllSectionsTargeted);
+
+/// <summary>
+/// The reviewed SetAlignment preview: every paragraph that carries a direct w:jc
+/// justification with a typed status. Paragraphs without direct justification
+/// are outside the operation’s target scope (spec 06 §21) and are not listed;
+/// they are never conflated with <see cref="PageLayoutTargetStatus.Unchanged"/>.
+/// </summary>
+public sealed record AlignmentChangePreview(
+    IReadOnlyList<AlignmentChangePreviewOccurrence> Paragraphs);
+
+/// <summary>
+/// A previewed per-section margin row: stable occurrence ID, section identity,
+/// display context, current→new four-margin values in twips, and the typed
+/// status. Current values are null when the section has no explicit w:pgMar
+/// (<see cref="PageLayoutTargetStatus.Unspecified"/>). Only
+/// <see cref="PageLayoutTargetStatus.Changed"/> rows are selected; the others
+/// are preview-only.
 /// </summary>
 public sealed record MarginsChangePreviewOccurrence(
     string Id,
     int SectionIndex,
     string Context,
-    int CurrentTopTwips,
-    int CurrentRightTwips,
-    int CurrentBottomTwips,
-    int CurrentLeftTwips,
+    int? CurrentTopTwips,
+    int? CurrentRightTwips,
+    int? CurrentBottomTwips,
+    int? CurrentLeftTwips,
     int NewTopTwips,
     int NewRightTwips,
     int NewBottomTwips,
     int NewLeftTwips,
-    bool Selected = true);
+    PageLayoutTargetStatus Status,
+    bool Selected);
 
-/// <summary>A previewed per-section paper-size change with current→new dimensions in twips.</summary>
+/// <summary>A previewed per-section paper-size row with current→new dimensions and typed status.</summary>
 public sealed record PaperSizeChangePreviewOccurrence(
     string Id,
     int SectionIndex,
     string Context,
-    int CurrentWidthTwips,
-    int CurrentHeightTwips,
+    int? CurrentWidthTwips,
+    int? CurrentHeightTwips,
     int NewWidthTwips,
     int NewHeightTwips,
-    bool Selected = true);
+    PageLayoutTargetStatus Status,
+    bool Selected);
 
 /// <summary>
-/// A previewed per-section orientation change. The new dimensions are the exact
-/// dimensions the mutation will install (the section's physical size is
+/// A previewed per-section orientation row. The new dimensions are the exact
+/// dimensions the mutation will install (the section’s physical size is
 /// preserved, so a real orientation change swaps the stored width/height).
+/// Current/new dimensions are null when the section has no explicit w:pgSz.
 /// </summary>
 public sealed record OrientationChangePreviewOccurrence(
     string Id,
     int SectionIndex,
     string Context,
-    string CurrentOrientation,
+    string? CurrentOrientation,
     string NewOrientation,
-    int CurrentWidthTwips,
-    int CurrentHeightTwips,
-    int NewWidthTwips,
-    int NewHeightTwips,
-    bool Selected = true);
+    int? CurrentWidthTwips,
+    int? CurrentHeightTwips,
+    int? NewWidthTwips,
+    int? NewHeightTwips,
+    PageLayoutTargetStatus Status,
+    bool Selected);
 
-/// <summary>A previewed per-paragraph alignment change: stable ID, origin, text context, current→new w:jc value.</summary>
+/// <summary>A previewed per-paragraph alignment row: stable ID, origin, text context, current→new w:jc value, typed status.</summary>
 public sealed record AlignmentChangePreviewOccurrence(
     string Id,
     string Origin,
     string Context,
-    string CurrentAlignment,
+    string? CurrentAlignment,
     string NewAlignment,
-    bool Selected = true);
+    PageLayoutTargetStatus Status,
+    bool Selected);
 
 /// <summary>A reviewed section for strict margin mutation with its reviewed expected values.</summary>
 public sealed record DocxMarginsTarget(
@@ -505,11 +568,39 @@ internal static class PageLayoutTargetResolver
 }
 
 /// <summary>
+/// Review-selection semantics shared by the BAT-09 operations. Unchanged and
+/// Unspecified rows are preview-only: they never enter a mutator target list.
+/// A selected ID that does not exist in the preview at all fails closed
+/// (BAT-05/BAT-08 parity) instead of being silently ignored.
+/// </summary>
+internal static class PageLayoutSelection
+{
+    public static void EnsureAllSelectedKnown(HashSet<string> selected, IEnumerable<string> knownIds)
+    {
+        var known = new HashSet<string>(knownIds, StringComparer.Ordinal);
+        int unknown = 0;
+        foreach (var id in selected)
+        {
+            if (!known.Contains(id)) unknown++;
+        }
+
+        if (unknown > 0)
+        {
+            throw new InvalidOperationException(
+                $"SelectedOccurrenceNotFound: {unknown} of {selected.Count} selected occurrence IDs were not found ({known.Count} previewed targets present).");
+        }
+    }
+}
+
+/// <summary>
 /// BAT-09 — Strict Set Paper Size operation (spec 07 §20). Changes only the
 /// reviewed sections' w:pgSz @w:w/@w:h values; margins, orientation and every
 /// other property are untouched. Sections without explicit page dimensions are
-/// out of scope (V1 never invents page geometry). Already-at-target sections are
-/// not affected.
+/// listed as <see cref="PageLayoutTargetStatus.Unspecified"/> and are never
+/// applied (V1 never invents page geometry); already-at-target sections are
+/// listed as <see cref="PageLayoutTargetStatus.Unchanged"/> (current == new,
+/// preview-only). Only <see cref="PageLayoutTargetStatus.Changed"/> sections are
+/// applicable.
 /// </summary>
 public sealed class SetPaperSizeOperation
 {
@@ -531,11 +622,14 @@ public sealed class SetPaperSizeOperation
     }
 
     /// <summary>
-    /// Builds the reviewed per-section page-size list: every section with explicit
-    /// w:pgSz dimensions whose current size differs from the requested size, in
-    /// document order. The source file is never modified.
+    /// Builds the reviewed per-section page-size preview: every section of the
+    /// document in document order with a typed status — Changed, Unchanged
+    /// (current == requested; preview-only) or Unspecified (no explicit w:pgSz;
+    /// never applicable). <see cref="PaperSizeChangePreview.AllSectionsTargeted"/>
+    /// states when every section is in the operation’s scope. The source file is
+    /// never modified.
     /// </summary>
-    public async Task<IReadOnlyList<PaperSizeChangePreviewOccurrence>> BuildOccurrencesAsync(
+    public async Task<PaperSizeChangePreview> BuildOccurrencesAsync(
         string filePath,
         SetPaperSizeParameters parameters,
         CancellationToken cancellationToken = default)
@@ -544,39 +638,51 @@ public sealed class SetPaperSizeOperation
         ValidateParameters(parameters);
 
         if (!SearchReplaceOperation.IsDocx(filePath))
-            return Array.Empty<PaperSizeChangePreviewOccurrence>();
+            return new PaperSizeChangePreview(Array.Empty<PaperSizeChangePreviewOccurrence>(), AllSectionsTargeted: false);
 
         var bytes = await SearchReplaceOperation.ReadBoundedAsync(filePath, cancellationToken);
         using var stream = new MemoryStream(bytes, writable: false);
         var sections = DocxPageLayoutScan.ScanSectionsStream(stream, cancellationToken);
+        return BuildPreview(sections, parameters);
+    }
 
-        var occurrences = new List<PaperSizeChangePreviewOccurrence>();
+    private static PaperSizeChangePreview BuildPreview(IReadOnlyList<DocxSectionInfo> sections, SetPaperSizeParameters parameters)
+    {
+        var rows = new List<PaperSizeChangePreviewOccurrence>();
         foreach (var section in sections)
         {
-            if (!section.HasPageSize) continue;
-            // A section already carrying the requested dimensions is not affected.
-            if (section.PageWidthTwips == parameters.WidthTwips && section.PageHeightTwips == parameters.HeightTwips)
-                continue;
-            if (occurrences.Count == DocxPageLayoutScan.OccurrenceBudget)
+            if (rows.Count == DocxPageLayoutScan.OccurrenceBudget)
                 throw new InvalidDataException("OccurrenceBudgetExceeded");
 
-            occurrences.Add(new PaperSizeChangePreviewOccurrence(
+            PageLayoutTargetStatus status;
+            if (!section.HasPageSize)
+                status = PageLayoutTargetStatus.Unspecified;
+            else if (section.PageWidthTwips == parameters.WidthTwips && section.PageHeightTwips == parameters.HeightTwips)
+                status = PageLayoutTargetStatus.Unchanged;
+            else
+                status = PageLayoutTargetStatus.Changed;
+
+            rows.Add(new PaperSizeChangePreviewOccurrence(
                 PaperSizeOccurrenceId(section),
                 section.SectionIndex,
                 PageLayoutOoxml.SectionContext(section.SectionIndex),
-                section.PageWidthTwips!.Value,
-                section.PageHeightTwips!.Value,
+                section.PageWidthTwips,
+                section.PageHeightTwips,
                 parameters.WidthTwips,
-                parameters.HeightTwips));
+                parameters.HeightTwips,
+                status,
+                Selected: status == PageLayoutTargetStatus.Changed));
         }
 
-        return occurrences;
+        return new PaperSizeChangePreview(rows, sections.Count > 0 && sections.All(s => s.HasPageSize));
     }
 
     /// <summary>
     /// Creates the mutate delegate for <c>BatchApplyEngine.ApplyAsync</c>. The
     /// delegate identifies the reviewed plan file by directory + preview
-    /// fingerprint and mutates only the reviewed, selected sections.
+    /// fingerprint and mutates only the reviewed, selected <b>Changed</b>
+    /// sections; Unchanged/Unspecified rows are preview-only and can never enter
+    /// the target list.
     /// </summary>
     public Func<string, CancellationToken, Task> CreateMutate(
         SetPaperSizeParameters parameters,
@@ -596,21 +702,24 @@ public sealed class SetPaperSizeOperation
             var bytes = await SearchReplaceOperation.ReadBoundedAsync(tempPath, cancellationToken);
             using var stream = new MemoryStream(bytes, writable: false);
             var sections = DocxPageLayoutScan.ScanSectionsStream(stream, cancellationToken);
+            var preview = BuildPreview(sections, parameters);
+            PageLayoutSelection.EnsureAllSelectedKnown(selected, preview.Sections.Select(r => r.Id));
+
+            var byId = new Dictionary<string, DocxSectionInfo>(StringComparer.Ordinal);
+            foreach (var section in sections)
+                byId[PaperSizeOccurrenceId(section)] = section;
 
             var chosen = new List<DocxPaperSizeTarget>();
-            int candidateCount = 0;
-            foreach (var section in sections)
+            foreach (var row in preview.Sections)
             {
-                if (!section.HasPageSize) continue;
-                candidateCount++;
-                if (!selected.Contains(PaperSizeOccurrenceId(section))) continue;
+                if (row.Status != PageLayoutTargetStatus.Changed || !selected.Contains(row.Id)) continue;
+                var section = byId[row.Id];
                 chosen.Add(new DocxPaperSizeTarget(
                     section.PartName, section.SectionIndex, section.PageWidthTwips!.Value, section.PageHeightTwips!.Value));
             }
 
-            SearchReplaceOperation.EnsureAllSelectedFound(chosen.Count, selected, candidateCount);
             if (chosen.Count == 0)
-                return;
+                return; // nothing applicable was selected → no change (bytes preserved)
 
             _mutator.SetPaperSize(tempPath, chosen, parameters.WidthTwips, parameters.HeightTwips);
         }
@@ -625,8 +734,12 @@ public sealed class SetPaperSizeOperation
 /// <summary>
 /// BAT-09 — Strict Set Margins operation (spec 07 §19). Changes only the reviewed
 /// sections' four w:pgMar values; fonts, alignment, page size and every other
-/// property are untouched. Sections without explicit margins are out of scope
-/// (V1 never invents page geometry). Already-at-target sections are not affected.
+/// property are untouched. Sections without explicit margins are listed as
+/// <see cref="PageLayoutTargetStatus.Unspecified"/> and are never applied (V1
+/// never invents page geometry); already-at-target sections are listed as
+/// <see cref="PageLayoutTargetStatus.Unchanged"/> (current == new,
+/// preview-only), so the spec’s “Section 2: unchanged” rendering is producible.
+/// Only <see cref="PageLayoutTargetStatus.Changed"/> sections are applicable.
 /// </summary>
 public sealed class SetMarginsOperation
 {
@@ -651,11 +764,16 @@ public sealed class SetMarginsOperation
     }
 
     /// <summary>
-    /// Builds the reviewed per-section margin list: every section with explicit
-    /// w:pgMar values whose current margins differ from the requested margins, in
-    /// document order. The source file is never modified.
+    /// Builds the reviewed per-section margin preview: every section of the
+    /// document in document order with a typed status — Changed, Unchanged
+    /// (current == requested; preview-only) or Unspecified (no explicit w:pgMar;
+    /// never applicable, so an out-of-scope section is never conflated with an
+    /// unchanged one). <see cref="MarginsChangePreview.AllSectionsTargeted"/>
+    /// states when every section is in the operation’s scope (spec 07 §19 “If
+    /// operation targets all sections, state so.”). The source file is never
+    /// modified.
     /// </summary>
-    public async Task<IReadOnlyList<MarginsChangePreviewOccurrence>> BuildOccurrencesAsync(
+    public async Task<MarginsChangePreview> BuildOccurrencesAsync(
         string filePath,
         SetMarginsParameters parameters,
         CancellationToken cancellationToken = default)
@@ -664,49 +782,58 @@ public sealed class SetMarginsOperation
         ValidateParameters(parameters);
 
         if (!SearchReplaceOperation.IsDocx(filePath))
-            return Array.Empty<MarginsChangePreviewOccurrence>();
+            return new MarginsChangePreview(Array.Empty<MarginsChangePreviewOccurrence>(), AllSectionsTargeted: false);
 
         var bytes = await SearchReplaceOperation.ReadBoundedAsync(filePath, cancellationToken);
         using var stream = new MemoryStream(bytes, writable: false);
         var sections = DocxPageLayoutScan.ScanSectionsStream(stream, cancellationToken);
+        return BuildPreview(sections, parameters);
+    }
 
-        var occurrences = new List<MarginsChangePreviewOccurrence>();
+    private static MarginsChangePreview BuildPreview(IReadOnlyList<DocxSectionInfo> sections, SetMarginsParameters parameters)
+    {
+        var rows = new List<MarginsChangePreviewOccurrence>();
         foreach (var section in sections)
         {
-            if (!section.HasMargins) continue;
-            // A section already carrying the requested margins is not affected.
-            if (section.MarginTopTwips == parameters.TopTwips &&
-                section.MarginRightTwips == parameters.RightTwips &&
-                section.MarginBottomTwips == parameters.BottomTwips &&
-                section.MarginLeftTwips == parameters.LeftTwips)
-            {
-                continue;
-            }
-
-            if (occurrences.Count == DocxPageLayoutScan.OccurrenceBudget)
+            if (rows.Count == DocxPageLayoutScan.OccurrenceBudget)
                 throw new InvalidDataException("OccurrenceBudgetExceeded");
 
-            occurrences.Add(new MarginsChangePreviewOccurrence(
+            PageLayoutTargetStatus status;
+            if (!section.HasMargins)
+                status = PageLayoutTargetStatus.Unspecified;
+            else if (section.MarginTopTwips == parameters.TopTwips &&
+                     section.MarginRightTwips == parameters.RightTwips &&
+                     section.MarginBottomTwips == parameters.BottomTwips &&
+                     section.MarginLeftTwips == parameters.LeftTwips)
+                status = PageLayoutTargetStatus.Unchanged;
+            else
+                status = PageLayoutTargetStatus.Changed;
+
+            rows.Add(new MarginsChangePreviewOccurrence(
                 MarginsOccurrenceId(section),
                 section.SectionIndex,
                 PageLayoutOoxml.SectionContext(section.SectionIndex),
-                section.MarginTopTwips!.Value,
-                section.MarginRightTwips!.Value,
-                section.MarginBottomTwips!.Value,
-                section.MarginLeftTwips!.Value,
+                section.MarginTopTwips,
+                section.MarginRightTwips,
+                section.MarginBottomTwips,
+                section.MarginLeftTwips,
                 parameters.TopTwips,
                 parameters.RightTwips,
                 parameters.BottomTwips,
-                parameters.LeftTwips));
+                parameters.LeftTwips,
+                status,
+                Selected: status == PageLayoutTargetStatus.Changed));
         }
 
-        return occurrences;
+        return new MarginsChangePreview(rows, sections.Count > 0 && sections.All(s => s.HasMargins));
     }
 
     /// <summary>
     /// Creates the mutate delegate for <c>BatchApplyEngine.ApplyAsync</c>. The
     /// delegate identifies the reviewed plan file by directory + preview
-    /// fingerprint and mutates only the reviewed, selected sections.
+    /// fingerprint and mutates only the reviewed, selected <b>Changed</b>
+    /// sections; Unchanged/Unspecified rows are preview-only and can never enter
+    /// the target list.
     /// </summary>
     public Func<string, CancellationToken, Task> CreateMutate(
         SetMarginsParameters parameters,
@@ -726,14 +853,18 @@ public sealed class SetMarginsOperation
             var bytes = await SearchReplaceOperation.ReadBoundedAsync(tempPath, cancellationToken);
             using var stream = new MemoryStream(bytes, writable: false);
             var sections = DocxPageLayoutScan.ScanSectionsStream(stream, cancellationToken);
+            var preview = BuildPreview(sections, parameters);
+            PageLayoutSelection.EnsureAllSelectedKnown(selected, preview.Sections.Select(r => r.Id));
+
+            var byId = new Dictionary<string, DocxSectionInfo>(StringComparer.Ordinal);
+            foreach (var section in sections)
+                byId[MarginsOccurrenceId(section)] = section;
 
             var chosen = new List<DocxMarginsTarget>();
-            int candidateCount = 0;
-            foreach (var section in sections)
+            foreach (var row in preview.Sections)
             {
-                if (!section.HasMargins) continue;
-                candidateCount++;
-                if (!selected.Contains(MarginsOccurrenceId(section))) continue;
+                if (row.Status != PageLayoutTargetStatus.Changed || !selected.Contains(row.Id)) continue;
+                var section = byId[row.Id];
                 chosen.Add(new DocxMarginsTarget(
                     section.PartName,
                     section.SectionIndex,
@@ -743,9 +874,8 @@ public sealed class SetMarginsOperation
                     section.MarginLeftTwips!.Value));
             }
 
-            SearchReplaceOperation.EnsureAllSelectedFound(chosen.Count, selected, candidateCount);
             if (chosen.Count == 0)
-                return;
+                return; // nothing applicable was selected → no change (bytes preserved)
 
             _mutator.SetMargins(tempPath, chosen, parameters.TopTwips, parameters.RightTwips, parameters.BottomTwips, parameters.LeftTwips);
         }
@@ -780,13 +910,16 @@ public sealed class SetOrientationOperation
     }
 
     /// <summary>
-    /// Builds the reviewed per-section orientation list: every section with
-    /// explicit w:pgSz dimensions that is not already in the requested
-    /// orientation (including dimension ordering), in document order. The new
-    /// dimensions shown are the exact dimensions the mutation will install.
-    /// The source file is never modified.
+    /// Builds the reviewed per-section orientation preview: every section of the
+    /// document in document order with a typed status — Changed, Unchanged
+    /// (already in the requested orientation with correctly ordered dimensions;
+    /// preview-only) or Unspecified (no explicit w:pgSz; never applicable). The
+    /// new dimensions shown are the exact dimensions the mutation will install.
+    /// <see cref="OrientationChangePreview.AllSectionsTargeted"/> states when
+    /// every section is in the operation’s scope. The source file is never
+    /// modified.
     /// </summary>
-    public async Task<IReadOnlyList<OrientationChangePreviewOccurrence>> BuildOccurrencesAsync(
+    public async Task<OrientationChangePreview> BuildOccurrencesAsync(
         string filePath,
         SetOrientationParameters parameters,
         CancellationToken cancellationToken = default)
@@ -795,30 +928,48 @@ public sealed class SetOrientationOperation
         ValidateParameters(parameters);
 
         if (!SearchReplaceOperation.IsDocx(filePath))
-            return Array.Empty<OrientationChangePreviewOccurrence>();
+            return new OrientationChangePreview(Array.Empty<OrientationChangePreviewOccurrence>(), AllSectionsTargeted: false);
 
         var bytes = await SearchReplaceOperation.ReadBoundedAsync(filePath, cancellationToken);
         using var stream = new MemoryStream(bytes, writable: false);
         var sections = DocxPageLayoutScan.ScanSectionsStream(stream, cancellationToken);
+        return BuildPreview(sections, parameters);
+    }
 
+    private static OrientationChangePreview BuildPreview(IReadOnlyList<DocxSectionInfo> sections, SetOrientationParameters parameters)
+    {
         string targetOrientation = PageLayoutOoxml.ToOoxmlValue(parameters.Orientation);
-        var occurrences = new List<OrientationChangePreviewOccurrence>();
+        var rows = new List<OrientationChangePreviewOccurrence>();
         foreach (var section in sections)
         {
-            if (!section.HasPageSize) continue;
+            if (rows.Count == DocxPageLayoutScan.OccurrenceBudget)
+                throw new InvalidDataException("OccurrenceBudgetExceeded");
+
+            if (!section.HasPageSize)
+            {
+                rows.Add(new OrientationChangePreviewOccurrence(
+                    OrientationOccurrenceId(section),
+                    section.SectionIndex,
+                    PageLayoutOoxml.SectionContext(section.SectionIndex),
+                    CurrentOrientation: null,
+                    targetOrientation,
+                    CurrentWidthTwips: null,
+                    CurrentHeightTwips: null,
+                    NewWidthTwips: null,
+                    NewHeightTwips: null,
+                    PageLayoutTargetStatus.Unspecified,
+                    Selected: false));
+                continue;
+            }
 
             int width = section.PageWidthTwips!.Value;
             int height = section.PageHeightTwips!.Value;
             bool needsSwap = PageLayoutOoxml.NeedsDimensionSwap(parameters.Orientation, width, height);
-            // A section already in the requested orientation with correctly ordered
-            // dimensions is not affected.
-            if (string.Equals(section.Orientation, targetOrientation, StringComparison.Ordinal) && !needsSwap)
-                continue;
+            var status = string.Equals(section.Orientation, targetOrientation, StringComparison.Ordinal) && !needsSwap
+                ? PageLayoutTargetStatus.Unchanged
+                : PageLayoutTargetStatus.Changed;
 
-            if (occurrences.Count == DocxPageLayoutScan.OccurrenceBudget)
-                throw new InvalidDataException("OccurrenceBudgetExceeded");
-
-            occurrences.Add(new OrientationChangePreviewOccurrence(
+            rows.Add(new OrientationChangePreviewOccurrence(
                 OrientationOccurrenceId(section),
                 section.SectionIndex,
                 PageLayoutOoxml.SectionContext(section.SectionIndex),
@@ -827,16 +978,20 @@ public sealed class SetOrientationOperation
                 width,
                 height,
                 needsSwap ? height : width,
-                needsSwap ? width : height));
+                needsSwap ? width : height,
+                status,
+                Selected: status == PageLayoutTargetStatus.Changed));
         }
 
-        return occurrences;
+        return new OrientationChangePreview(rows, sections.Count > 0 && sections.All(s => s.HasPageSize));
     }
 
     /// <summary>
     /// Creates the mutate delegate for <c>BatchApplyEngine.ApplyAsync</c>. The
     /// delegate identifies the reviewed plan file by directory + preview
-    /// fingerprint and mutates only the reviewed, selected sections.
+    /// fingerprint and mutates only the reviewed, selected <b>Changed</b>
+    /// sections; Unchanged/Unspecified rows are preview-only and can never enter
+    /// the target list.
     /// </summary>
     public Func<string, CancellationToken, Task> CreateMutate(
         SetOrientationParameters parameters,
@@ -856,14 +1011,18 @@ public sealed class SetOrientationOperation
             var bytes = await SearchReplaceOperation.ReadBoundedAsync(tempPath, cancellationToken);
             using var stream = new MemoryStream(bytes, writable: false);
             var sections = DocxPageLayoutScan.ScanSectionsStream(stream, cancellationToken);
+            var preview = BuildPreview(sections, parameters);
+            PageLayoutSelection.EnsureAllSelectedKnown(selected, preview.Sections.Select(r => r.Id));
+
+            var byId = new Dictionary<string, DocxSectionInfo>(StringComparer.Ordinal);
+            foreach (var section in sections)
+                byId[OrientationOccurrenceId(section)] = section;
 
             var chosen = new List<DocxOrientationTarget>();
-            int candidateCount = 0;
-            foreach (var section in sections)
+            foreach (var row in preview.Sections)
             {
-                if (!section.HasPageSize) continue;
-                candidateCount++;
-                if (!selected.Contains(OrientationOccurrenceId(section))) continue;
+                if (row.Status != PageLayoutTargetStatus.Changed || !selected.Contains(row.Id)) continue;
+                var section = byId[row.Id];
                 chosen.Add(new DocxOrientationTarget(
                     section.PartName,
                     section.SectionIndex,
@@ -872,9 +1031,8 @@ public sealed class SetOrientationOperation
                     section.PageHeightTwips!.Value));
             }
 
-            SearchReplaceOperation.EnsureAllSelectedFound(chosen.Count, selected, candidateCount);
             if (chosen.Count == 0)
-                return;
+                return; // nothing applicable was selected → no change (bytes preserved)
 
             _mutator.SetOrientation(tempPath, chosen, parameters.Orientation);
         }
@@ -889,9 +1047,12 @@ public sealed class SetOrientationOperation
 /// <summary>
 /// BAT-09 — Strict Set Alignment operation (spec 06 §20). Changes only the
 /// reviewed paragraphs' direct w:jc justification; paragraphs whose alignment
-/// comes from styles are deliberately out of scope (no flattening, spec 06 §21),
-/// and section properties are never touched. Already-at-target paragraphs are
-/// not affected. Targets body, table, header and footer paragraphs.
+/// comes from styles are deliberately outside the target scope and are not
+/// listed (no flattening, spec 06 §21), and section properties are never
+/// touched. Already-at-target paragraphs are listed as
+/// <see cref="PageLayoutTargetStatus.Unchanged"/> (current == new,
+/// preview-only); only <see cref="PageLayoutTargetStatus.Changed"/> paragraphs
+/// are applicable. Targets body, table, header and footer paragraphs.
 /// </summary>
 public sealed class SetAlignmentOperation
 {
@@ -910,13 +1071,15 @@ public sealed class SetAlignmentOperation
     }
 
     /// <summary>
-    /// Builds the reviewed paragraph list: every paragraph with a direct w:jc
-    /// justification that differs from the requested alignment, in part order →
-    /// paragraph order, with origin and visible-text context. Paragraphs whose
-    /// alignment is style-inherited are deliberately out of scope (spec 06 §21).
-    /// The source file is never modified.
+    /// Builds the reviewed paragraph preview: every paragraph with a direct w:jc
+    /// justification in part order → paragraph order with a typed status —
+    /// Changed or Unchanged (current == requested; preview-only), plus origin and
+    /// visible-text context. Paragraphs without direct justification are outside
+    /// the operation’s target scope (spec 06 §21) and are not listed; they are
+    /// never conflated with <see cref="PageLayoutTargetStatus.Unchanged"/>. The
+    /// source file is never modified.
     /// </summary>
-    public async Task<IReadOnlyList<AlignmentChangePreviewOccurrence>> BuildOccurrencesAsync(
+    public async Task<AlignmentChangePreview> BuildOccurrencesAsync(
         string filePath,
         SetAlignmentParameters parameters,
         CancellationToken cancellationToken = default)
@@ -925,38 +1088,48 @@ public sealed class SetAlignmentOperation
         ValidateParameters(parameters);
 
         if (!SearchReplaceOperation.IsDocx(filePath))
-            return Array.Empty<AlignmentChangePreviewOccurrence>();
+            return new AlignmentChangePreview(Array.Empty<AlignmentChangePreviewOccurrence>());
 
         var bytes = await SearchReplaceOperation.ReadBoundedAsync(filePath, cancellationToken);
         using var stream = new MemoryStream(bytes, writable: false);
         var paragraphs = DocxPageLayoutScan.ScanAlignmentStream(stream, cancellationToken);
+        return BuildPreview(paragraphs, parameters);
+    }
 
+    private static AlignmentChangePreview BuildPreview(IReadOnlyList<DocxAlignmentParagraph> paragraphs, SetAlignmentParameters parameters)
+    {
         string newValue = PageLayoutOoxml.ToOoxmlValue(parameters.Alignment);
-        var occurrences = new List<AlignmentChangePreviewOccurrence>();
+        var rows = new List<AlignmentChangePreviewOccurrence>();
         foreach (var paragraph in paragraphs)
         {
-            if (paragraph.DirectAlignment == null) continue;
-            // A paragraph already carrying the requested alignment is not affected.
-            if (string.Equals(paragraph.DirectAlignment, newValue, StringComparison.Ordinal)) continue;
-            if (occurrences.Count == DocxPageLayoutScan.OccurrenceBudget)
+            if (paragraph.DirectAlignment == null) continue; // outside the target scope; not listed
+            if (rows.Count == DocxPageLayoutScan.OccurrenceBudget)
                 throw new InvalidDataException("OccurrenceBudgetExceeded");
 
-            occurrences.Add(new AlignmentChangePreviewOccurrence(
+            var status = string.Equals(paragraph.DirectAlignment, newValue, StringComparison.Ordinal)
+                ? PageLayoutTargetStatus.Unchanged
+                : PageLayoutTargetStatus.Changed;
+
+            rows.Add(new AlignmentChangePreviewOccurrence(
                 AlignmentOccurrenceId(paragraph),
                 paragraph.Origin.ToString(),
                 SearchReplaceOperation.TextPreviewContext(
                     paragraph.ParagraphText, 0, Math.Min(paragraph.ParagraphText.Length, 30)),
                 paragraph.DirectAlignment,
-                newValue));
+                newValue,
+                status,
+                Selected: status == PageLayoutTargetStatus.Changed));
         }
 
-        return occurrences;
+        return new AlignmentChangePreview(rows);
     }
 
     /// <summary>
     /// Creates the mutate delegate for <c>BatchApplyEngine.ApplyAsync</c>. The
     /// delegate identifies the reviewed plan file by directory + preview
-    /// fingerprint and mutates only the reviewed, selected paragraphs.
+    /// fingerprint and mutates only the reviewed, selected <b>Changed</b>
+    /// paragraphs; Unchanged rows are preview-only and can never enter the target
+    /// list.
     /// </summary>
     public Func<string, CancellationToken, Task> CreateMutate(
         SetAlignmentParameters parameters,
@@ -976,21 +1149,27 @@ public sealed class SetAlignmentOperation
             var bytes = await SearchReplaceOperation.ReadBoundedAsync(tempPath, cancellationToken);
             using var stream = new MemoryStream(bytes, writable: false);
             var paragraphs = DocxPageLayoutScan.ScanAlignmentStream(stream, cancellationToken);
+            var preview = BuildPreview(paragraphs, parameters);
+            PageLayoutSelection.EnsureAllSelectedKnown(selected, preview.Paragraphs.Select(r => r.Id));
 
-            var chosen = new List<DocxAlignmentTarget>();
-            int candidateCount = 0;
+            var byId = new Dictionary<string, DocxAlignmentParagraph>(StringComparer.Ordinal);
             foreach (var paragraph in paragraphs)
             {
                 if (paragraph.DirectAlignment == null) continue;
-                candidateCount++;
-                if (!selected.Contains(AlignmentOccurrenceId(paragraph))) continue;
-                chosen.Add(new DocxAlignmentTarget(
-                    paragraph.PartName, paragraph.ParagraphIndex, paragraph.DirectAlignment));
+                byId[AlignmentOccurrenceId(paragraph)] = paragraph;
             }
 
-            SearchReplaceOperation.EnsureAllSelectedFound(chosen.Count, selected, candidateCount);
+            var chosen = new List<DocxAlignmentTarget>();
+            foreach (var row in preview.Paragraphs)
+            {
+                if (row.Status != PageLayoutTargetStatus.Changed || !selected.Contains(row.Id)) continue;
+                var paragraph = byId[row.Id];
+                chosen.Add(new DocxAlignmentTarget(
+                    paragraph.PartName, paragraph.ParagraphIndex, paragraph.DirectAlignment!));
+            }
+
             if (chosen.Count == 0)
-                return;
+                return; // nothing applicable was selected → no change (bytes preserved)
 
             _mutator.SetParagraphAlignment(tempPath, chosen, parameters.Alignment);
         }

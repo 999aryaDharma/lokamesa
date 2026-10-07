@@ -85,8 +85,10 @@ public sealed class PageLayoutOperationsTests : IDisposable
             WidthTwips = PaperSizeTwips.A4Width,
             HeightTwips = PaperSizeTwips.A4Height
         };
-        var occurrences = await _setPaperSize.BuildOccurrencesAsync(path, parameters);
-        var occurrence = Assert.Single(occurrences);
+        var preview = await _setPaperSize.BuildOccurrencesAsync(path, parameters);
+        var occurrence = Assert.Single(preview.Sections);
+        Assert.True(preview.AllSectionsTargeted);
+        Assert.Equal(PageLayoutTargetStatus.Changed, occurrence.Status);
         Assert.Equal(12240, occurrence.CurrentWidthTwips);
         Assert.Equal(15840, occurrence.CurrentHeightTwips);
         Assert.Equal(PaperSizeTwips.A4Width, occurrence.NewWidthTwips);
@@ -138,8 +140,10 @@ public sealed class PageLayoutOperationsTests : IDisposable
             BottomTwips = 2880,
             LeftTwips = 1440
         };
-        var occurrences = await _setMargins.BuildOccurrencesAsync(path, parameters);
-        var occurrence = Assert.Single(occurrences);
+        var preview = await _setMargins.BuildOccurrencesAsync(path, parameters);
+        var occurrence = Assert.Single(preview.Sections);
+        Assert.Equal(PageLayoutTargetStatus.Changed, occurrence.Status);
+        Assert.True(preview.AllSectionsTargeted);
         Assert.Equal(0, occurrence.SectionIndex);
         Assert.Equal(1440, occurrence.CurrentTopTwips);
         Assert.Equal(1800, occurrence.CurrentRightTwips);
@@ -179,13 +183,15 @@ public sealed class PageLayoutOperationsTests : IDisposable
     }
 
     [Fact]
-    public async Task Build_MarginsPreviewShowsPerSectionOldToNewAndSkipsUnchangedSections()
+    public async Task Build_MarginsPreviewListsChangedUnchangedAndUnspecifiedSections()
     {
-        // Sprint step 5: preview lists each affected section with its old→new
-        // margins; a section already at the requested margins is unchanged and not
-        // listed (spec 07 §19 "Section 2: unchanged").
-        var package = DocxTestFixtureBuilder.CreateValidDocxPackage(documentXml: TwoSectionFixtureDocument);
-        var path = Path.Combine(_root, "two-sections.docx");
+        // Spec 07 §19 (binding example): the preview must be able to render the
+        // full shape — "Section 1: old→new", "Section 2: unchanged" — so
+        // already-at-target sections are listed as Unchanged (current == new) and
+        // sections without explicit geometry are distinguishable as Unspecified,
+        // never conflated with Unchanged.
+        var package = DocxTestFixtureBuilder.CreateValidDocxPackage(documentXml: PageLayoutStatusFixtureDocument);
+        var path = Path.Combine(_root, "status-margins.docx");
         await File.WriteAllBytesAsync(path, package);
 
         var parameters = new SetMarginsParameters
@@ -195,18 +201,109 @@ public sealed class PageLayoutOperationsTests : IDisposable
             BottomTwips = 2880,
             LeftTwips = 1440
         };
-        var occurrences = await _setMargins.BuildOccurrencesAsync(path, parameters);
+        var preview = await _setMargins.BuildOccurrencesAsync(path, parameters);
 
-        var occurrence = Assert.Single(occurrences);
-        Assert.Equal(0, occurrence.SectionIndex);
-        Assert.Equal("Section 1", occurrence.Context);
-        Assert.Equal(1440, occurrence.CurrentTopTwips);
-        Assert.Equal(1800, occurrence.CurrentRightTwips);
-        Assert.Equal(2880, occurrence.NewTopTwips);
-        Assert.Equal(1440, occurrence.NewLeftTwips);
-        Assert.DoesNotContain(occurrences, o => o.SectionIndex == 1);
+        Assert.Equal(3, preview.Sections.Count);
+
+        var changed = preview.Sections[0];
+        Assert.Equal("Section 1", changed.Context);
+        Assert.Equal(PageLayoutTargetStatus.Changed, changed.Status);
+        Assert.True(changed.Selected);
+        Assert.Equal(1440, changed.CurrentTopTwips);
+        Assert.Equal(1800, changed.CurrentRightTwips);
+        Assert.Equal(1440, changed.CurrentBottomTwips);
+        Assert.Equal(1800, changed.CurrentLeftTwips);
+        Assert.Equal(2880, changed.NewTopTwips);
+        Assert.Equal(1440, changed.NewRightTwips);
+        Assert.Equal(2880, changed.NewBottomTwips);
+        Assert.Equal(1440, changed.NewLeftTwips);
+
+        var unchanged = preview.Sections[1];
+        Assert.Equal("Section 2", unchanged.Context);
+        Assert.Equal(PageLayoutTargetStatus.Unchanged, unchanged.Status);
+        Assert.False(unchanged.Selected);
+        Assert.Equal(2880, unchanged.CurrentTopTwips);
+        Assert.Equal(2880, unchanged.NewTopTwips);
+        Assert.Equal(1440, unchanged.CurrentRightTwips);
+        Assert.Equal(1440, unchanged.NewRightTwips);
+        Assert.Equal(2880, unchanged.CurrentBottomTwips);
+        Assert.Equal(2880, unchanged.NewBottomTwips);
+        Assert.Equal(1440, unchanged.CurrentLeftTwips);
+        Assert.Equal(1440, unchanged.NewLeftTwips);
+
+        var unspecified = preview.Sections[2];
+        Assert.Equal("Section 3", unspecified.Context);
+        Assert.Equal(PageLayoutTargetStatus.Unspecified, unspecified.Status);
+        Assert.False(unspecified.Selected);
+        Assert.Null(unspecified.CurrentTopTwips);
+        Assert.Null(unspecified.CurrentRightTwips);
+        Assert.Null(unspecified.CurrentBottomTwips);
+        Assert.Null(unspecified.CurrentLeftTwips);
+        Assert.Equal(2880, unspecified.NewTopTwips);
+
+        // One section has no explicit margins → the operation does not target all sections.
+        Assert.False(preview.AllSectionsTargeted);
 
         // Preview never mutates the source.
+        Assert.Equal(package, await File.ReadAllBytesAsync(path));
+    }
+
+    [Fact]
+    public async Task Build_PreviewStatesWhenOperationTargetsAllSections()
+    {
+        // Spec 07 §19: "If operation targets all sections, state so."
+        var package = DocxTestFixtureBuilder.CreateValidDocxPackage(documentXml: LayoutFixtureDocument);
+        var path = Path.Combine(_root, "all-sections.docx");
+        await File.WriteAllBytesAsync(path, package);
+
+        var margins = await _setMargins.BuildOccurrencesAsync(
+            path, new SetMarginsParameters { TopTwips = 2880, RightTwips = 1440, BottomTwips = 2880, LeftTwips = 1440 });
+        Assert.True(margins.AllSectionsTargeted);
+
+        var paper = await _setPaperSize.BuildOccurrencesAsync(
+            path, new SetPaperSizeParameters { WidthTwips = PaperSizeTwips.A4Width, HeightTwips = PaperSizeTwips.A4Height });
+        Assert.True(paper.AllSectionsTargeted);
+
+        var orientation = await _setOrientation.BuildOccurrencesAsync(
+            path, new SetOrientationParameters { Orientation = PageOrientationKind.Landscape });
+        Assert.True(orientation.AllSectionsTargeted);
+
+        // A document containing an out-of-scope section (no explicit margins) is
+        // not "all sections".
+        var mixedPath = Path.Combine(_root, "mixed-sections.docx");
+        await File.WriteAllBytesAsync(mixedPath, DocxTestFixtureBuilder.CreateValidDocxPackage(documentXml: PageLayoutStatusFixtureDocument));
+        var mixed = await _setMargins.BuildOccurrencesAsync(
+            mixedPath, new SetMarginsParameters { TopTwips = 2880, RightTwips = 1440, BottomTwips = 2880, LeftTwips = 1440 });
+        Assert.False(mixed.AllSectionsTargeted);
+    }
+
+    [Fact]
+    public async Task Apply_UnchangedEntriesAreNotApplicableAndPreservePackageBytes()
+    {
+        // Unchanged rows are preview-only: selecting only an Unchanged occurrence
+        // must not enter the mutator target list and must not rewrite bytes.
+        var package = DocxTestFixtureBuilder.CreateValidDocxPackage(documentXml: PageLayoutStatusFixtureDocument);
+        var (planId, path) = await SeedAsync("doc", "unchanged-select.docx", package);
+
+        var parameters = new SetMarginsParameters
+        {
+            TopTwips = 2880,
+            RightTwips = 1440,
+            BottomTwips = 2880,
+            LeftTwips = 1440
+        };
+        var preview = await _setMargins.BuildOccurrencesAsync(path, parameters);
+        var unchanged = preview.Sections.Single(s => s.Status == PageLayoutTargetStatus.Unchanged);
+        await SelectAsync(planId, "doc", new[] { unchanged.Id });
+
+        var mutate = _setMargins.CreateMutate(parameters, await CreateTargetsAsync(planId));
+        var result = await _engine.ApplyAsync(planId, mutate);
+
+        var success = Assert.Single(result.Files);
+        Assert.Equal(BatchApplyFileOutcome.Success, success.Outcome);
+
+        // Nothing was applicable: every section (changed, unchanged, unspecified)
+        // keeps its original values and the package bytes are untouched.
         Assert.Equal(package, await File.ReadAllBytesAsync(path));
     }
 
@@ -222,8 +319,10 @@ public sealed class PageLayoutOperationsTests : IDisposable
         var (planId, path) = await SeedAsync("doc", "orientation.docx", package);
 
         var parameters = new SetOrientationParameters { Orientation = PageOrientationKind.Landscape };
-        var occurrences = await _setOrientation.BuildOccurrencesAsync(path, parameters);
-        var occurrence = Assert.Single(occurrences);
+        var preview = await _setOrientation.BuildOccurrencesAsync(path, parameters);
+        var occurrence = Assert.Single(preview.Sections);
+        Assert.Equal(PageLayoutTargetStatus.Changed, occurrence.Status);
+        Assert.True(preview.AllSectionsTargeted);
         Assert.Equal("Section 1", occurrence.Context);
         Assert.Equal("portrait", occurrence.CurrentOrientation);
         Assert.Equal("landscape", occurrence.NewOrientation);
@@ -256,20 +355,33 @@ public sealed class PageLayoutOperationsTests : IDisposable
     }
 
     [Fact]
-    public async Task Build_OrientationAlreadyAtTargetIsNotAffected()
+    public async Task Build_OrientationListsAtTargetSectionAsUnchanged()
     {
-        // Sprint step 3 no-op discipline: a section already in the requested
-        // orientation must not be listed or rewritten; the reverse request lists
-        // it with the exact inverse swap.
+        // A section already in the requested orientation is listed as Unchanged
+        // (current == new, preview-only); the reverse request lists it as Changed
+        // with the exact inverse swap.
         var package = DocxTestFixtureBuilder.CreateValidDocxPackage(documentXml: LandscapeFixtureDocument);
         var path = Path.Combine(_root, "landscape.docx");
         await File.WriteAllBytesAsync(path, package);
 
         var landscapeRequest = new SetOrientationParameters { Orientation = PageOrientationKind.Landscape };
-        Assert.Empty(await _setOrientation.BuildOccurrencesAsync(path, landscapeRequest));
+        var landscapePreview = await _setOrientation.BuildOccurrencesAsync(path, landscapeRequest);
+        var unchanged = Assert.Single(landscapePreview.Sections);
+        Assert.Equal(PageLayoutTargetStatus.Unchanged, unchanged.Status);
+        Assert.False(unchanged.Selected);
+        Assert.Equal("landscape", unchanged.CurrentOrientation);
+        Assert.Equal("landscape", unchanged.NewOrientation);
+        Assert.Equal(15840, unchanged.CurrentWidthTwips);
+        Assert.Equal(15840, unchanged.NewWidthTwips);
+        Assert.Equal(12240, unchanged.CurrentHeightTwips);
+        Assert.Equal(12240, unchanged.NewHeightTwips);
+        Assert.True(landscapePreview.AllSectionsTargeted);
 
         var portraitRequest = new SetOrientationParameters { Orientation = PageOrientationKind.Portrait };
-        var occurrence = Assert.Single(await _setOrientation.BuildOccurrencesAsync(path, portraitRequest));
+        var portraitPreview = await _setOrientation.BuildOccurrencesAsync(path, portraitRequest);
+        var occurrence = Assert.Single(portraitPreview.Sections);
+        Assert.Equal(PageLayoutTargetStatus.Changed, occurrence.Status);
+        Assert.True(occurrence.Selected);
         Assert.Equal("landscape", occurrence.CurrentOrientation);
         Assert.Equal("portrait", occurrence.NewOrientation);
         Assert.Equal(15840, occurrence.CurrentWidthTwips);
@@ -294,8 +406,9 @@ public sealed class PageLayoutOperationsTests : IDisposable
         string sectionsBefore = SectionSignature(package);
 
         var parameters = new SetAlignmentParameters { Alignment = ParagraphAlignmentKind.Center };
-        var occurrences = await _setAlignment.BuildOccurrencesAsync(path, parameters);
-        var occurrence = Assert.Single(occurrences);
+        var preview = await _setAlignment.BuildOccurrencesAsync(path, parameters);
+        var occurrence = Assert.Single(preview.Paragraphs);
+        Assert.Equal(PageLayoutTargetStatus.Changed, occurrence.Status);
         Assert.Equal("Body", occurrence.Origin);
         Assert.Equal("left", occurrence.CurrentAlignment);
         Assert.Equal("center", occurrence.NewAlignment);
@@ -322,48 +435,62 @@ public sealed class PageLayoutOperationsTests : IDisposable
     }
 
     [Fact]
-    public async Task Build_AlignmentPreviewTargetsOnlyDirectJustification()
+    public async Task Build_AlignmentPreviewListsChangedAndUnchangedDirectParagraphs()
     {
-        // Sprint step 4 + 5: only paragraphs with a direct w:jc are targeted; the
-        // preview identifies exactly the affected paragraphs (current→new), skips
-        // style-inherited and already-at-target paragraphs, and reports
-        // body/table/header origins.
+        // Sprint step 4 + 5: only paragraphs with a direct w:jc are listed; the
+        // preview identifies Changed paragraphs (current→new) and already-at-target
+        // paragraphs as Unchanged (current == new, preview-only), and reports
+        // body/table/header origins. Style-inherited paragraphs are outside the
+        // target scope and are not listed (never conflated with Unchanged).
         var package = DocxTestFixtureBuilder.CreateValidDocxPackage(
             documentXml: AlignmentFixtureDocument,
             extraEntries: new[] { ("word/header1.xml", Encoding.UTF8.GetBytes(AlignmentHeaderXml)) });
         var path = Path.Combine(_root, "alignment-preview.docx");
         await File.WriteAllBytesAsync(path, package);
 
-        var occurrences = await _setAlignment.BuildOccurrencesAsync(
+        var preview = await _setAlignment.BuildOccurrencesAsync(
             path, new SetAlignmentParameters { Alignment = ParagraphAlignmentKind.Center });
 
         Assert.Equal(new[]
         {
             "align_word/document.xml_Body_p0",
             "align_word/document.xml_Body_p1",
+            "align_word/document.xml_Body_p3",
             "align_word/document.xml_Table_p4",
             "align_word/header1.xml_Header_p0"
-        }, occurrences.Select(o => o.Id));
-        Assert.Equal(new[] { "Body", "Body", "Table", "Header" }, occurrences.Select(o => o.Origin));
-        Assert.Equal(new[] { "left", "both", "left", "left" }, occurrences.Select(o => o.CurrentAlignment));
-        Assert.All(occurrences, o => Assert.Equal("center", o.NewAlignment));
-        Assert.Contains("Alpha left", occurrences[0].Context);
-        Assert.Contains("Beta justified", occurrences[1].Context);
-        Assert.Contains("Table left", occurrences[2].Context);
-        Assert.Contains("Header left", occurrences[3].Context);
-        // The style-inherited paragraph (p2) and the already-centered paragraph (p3) are not affected.
-        Assert.DoesNotContain(occurrences, o => o.Id.EndsWith("_p2", StringComparison.Ordinal) || o.Id.EndsWith("_p3", StringComparison.Ordinal));
+        }, preview.Paragraphs.Select(o => o.Id));
+        Assert.Equal(new[] { "Body", "Body", "Body", "Table", "Header" }, preview.Paragraphs.Select(o => o.Origin));
+        Assert.Equal(new[] { "left", "both", "center", "left", "left" }, preview.Paragraphs.Select(o => o.CurrentAlignment));
+        Assert.All(preview.Paragraphs, o => Assert.Equal("center", o.NewAlignment));
+        Assert.Equal(new[]
+        {
+            PageLayoutTargetStatus.Changed,
+            PageLayoutTargetStatus.Changed,
+            PageLayoutTargetStatus.Unchanged,
+            PageLayoutTargetStatus.Changed,
+            PageLayoutTargetStatus.Changed
+        }, preview.Paragraphs.Select(o => o.Status));
+        Assert.Equal(new[] { true, true, false, true, true }, preview.Paragraphs.Select(o => o.Selected));
+        Assert.Contains("Alpha left", preview.Paragraphs[0].Context);
+        Assert.Contains("Beta justified", preview.Paragraphs[1].Context);
+        Assert.Contains("Delta already centered", preview.Paragraphs[2].Context);
+        Assert.Contains("Table left", preview.Paragraphs[3].Context);
+        Assert.Contains("Header left", preview.Paragraphs[4].Context);
+        // The style-inherited paragraph (p2) is not in the target scope and not listed.
+        Assert.DoesNotContain(preview.Paragraphs, o => o.Id.EndsWith("_p2", StringComparison.Ordinal));
 
         // Canonical w:jc mapping: Justify is Word's "both" (p1 already justified is
-        // excluded), Right is "right".
-        var justifyOccurrences = await _setAlignment.BuildOccurrencesAsync(
+        // Unchanged), Right is "right".
+        var justifyPreview = await _setAlignment.BuildOccurrencesAsync(
             path, new SetAlignmentParameters { Alignment = ParagraphAlignmentKind.Justify });
-        Assert.All(justifyOccurrences, o => Assert.Equal("both", o.NewAlignment));
-        Assert.DoesNotContain(justifyOccurrences, o => o.Id.EndsWith("_p1", StringComparison.Ordinal));
+        Assert.All(justifyPreview.Paragraphs, o => Assert.Equal("both", o.NewAlignment));
+        var justified = justifyPreview.Paragraphs.Single(o => o.Id.EndsWith("_p1", StringComparison.Ordinal));
+        Assert.Equal(PageLayoutTargetStatus.Unchanged, justified.Status);
+        Assert.False(justified.Selected);
 
-        var rightOccurrences = await _setAlignment.BuildOccurrencesAsync(
+        var rightPreview = await _setAlignment.BuildOccurrencesAsync(
             path, new SetAlignmentParameters { Alignment = ParagraphAlignmentKind.Right });
-        Assert.All(rightOccurrences, o => Assert.Equal("right", o.NewAlignment));
+        Assert.All(rightPreview.Paragraphs, o => Assert.Equal("right", o.NewAlignment));
 
         // Preview never mutates the source.
         Assert.Equal(package, await File.ReadAllBytesAsync(path));
@@ -378,10 +505,10 @@ public sealed class PageLayoutOperationsTests : IDisposable
         var (planId, path) = await SeedAsync("doc", "align-deselect.docx", package);
 
         var parameters = new SetAlignmentParameters { Alignment = ParagraphAlignmentKind.Center };
-        var occurrences = await _setAlignment.BuildOccurrencesAsync(path, parameters);
-        Assert.Equal(2, occurrences.Count);
+        var preview = await _setAlignment.BuildOccurrencesAsync(path, parameters);
+        Assert.Equal(2, preview.Paragraphs.Count);
 
-        await SelectAsync(planId, "doc", new[] { occurrences[1].Id });
+        await SelectAsync(planId, "doc", new[] { preview.Paragraphs[1].Id });
 
         var mutate = _setAlignment.CreateMutate(parameters, await CreateTargetsAsync(planId));
         var result = await _engine.ApplyAsync(planId, mutate);
@@ -398,10 +525,11 @@ public sealed class PageLayoutOperationsTests : IDisposable
     }
 
     [Fact]
-    public async Task Build_PaperSizePreviewShowsPerSectionOldToNewValues()
+    public async Task Build_PaperSizePreviewListsChangedAndUnchangedSections()
     {
-        // Sprint step 5: the A4 preview lists each affected section's old→new
-        // dimensions and skips a section that already has the requested size.
+        // Sprint step 5 + spec 07 §19 shape: the A4 preview lists the changed
+        // section with old→new dimensions and the already-A4 section as Unchanged
+        // (current == new, preview-only).
         var package = DocxTestFixtureBuilder.CreateValidDocxPackage(documentXml: TwoSectionFixtureDocument);
         var path = Path.Combine(_root, "papersize-preview.docx");
         await File.WriteAllBytesAsync(path, package);
@@ -411,16 +539,27 @@ public sealed class PageLayoutOperationsTests : IDisposable
             WidthTwips = PaperSizeTwips.A4Width,
             HeightTwips = PaperSizeTwips.A4Height
         };
-        var occurrences = await _setPaperSize.BuildOccurrencesAsync(path, parameters);
+        var preview = await _setPaperSize.BuildOccurrencesAsync(path, parameters);
 
-        var occurrence = Assert.Single(occurrences);
-        Assert.Equal(0, occurrence.SectionIndex);
-        Assert.Equal("Section 1", occurrence.Context);
-        Assert.Equal(12240, occurrence.CurrentWidthTwips);
-        Assert.Equal(15840, occurrence.CurrentHeightTwips);
-        Assert.Equal(PaperSizeTwips.A4Width, occurrence.NewWidthTwips);
-        Assert.Equal(PaperSizeTwips.A4Height, occurrence.NewHeightTwips);
-        Assert.DoesNotContain(occurrences, o => o.SectionIndex == 1);
+        Assert.Equal(2, preview.Sections.Count);
+        Assert.True(preview.AllSectionsTargeted);
+
+        var changed = preview.Sections[0];
+        Assert.Equal("Section 1", changed.Context);
+        Assert.Equal(PageLayoutTargetStatus.Changed, changed.Status);
+        Assert.True(changed.Selected);
+        Assert.Equal(12240, changed.CurrentWidthTwips);
+        Assert.Equal(15840, changed.CurrentHeightTwips);
+        Assert.Equal(PaperSizeTwips.A4Width, changed.NewWidthTwips);
+        Assert.Equal(PaperSizeTwips.A4Height, changed.NewHeightTwips);
+
+        var unchanged = preview.Sections[1];
+        Assert.Equal(PageLayoutTargetStatus.Unchanged, unchanged.Status);
+        Assert.False(unchanged.Selected);
+        Assert.Equal(PaperSizeTwips.A4Width, unchanged.CurrentWidthTwips);
+        Assert.Equal(PaperSizeTwips.A4Width, unchanged.NewWidthTwips);
+        Assert.Equal(PaperSizeTwips.A4Height, unchanged.CurrentHeightTwips);
+        Assert.Equal(PaperSizeTwips.A4Height, unchanged.NewHeightTwips);
 
         Assert.Equal(package, await File.ReadAllBytesAsync(path));
     }
@@ -451,10 +590,10 @@ public sealed class PageLayoutOperationsTests : IDisposable
             WidthTwips = PaperSizeTwips.A4Width,
             HeightTwips = PaperSizeTwips.A4Height
         };
-        var occurrences = await _setPaperSize.BuildOccurrencesAsync(path, parameters);
-        Assert.Equal(2, occurrences.Count);
+        var preview = await _setPaperSize.BuildOccurrencesAsync(path, parameters);
+        Assert.Equal(2, preview.Sections.Count);
 
-        await SelectAsync(planId, "doc", new[] { occurrences[1].Id });
+        await SelectAsync(planId, "doc", new[] { preview.Sections[1].Id });
 
         var mutate = _setPaperSize.CreateMutate(parameters, await CreateTargetsAsync(planId));
         var result = await _engine.ApplyAsync(planId, mutate);
@@ -652,8 +791,8 @@ public sealed class PageLayoutOperationsTests : IDisposable
             WidthTwips = PaperSizeTwips.A4Width,
             HeightTwips = PaperSizeTwips.A4Height
         };
-        var occurrences = await _setPaperSize.BuildOccurrencesAsync(path, parameters);
-        await SelectAsync(planId, "doc", occurrences.Select(o => o.Id).ToList());
+        var preview = await _setPaperSize.BuildOccurrencesAsync(path, parameters);
+        await SelectAsync(planId, "doc", preview.Sections.Where(s => s.Selected).Select(o => o.Id).ToList());
 
         // The file changes after preview: the reviewed fingerprint no longer matches.
         var modified = DocxTestFixtureBuilder.CreateValidDocxPackage(documentXml:
@@ -686,8 +825,8 @@ public sealed class PageLayoutOperationsTests : IDisposable
             BottomTwips = 2880,
             LeftTwips = 2880
         };
-        var goodOccurrences = await _setMargins.BuildOccurrencesAsync(goodPath, parameters);
-        await SelectAsync(planId, "aaa", goodOccurrences.Select(o => o.Id).ToList());
+        var goodPreview = await _setMargins.BuildOccurrencesAsync(goodPath, parameters);
+        await SelectAsync(planId, "aaa", goodPreview.Sections.Where(s => s.Selected).Select(o => o.Id).ToList());
         // The reviewed plan believed this package contained the section; the
         // mutation failure must surface as a typed per-file outcome, not a silent skip.
         await SelectAsync(planId, "bbb", new[] { "margin_word/document.xml_s0" });
@@ -718,14 +857,25 @@ public sealed class PageLayoutOperationsTests : IDisposable
     public async Task Build_NonDocxFilesHaveNoPageLayoutOccurrences()
     {
         // Page-layout operations target DOCX packages only; other file types are
-        // never touched and preview as unaffected (zero occurrences), not failed.
+        // never touched and preview as unaffected (zero rows), not failed.
         var mdPath = Path.Combine(_root, "notes.md");
         await File.WriteAllBytesAsync(mdPath, Encoding.UTF8.GetBytes("# Notes\n\nSome text."));
 
-        Assert.Empty(await _setMargins.BuildOccurrencesAsync(mdPath, new SetMarginsParameters { TopTwips = 2880, RightTwips = 2880, BottomTwips = 2880, LeftTwips = 2880 }));
-        Assert.Empty(await _setPaperSize.BuildOccurrencesAsync(mdPath, new SetPaperSizeParameters { WidthTwips = PaperSizeTwips.A4Width, HeightTwips = PaperSizeTwips.A4Height }));
-        Assert.Empty(await _setOrientation.BuildOccurrencesAsync(mdPath, new SetOrientationParameters { Orientation = PageOrientationKind.Landscape }));
-        Assert.Empty(await _setAlignment.BuildOccurrencesAsync(mdPath, new SetAlignmentParameters { Alignment = ParagraphAlignmentKind.Center }));
+        var margins = await _setMargins.BuildOccurrencesAsync(mdPath, new SetMarginsParameters { TopTwips = 2880, RightTwips = 2880, BottomTwips = 2880, LeftTwips = 2880 });
+        Assert.Empty(margins.Sections);
+        Assert.False(margins.AllSectionsTargeted);
+
+        var paper = await _setPaperSize.BuildOccurrencesAsync(mdPath, new SetPaperSizeParameters { WidthTwips = PaperSizeTwips.A4Width, HeightTwips = PaperSizeTwips.A4Height });
+        Assert.Empty(paper.Sections);
+        Assert.False(paper.AllSectionsTargeted);
+
+        var orientation = await _setOrientation.BuildOccurrencesAsync(mdPath, new SetOrientationParameters { Orientation = PageOrientationKind.Landscape });
+        Assert.Empty(orientation.Sections);
+        Assert.False(orientation.AllSectionsTargeted);
+
+        var alignment = await _setAlignment.BuildOccurrencesAsync(mdPath, new SetAlignmentParameters { Alignment = ParagraphAlignmentKind.Center });
+        Assert.Empty(alignment.Paragraphs);
+
         Assert.Equal("# Notes\n\nSome text.", await File.ReadAllTextAsync(mdPath));
     }
 
@@ -806,6 +956,27 @@ public sealed class PageLayoutOperationsTests : IDisposable
             <w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:t>First left</w:t></w:r></w:p>
             <w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:t>Second left</w:t></w:r></w:p>
             <w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1800" w:bottom="1440" w:left="1800"/></w:sectPr>
+          </w:body>
+        </w:document>
+        """;
+
+    private const string PageLayoutStatusFixtureDocument = """
+        <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:body>
+            <w:p>
+              <w:pPr>
+                <w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1800" w:bottom="1440" w:left="1800"/></w:sectPr>
+              </w:pPr>
+              <w:r><w:t>Section one</w:t></w:r>
+            </w:p>
+            <w:p>
+              <w:pPr>
+                <w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="2880" w:right="1440" w:bottom="2880" w:left="1440"/></w:sectPr>
+              </w:pPr>
+              <w:r><w:t>Section two</w:t></w:r>
+            </w:p>
+            <w:p><w:r><w:t>Section three</w:t></w:r></w:p>
+            <w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>
           </w:body>
         </w:document>
         """;
