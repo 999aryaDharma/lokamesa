@@ -364,7 +364,18 @@ public class SourceWatcherTests : IDisposable
         File.Delete(docPath);
         mockWatcher.RaiseRawEvent(WatcherChangeTypes.Deleted, docPath, null, source.Id);
 
-        await Task.Delay(500);
+        // Poll for the debounced logical event with a timeout: a fixed sleep races the
+        // debounce timer under parallel test load; settle briefly before asserting.
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            lock (emittedEvents)
+            {
+                if (emittedEvents.Count > 0) break;
+            }
+            await Task.Delay(25);
+        }
+        await Task.Delay(200);
 
         try
         {
