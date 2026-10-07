@@ -180,7 +180,11 @@ it('History usage warning appears at threshold', () => {
   expect(usage).toHaveTextContent('80%');
   const warning = screen.getByTestId('history-storage-warning');
   expect(warning).toHaveTextContent('80% warning threshold');
-  expect(warning).toHaveTextContent('never evicted silently');
+  // Honest copy: retention is stated, automatic cleanup is not (no production caller wires it) and no silent eviction.
+  expect(warning).toHaveTextContent('History is retained for 30 days');
+  expect(warning).toHaveTextContent('expired snapshots are not cleaned up automatically yet');
+  expect(warning).toHaveTextContent('unexpired snapshots are never evicted silently');
+  expect(warning).not.toHaveTextContent(/are cleaned up automatically/i);
 });
 
 it('does not warn below the storage threshold', () => {

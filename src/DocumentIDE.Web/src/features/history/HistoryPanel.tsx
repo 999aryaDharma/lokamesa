@@ -137,8 +137,10 @@ export function HistoryPanel({ entries, storageUsage, documentName, onInspect, o
       History storage: {formatGiB(storageUsage.usedBytes)} of {formatGiB(storageUsage.capacityBytes)} ({Math.round(usageRatio * 100)}%)
     </p>
     {storageUsage.capacityBytes > 0 && <progress aria-label="History storage usage" value={storageUsage.usedBytes} max={storageUsage.capacityBytes} />}
+    {/* Retention is spec 00 §25 / spec 07 §23. The copy must not claim an automatic cleanup
+        sweep: HistoryStorage.CleanupExpiredAsync has no production caller yet. Wording pinned by test. */}
     {usageRatio >= HISTORY_WARNING_RATIO && <p role="alert" data-testid="history-storage-warning">
-      History storage is at or above the {Math.round(HISTORY_WARNING_RATIO * 100)}% warning threshold. Expired snapshots are cleaned up automatically; unexpired snapshots are never evicted silently.
+      History storage is at or above the {Math.round(HISTORY_WARNING_RATIO * 100)}% warning threshold. History is retained for 30 days; expired snapshots are not cleaned up automatically yet, and unexpired snapshots are never evicted silently.
     </p>}
     {entries.length === 0
       ? <p>No operations recorded yet.</p>
