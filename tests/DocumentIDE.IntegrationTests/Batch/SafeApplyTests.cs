@@ -323,8 +323,11 @@ public sealed class SafeApplyTests : IDisposable
         Assert.Equal(BatchApplyResultStatus.Canceled, result.Status);
         Assert.Equal(BatchPlanStatus.Failed, (await _plans.GetByIdAsync(planId))!.Status);
 
-        var fileLocks = (IDictionary<string, SemaphoreSlim>)typeof(BatchApplyEngine)
-            .GetField("_fileLocks", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+        // The engine no longer owns the dictionary: apply and undo share the
+        // process-wide registry, so eviction is asserted there.
+        var registryType = typeof(DocumentIdeCoreMarker).Assembly.GetType("DocumentIDE.Core.Filesystem.FileOperationLocks")!;
+        var fileLocks = (IDictionary<string, SemaphoreSlim>)registryType
+            .GetField("FileLocks", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
             .GetValue(null)!;
         Assert.False(fileLocks.ContainsKey(firstPath), "doc1's lock entry must be evicted after release.");
         Assert.False(fileLocks.ContainsKey(secondPath), "doc2's lock entry must be evicted after release.");

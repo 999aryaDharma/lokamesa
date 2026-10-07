@@ -110,8 +110,20 @@ public class SourceWatcherTests : IDisposable
         // 7. Final change event on main file
         mockWatcher.RaiseRawEvent(WatcherChangeTypes.Changed, docPath, null, source.Id);
 
-        // Wait for debounce window (50ms + margin)
-        await Task.Delay(250);
+        // Wait for the debounced logical event with a generous timeout: a fixed sleep
+        // races the 50 ms debounce timer under parallel test load (HIST-02 review), so
+        // poll for the event and then let the debounce window settle before asserting
+        // that the burst coalesced into exactly one modification.
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            lock (emittedEvents)
+            {
+                if (emittedEvents.Count > 0) break;
+            }
+            await Task.Delay(25);
+        }
+        await Task.Delay(200);
 
         try
         {

@@ -277,6 +277,45 @@ namespace DocumentIDE.IntegrationTests.History
         }
 
         [Fact]
+        public async Task Undo_SnapshotWithoutFileRecordsThrows()
+        {
+            // e.g. a legacy HIST-01 metadata payload that deserializes with no per-file records:
+            // nothing can be compared or restored, so a false "undone" status is unacceptable.
+            await _storage.SaveMetadataAsync(new SnapshotMetadata
+            {
+                SnapshotId = "legacy-snapshot",
+                OperationId = "legacy-op",
+                CreatedUtc = DateTime.UtcNow.AddMinutes(-1),
+                ExpiryUtc = DateTime.UtcNow.AddDays(1),
+                Files = new List<SnapshotFileRecord>()
+            });
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() => CreateUndoService().UndoAsync("legacy-op"));
+            Assert.Empty(_undoRecorder.Records);
+        }
+
+        [Fact]
+        public async Task Undo_TamperedSnapshotFileNameIsRejected()
+        {
+            var original = Encoding.UTF8.GetBytes("target content");
+            var (planId, path) = await SeedAsync("doc", "notes.md", original);
+            await ApplyReplaceAsync(planId);
+            _reindex.DocumentIds.Clear();
+            var applied = await File.ReadAllBytesAsync(path);
+
+            var metadata = Assert.Single(await _storage.GetAllMetadataAsync());
+            metadata.Files.Single().SnapshotFileName = "../outside.md";
+
+            var result = await CreateUndoService().UndoAsync(planId);
+
+            Assert.Equal(UndoResultStatus.Blocked, result.Status);
+            var file = Assert.Single(result.Files);
+            Assert.Equal(UndoFileOutcome.Failure, file.Outcome);
+            Assert.Equal("SnapshotMissing", file.ReasonCode);
+            Assert.Equal(applied, await File.ReadAllBytesAsync(path));
+        }
+
+        [Fact]
         public async Task Undo_UnknownDocumentFailsClosed()
         {
             var original = Encoding.UTF8.GetBytes("target content");
@@ -294,6 +333,49 @@ namespace DocumentIDE.IntegrationTests.History
             Assert.Equal(UndoFileOutcome.Failure, file.Outcome);
             Assert.Equal("UnknownDocument", file.ReasonCode);
             Assert.Equal(applied, await File.ReadAllBytesAsync(path));
+        }
+
+        [Fact]
+        public async Task Undo_FileOpenInWordIsSkippedSafely()
+        {
+            var original = Encoding.UTF8.GetBytes("target content");
+            var (planId, path) = await SeedAsync("doc", "notes.md", original);
+            await ApplyReplaceAsync(planId);
+            _reindex.DocumentIds.Clear();
+            var applied = await File.ReadAllBytesAsync(path);
+
+            var undo = new UndoService(_storage, _documents, new AtomicFileReplacer(), new FakeEditProbe(ExternalEditState.Locked), _reindex, _undoRecorder);
+
+            var result = await undo.UndoAsync(planId);
+
+            Assert.Equal(UndoResultStatus.Blocked, result.Status);
+            var file = Assert.Single(result.Files);
+            Assert.Equal(UndoFileOutcome.Skipped, file.Outcome);
+            Assert.Equal("OpenInWord", file.ReasonCode);
+            Assert.Equal(applied, await File.ReadAllBytesAsync(path));
+            Assert.Empty(_reindex.DocumentIds);
+            Assert.Empty(_undoRecorder.Records);
+        }
+
+        [Fact]
+        public async Task Undo_UnknownExternalEditStateSkipsSafely()
+        {
+            var original = Encoding.UTF8.GetBytes("target content");
+            var (planId, path) = await SeedAsync("doc", "notes.md", original);
+            await ApplyReplaceAsync(planId);
+            _reindex.DocumentIds.Clear();
+            var applied = await File.ReadAllBytesAsync(path);
+
+            var undo = new UndoService(_storage, _documents, new AtomicFileReplacer(), new FakeEditProbe(ExternalEditState.Unknown), _reindex, _undoRecorder);
+
+            var result = await undo.UndoAsync(planId);
+
+            Assert.Equal(UndoResultStatus.Blocked, result.Status);
+            var file = Assert.Single(result.Files);
+            Assert.Equal(UndoFileOutcome.Skipped, file.Outcome);
+            Assert.Equal("LockUnknown", file.ReasonCode);
+            Assert.Equal(applied, await File.ReadAllBytesAsync(path));
+            Assert.Empty(_undoRecorder.Records);
         }
 
         [Fact]
@@ -330,7 +412,7 @@ namespace DocumentIDE.IntegrationTests.History
 
             // The external edit lands after the fingerprint check but before the commit.
             var newer = Encoding.UTF8.GetBytes("edit during restore");
-            var undo = new UndoService(_storage, _documents, new RacingReplacer(path, newer), _reindex, _undoRecorder);
+            var undo = new UndoService(_storage, _documents, new RacingReplacer(path, newer), new WordEditStateProbe(), _reindex, _undoRecorder);
 
             var result = await undo.UndoAsync(planId);
 
@@ -371,7 +453,7 @@ namespace DocumentIDE.IntegrationTests.History
             var appliedTwo = await File.ReadAllBytesAsync(twoPath);
 
             using var cts = new CancellationTokenSource();
-            var undo = new UndoService(_storage, _documents, new CancelOnPrepareReplacer(cts), _reindex, _undoRecorder);
+            var undo = new UndoService(_storage, _documents, new CancelOnPrepareReplacer(cts), new WordEditStateProbe(), _reindex, _undoRecorder);
 
             var result = await undo.UndoAsync(planId, cts.Token);
 
@@ -384,6 +466,83 @@ namespace DocumentIDE.IntegrationTests.History
             AssertNoApplyTempFiles();
             Assert.Empty(_reindex.DocumentIds);
             Assert.Empty(_undoRecorder.Records);
+        }
+
+        [Fact]
+        public async Task Undo_ReindexFailureAfterRestoreIsReportedTyped()
+        {
+            var original = Encoding.UTF8.GetBytes("target content");
+            var (planId, path) = await SeedAsync("doc", "notes.md", original);
+            await ApplyReplaceAsync(planId);
+            _reindex.DocumentIds.Clear();
+
+            var undo = new UndoService(_storage, _documents, new AtomicFileReplacer(), new WordEditStateProbe(), new FailingReindexTrigger(), _undoRecorder);
+
+            var result = await undo.UndoAsync(planId);
+
+            // The file is restored; the reindex hiccup is a typed warning, not a fake failure,
+            // and the operation must still be recorded as undone.
+            Assert.Equal(UndoResultStatus.Completed, result.Status);
+            var file = Assert.Single(result.Files);
+            Assert.Equal(UndoFileOutcome.Restored, file.Outcome);
+            Assert.Equal("ReindexFailed", file.ReasonCode);
+            Assert.Equal(original, await File.ReadAllBytesAsync(path));
+            Assert.Single(_undoRecorder.Records);
+        }
+
+        [Fact]
+        public async Task Apply_FingerprintRecordingFailureLeavesOriginalUnchanged()
+        {
+            var original = Encoding.UTF8.GetBytes("target content");
+            var (planId, path) = await SeedAsync("doc", "notes.md", original);
+
+            // The snapshot store fails to persist the post-operation fingerprint update.
+            var failingStorage = new FailOnSecondSaveHistoryStorage(_storage);
+            var engine = new BatchApplyEngine(
+                _plans, _documents, new RecoverySnapshotService(failingStorage),
+                new WordEditStateProbe(), new AtomicFileReplacer(), _recorder, _reindex);
+
+            async Task ReplaceTarget(string tempPath, CancellationToken token)
+            {
+                var text = await File.ReadAllTextAsync(tempPath, token);
+                await File.WriteAllTextAsync(tempPath, text.Replace("target", "replaced"), token);
+            }
+
+            var result = await engine.ApplyAsync(planId, ReplaceTarget);
+
+            // Without undo data the mutation must fail closed: reported as failed and
+            // the original file must be byte-identical (no commit happened).
+            var failure = Assert.Single(result.Files);
+            Assert.Equal(BatchApplyFileOutcome.Failure, failure.Outcome);
+            Assert.Equal("MutationFailed", failure.ReasonCode);
+            Assert.Equal(original, await File.ReadAllBytesAsync(path));
+            AssertNoApplyTempFiles();
+        }
+
+        [Fact]
+        public async Task Undo_AfterFingerprintRecordingFailureRestoresNothing()
+        {
+            var original = Encoding.UTF8.GetBytes("target content");
+            var (planId, path) = await SeedAsync("doc", "notes.md", original);
+            var failingStorage = new FailOnSecondSaveHistoryStorage(_storage);
+            var engine = new BatchApplyEngine(
+                _plans, _documents, new RecoverySnapshotService(failingStorage),
+                new WordEditStateProbe(), new AtomicFileReplacer(), _recorder, _reindex);
+
+            async Task ReplaceTarget(string tempPath, CancellationToken token)
+            {
+                var text = await File.ReadAllTextAsync(tempPath, token);
+                await File.WriteAllTextAsync(tempPath, text.Replace("target", "replaced"), token);
+            }
+            await engine.ApplyAsync(planId, ReplaceTarget);
+
+            var result = await CreateUndoService().UndoAsync(planId);
+
+            // The file still holds its original bytes because the apply failed closed;
+            // undo must not "restore" or overwrite anything.
+            Assert.Equal(UndoResultStatus.Completed, result.Status);
+            Assert.Equal(UndoFileOutcome.AlreadyRestored, Assert.Single(result.Files).Outcome);
+            Assert.Equal(original, await File.ReadAllBytesAsync(path));
         }
 
         private void AssertNoApplyTempFiles() =>
@@ -405,8 +564,49 @@ namespace DocumentIDE.IntegrationTests.History
                 Assert.Equal(BatchApplyFileOutcome.Success, file.Outcome);
         }
 
+        [Fact]
+        public async Task Undo_WaitsForSharedPerFileProcessLock()
+        {
+            var original = Encoding.UTF8.GetBytes("target content");
+            var (planId, path) = await SeedAsync("doc", "notes.md", original);
+            await ApplyReplaceAsync(planId);
+            _reindex.DocumentIds.Clear();
+
+            // Hold the process-wide per-file lock that batch apply and undo share, as a
+            // concurrent apply/undo targeting the same file would. Undo must wait for it
+            // instead of interleaving its check→replace with the other operation.
+            var sharedLock = AcquireSharedFileLock(path);
+            await sharedLock.WaitAsync();
+            try
+            {
+                var undoTask = CreateUndoService().UndoAsync(planId);
+                await Task.Delay(250);
+                Assert.False(undoTask.IsCompleted, "undo must wait for the shared per-file lock");
+
+                sharedLock.Release();
+                var result = await undoTask;
+                Assert.Equal(UndoResultStatus.Completed, result.Status);
+                Assert.Equal(UndoFileOutcome.Restored, Assert.Single(result.Files).Outcome);
+                Assert.Equal(original, await File.ReadAllBytesAsync(path));
+            }
+            finally
+            {
+                if (sharedLock.CurrentCount == 0)
+                    sharedLock.Release();
+            }
+        }
+
+        private static System.Threading.SemaphoreSlim AcquireSharedFileLock(string path)
+        {
+            var registryType = typeof(DocumentIDE.Core.DocumentIdeCoreMarker).Assembly
+                .GetType("DocumentIDE.Core.Filesystem.FileOperationLocks")
+                ?? throw new InvalidOperationException("Shared per-file lock registry is missing.");
+            var getOrAdd = registryType.GetMethod("GetOrAdd", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)!;
+            return (System.Threading.SemaphoreSlim)getOrAdd.Invoke(null, new object[] { path })!;
+        }
+
         private UndoService CreateUndoService() =>
-            new(_storage, _documents, new AtomicFileReplacer(), _reindex, _undoRecorder);
+            new(_storage, _documents, new AtomicFileReplacer(), new WordEditStateProbe(), _reindex, _undoRecorder);
 
         private static string Sha256Hex(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
 
@@ -510,6 +710,40 @@ namespace DocumentIDE.IntegrationTests.History
 
             public Task RollbackAsync(PreparedFileReplacement replacement, CancellationToken cancellationToken = default) =>
                 _inner.RollbackAsync(replacement, cancellationToken);
+        }
+
+        private sealed class FakeEditProbe(ExternalEditState state) : IExternalEditStateProbe
+        {
+            public Task<ExternalEditState> ProbeAsync(string filePath, CancellationToken cancellationToken = default) =>
+                Task.FromResult(state);
+        }
+
+        private sealed class FailingReindexTrigger : IBatchApplyReindexTrigger
+        {
+            public Task TriggerAsync(string documentId, CancellationToken cancellationToken = default) =>
+                throw new InvalidOperationException("reindex unavailable");
+        }
+
+        private sealed class FailOnSecondSaveHistoryStorage : IHistoryStorage
+        {
+            private readonly FakeHistoryStorage _inner;
+            private int _saves;
+
+            public FailOnSecondSaveHistoryStorage(FakeHistoryStorage inner) => _inner = inner;
+
+            public string GetSnapshotRootPath(string snapshotId) => _inner.GetSnapshotRootPath(snapshotId);
+
+            public Task SaveMetadataAsync(SnapshotMetadata metadata)
+            {
+                if (++_saves == 2)
+                    throw new IOException("snapshot store unavailable");
+                return _inner.SaveMetadataAsync(metadata);
+            }
+
+            public Task<IReadOnlyCollection<SnapshotMetadata>> GetAllMetadataAsync() => _inner.GetAllMetadataAsync();
+            public Task DeleteSnapshotAsync(string snapshotId) => _inner.DeleteSnapshotAsync(snapshotId);
+            public Task<long> GetTotalSizeAsync() => _inner.GetTotalSizeAsync();
+            public Task<long> GetCapacityBytesAsync() => _inner.GetCapacityBytesAsync();
         }
 
         private sealed class FakeHistoryStorage : IHistoryStorage

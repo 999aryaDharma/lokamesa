@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -8,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DocumentIDE.Core.Batch;
 using DocumentIDE.Core.Domain.Repositories;
+using DocumentIDE.Core.Filesystem;
 
 namespace DocumentIDE.Core.History;
 
@@ -54,18 +54,16 @@ public sealed class UndoService
     private readonly IHistoryStorage _storage;
     private readonly IDocumentRepository _documents;
     private readonly IAtomicFileReplacer _replacer;
+    private readonly IExternalEditStateProbe _externalEditProbe;
     private readonly IBatchApplyReindexTrigger _reindex;
     private readonly IUndoHistoryRecorder _history;
     private readonly IDateTimeProvider _clock;
-
-    // Process-wide per-file lock, mirroring the apply engine's serialization so two
-    // concurrent undos of the same target cannot interleave their compare/restore.
-    private static readonly ConcurrentDictionary<string, SemaphoreSlim> _fileLocks = new(StringComparer.OrdinalIgnoreCase);
 
     public UndoService(
         IHistoryStorage storage,
         IDocumentRepository documents,
         IAtomicFileReplacer replacer,
+        IExternalEditStateProbe externalEditProbe,
         IBatchApplyReindexTrigger reindexTrigger,
         IUndoHistoryRecorder historyRecorder,
         IDateTimeProvider? clock = null)
@@ -73,6 +71,7 @@ public sealed class UndoService
         _storage = storage ?? throw new ArgumentNullException(nameof(storage));
         _documents = documents ?? throw new ArgumentNullException(nameof(documents));
         _replacer = replacer ?? throw new ArgumentNullException(nameof(replacer));
+        _externalEditProbe = externalEditProbe ?? throw new ArgumentNullException(nameof(externalEditProbe));
         _reindex = reindexTrigger ?? throw new ArgumentNullException(nameof(reindexTrigger));
         _history = historyRecorder ?? throw new ArgumentNullException(nameof(historyRecorder));
         _clock = clock ?? new SystemDateTimeProvider();
@@ -89,6 +88,11 @@ public sealed class UndoService
             .OrderByDescending(m => m.CreatedUtc)
             .FirstOrDefault()
             ?? throw new InvalidOperationException($"Unknown operation '{operationId}': no recovery snapshot exists.");
+
+        // A snapshot with no per-file records cannot be compared or restored; refusing
+        // here also prevents recording a false "undone" status for such metadata.
+        if (metadata.Files.Count == 0)
+            throw new InvalidOperationException($"Snapshot for operation '{operationId}' has no file records; nothing can be verified or restored.");
 
         // Retention is 30 days: an expired snapshot is not a valid restore source.
         // Refuse before touching any file and report per-file typed outcomes.
@@ -179,7 +183,10 @@ public sealed class UndoService
             return Failure(record, document.CurrentPath, "InvalidPath", ex.Message);
         }
 
-        var fileLock = _fileLocks.GetOrAdd(path, _ => new SemaphoreSlim(1, 1));
+        // The process-wide per-file lock is shared with the batch apply engine, so an
+        // apply and an undo targeting the same file can never interleave their
+        // check→commit sequences.
+        var fileLock = FileOperationLocks.GetOrAdd(path);
         await fileLock.WaitAsync(cancellationToken);
         try
         {
@@ -188,7 +195,7 @@ public sealed class UndoService
         finally
         {
             fileLock.Release();
-            EvictIfIdle(path, fileLock);
+            FileOperationLocks.EvictIfIdle(path, fileLock);
         }
     }
 
@@ -217,7 +224,26 @@ public sealed class UndoService
         }
 
         if (FingerprintEquals(current, postOperation))
+        {
+            // Mirror the apply engine's external-editor check: writing to a file that
+            // may be open in Word (or whose lock state is unknowable) fails safe.
+            ExternalEditState state;
+            try
+            {
+                state = await _externalEditProbe.ProbeAsync(path, cancellationToken);
+            }
+            catch
+            {
+                state = ExternalEditState.Unknown;
+            }
+
+            if (state == ExternalEditState.Locked)
+                return Skipped(record, path, "OpenInWord", "Document appears to be open in an external editor.");
+            if (state == ExternalEditState.Unknown)
+                return Skipped(record, path, "LockUnknown", "External editing state could not be determined; file skipped safely.");
+
             return await RestoreAsync(snapshotId, record, path, cancellationToken);
+        }
 
         if (FingerprintEquals(current, record.OriginalFingerprint))
             return AlreadyRestored(record, path);
@@ -258,8 +284,6 @@ public sealed class UndoService
             }
 
             await _replacer.CommitAsync(prepared, CancellationToken.None);
-            await TriggerReindexAsync(record.DocumentId);
-            return new UndoFileResult(record.DocumentId, path, UndoFileOutcome.Restored, null, null);
         }
         catch (OperationCanceledException)
         {
@@ -273,6 +297,19 @@ public sealed class UndoService
                 await _replacer.RollbackAsync(prepared, CancellationToken.None);
             return Failure(record, path, "RestoreFailed", ex.Message);
         }
+
+        // The file is restored at this point. A reindex-trigger failure must not be
+        // reported as a restore failure and must not stop the undone-status record:
+        // it is surfaced as a typed warning on the Restored outcome.
+        try
+        {
+            await _reindex.TriggerAsync(record.DocumentId, CancellationToken.None);
+            return new UndoFileResult(record.DocumentId, path, UndoFileOutcome.Restored, null, null);
+        }
+        catch (Exception ex)
+        {
+            return new UndoFileResult(record.DocumentId, path, UndoFileOutcome.Restored, "ReindexFailed", ex.Message);
+        }
     }
 
     private async Task RecordStatusAsync(string operationId, UndoResultStatus status)
@@ -284,18 +321,6 @@ public sealed class UndoService
         catch (Exception ex)
         {
             throw new InvalidOperationException($"Undo status recording failed for operation '{operationId}'.", ex);
-        }
-    }
-
-    private async Task TriggerReindexAsync(string documentId)
-    {
-        try
-        {
-            await _reindex.TriggerAsync(documentId, CancellationToken.None);
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException($"Reindex trigger failed for document '{documentId}'.", ex);
         }
     }
 
@@ -322,20 +347,14 @@ public sealed class UndoService
         return Convert.ToHexString(SHA256.HashData(bytes));
     }
 
-    private static void EvictIfIdle(string path, SemaphoreSlim fileLock)
-    {
-        // Same race-tolerant eviction as the apply engine: removal is conditional on
-        // identity, and content safety rests on fingerprint checks + atomic replace.
-        if (fileLock.CurrentCount == 1)
-            ((ICollection<KeyValuePair<string, SemaphoreSlim>>)_fileLocks)
-                .Remove(new KeyValuePair<string, SemaphoreSlim>(path, fileLock));
-    }
-
     private static UndoFileResult Failure(SnapshotFileRecord record, string path, string reasonCode, string? detail) =>
         new(record.DocumentId, path, UndoFileOutcome.Failure, reasonCode, detail);
 
     private static UndoFileResult Conflict(SnapshotFileRecord record, string path, string reasonCode, string? detail) =>
         new(record.DocumentId, path, UndoFileOutcome.Conflict, reasonCode, detail);
+
+    private static UndoFileResult Skipped(SnapshotFileRecord record, string path, string reasonCode, string? detail) =>
+        new(record.DocumentId, path, UndoFileOutcome.Skipped, reasonCode, detail);
 
     private static UndoFileResult AlreadyRestored(SnapshotFileRecord record, string path) =>
         new(record.DocumentId, path, UndoFileOutcome.AlreadyRestored, null, null);

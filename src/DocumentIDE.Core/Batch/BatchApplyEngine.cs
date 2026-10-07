@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -8,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DocumentIDE.Core.Domain;
 using DocumentIDE.Core.Domain.Repositories;
+using DocumentIDE.Core.Filesystem;
 using DocumentIDE.Core.History;
 
 namespace DocumentIDE.Core.Batch;
@@ -107,9 +107,6 @@ public sealed class BatchApplyEngine
     private readonly IAtomicFileReplacer _replacer;
     private readonly IBatchApplyHistoryRecorder _history;
     private readonly IBatchApplyReindexTrigger _reindex;
-
-    // Step 1: process-wide document-level application lock, serializing applies per file.
-    private static readonly ConcurrentDictionary<string, SemaphoreSlim> _fileLocks = new(StringComparer.OrdinalIgnoreCase);
 
     public BatchApplyEngine(
         IBatchPlanRepository plans,
@@ -217,8 +214,11 @@ public sealed class BatchApplyEngine
                 try
                 {
                     prepared = await _replacer.PrepareAsync(entry.Path, mutate, validate, cancellationToken);
+                    // Record the post-operation fingerprint from the fully-prepared temp
+                    // file BEFORE the atomic commit: either the mutation commits with
+                    // verifiable undo data, or it fails closed with the original untouched.
+                    await RecordPostOperationFingerprintAsync(snapshotMetadata, entry.File.DocumentId, prepared.TempPath);
                     await _replacer.CommitAsync(prepared, cancellationToken);
-                    await RecordPostOperationFingerprintAsync(snapshotMetadata, entry.File.DocumentId, entry.Path);
                     var success = new BatchApplyFileResult(entry.File.DocumentId, entry.Path, BatchApplyFileOutcome.Success, null, null);
                     await RecordOutcomeAsync(plan, success, snapshotId, CancellationToken.None);
                     await TriggerReindexAsync(entry.File.DocumentId, cancellationToken);
@@ -285,7 +285,7 @@ public sealed class BatchApplyEngine
             foreach (var held in heldLocks)
             {
                 held.Lock.Release();
-                EvictIfIdle(held.Path, held.Lock);
+                FileOperationLocks.EvictIfIdle(held.Path, held.Lock);
             }
         }
 
@@ -323,8 +323,9 @@ public sealed class BatchApplyEngine
         if (string.IsNullOrEmpty(file.ExpectedFingerprint))
             return Skipped(file.DocumentId, path, "Unavailable", "Plan file has no preview fingerprint; skipped.");
 
-        // Step 1: document-level application lock for this file.
-        var fileLock = _fileLocks.GetOrAdd(path, _ => new SemaphoreSlim(1, 1));
+        // Step 1: process-wide document-level application lock shared with the undo
+        // service (Core.Filesystem.FileOperationLocks), serializing per file.
+        var fileLock = FileOperationLocks.GetOrAdd(path);
         await fileLock.WaitAsync(cancellationToken);
         heldLocks.Add(new HeldLock(fileLock, path));
 
@@ -377,21 +378,7 @@ public sealed class BatchApplyEngine
     {
         fileLock.Release();
         heldLocks.RemoveAll(h => h.Lock == fileLock);
-        EvictIfIdle(path, fileLock);
-    }
-
-    private static void EvictIfIdle(string path, SemaphoreSlim fileLock)
-    {
-        // Evict the entry once this exact semaphore is fully released (count back to
-        // 1, no waiter), so the process-wide dictionary cannot grow unbounded across
-        // a session. Removal is conditional on identity, so a semaphore a concurrent
-        // apply already replaced is never evicted. The check is inherently racy: an
-        // apply arriving right after eviction gets a fresh semaphore; content safety
-        // remains guaranteed independently by the fingerprint stale-check and the
-        // atomic replace.
-        if (fileLock.CurrentCount == 1)
-            ((ICollection<KeyValuePair<string, SemaphoreSlim>>)_fileLocks)
-                .Remove(new KeyValuePair<string, SemaphoreSlim>(path, fileLock));
+        FileOperationLocks.EvictIfIdle(path, fileLock);
     }
 
     private async Task RecordOutcomeAsync(BatchOperationPlan plan, BatchApplyFileResult fileResult, string? snapshotId, CancellationToken cancellationToken)
@@ -415,21 +402,26 @@ public sealed class BatchApplyEngine
         }
     }
 
-    private async Task RecordPostOperationFingerprintAsync(SnapshotMetadata? snapshot, string documentId, string filePath)
+    private async Task RecordPostOperationFingerprintAsync(SnapshotMetadata? snapshot, string documentId, string preparedTempPath)
     {
         if (snapshot == null) return;
         try
         {
-            // Post-commit bookkeeping uses CancellationToken.None on purpose: the file is
-            // already consistently committed, so a token cancel must not misreport it.
-            var bytes = await ReadBoundedAsync(filePath, CancellationToken.None);
-            await _snapshots.RecordPostOperationFingerprintAsync(
-                snapshot, documentId, Convert.ToHexString(SHA256.HashData(bytes)));
+            // The temp file holds exactly the content the atomic commit will install, so
+            // hashing it yields the post-operation fingerprint. Streaming keeps large
+            // documents off the heap, and SHA-256 over the same bytes matches the
+            // bounded-read fingerprints used by preview/apply/undo. CancellationToken.None
+            // is deliberate: this runs before the commit, so a later token cancel must
+            // not leave metadata half-recorded for a mutation that then rolls back safely.
+            using var stream = new FileStream(preparedTempPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
+            var hash = await SHA256.HashDataAsync(stream, CancellationToken.None);
+            await _snapshots.RecordPostOperationFingerprintAsync(snapshot, documentId, Convert.ToHexString(hash));
         }
         catch (Exception ex)
         {
-            // Without the post-operation fingerprint a later undo cannot verify this file,
-            // so the failure is surfaced typed instead of silently claiming a safe apply.
+            // Without the post-operation fingerprint a later undo could not verify this
+            // file, so the failure fails the mutation closed instead of committing
+            // content that may never be undoable.
             throw new InvalidOperationException($"Post-operation fingerprint recording failed for document '{documentId}'.", ex);
         }
     }
