@@ -446,6 +446,44 @@ public sealed class CrashRecoveryTests : IDisposable
         Assert.Equal(original, await File.ReadAllBytesAsync(snapshotCopy));
     }
 
+    [Fact]
+    public async Task PlanRepairFailure_IsReportedTyped_WithoutAbortingRecovery()
+    {
+        var bytes = Encoding.UTF8.GetBytes("repair failure must be visible");
+        var (planId, path) = await SeedPlanAsync("doc-repair-fail", "repair.md", bytes, BatchPlanStatus.Executing);
+        var service = new StartupRecoveryService(_workspaces, _folderSources, new UpdateFailingPlanRepository(_plans, planId));
+
+        var report = await service.RecoverAsync();
+
+        // A repair that could not be persisted is surfaced, never silently swallowed.
+        var repair = Assert.Single(report.InterruptedPlans);
+        Assert.Equal(planId, repair.PlanId);
+        Assert.Equal(InterruptedPlanRepairOutcome.RepairFailed, repair.Outcome);
+        Assert.False(string.IsNullOrWhiteSpace(repair.Detail));
+        Assert.False(report.IsClean);
+        Assert.Equal(BatchPlanStatus.Executing, (await _plans.GetByIdAsync(planId))!.Status);
+        Assert.Equal(bytes, await File.ReadAllBytesAsync(path));
+    }
+
+    [Fact]
+    public async Task Recovery_WithUnavailableSourceDirectory_SkipsCleanupWithoutFailure()
+    {
+        // e.g. an unplugged drive: the source stays configured but is not on disk.
+        await _folderSources.CreateAsync(new FolderSource
+        {
+            Id = "src-missing",
+            WorkspaceId = WorkspaceId,
+            CanonicalPath = Path.Combine(_root, "gone"),
+            DisplayName = "unavailable source"
+        });
+
+        var report = await NewStartupRecovery().RecoverAsync();
+
+        Assert.True(report.IsClean);
+        Assert.Empty(report.OrphanTempFiles);
+        Assert.Empty(report.InterruptedPlans);
+    }
+
     private StartupRecoveryService NewStartupRecovery() => new(_workspaces, _folderSources, _plans);
 
     private UndoService NewUndoService() => new(
@@ -493,6 +531,36 @@ public sealed class CrashRecoveryTests : IDisposable
         };
         await _plans.SavePlanAsync(plan);
         return (plan.Id, path);
+    }
+
+    /// <summary>Fault injection: one plan's status update fails, everything else delegates to the real repository.</summary>
+    private sealed class UpdateFailingPlanRepository : DocumentIDE.Core.Domain.Repositories.IBatchPlanRepository
+    {
+        private readonly DocumentIDE.Core.Domain.Repositories.IBatchPlanRepository _inner;
+        private readonly string _failingPlanId;
+
+        public UpdateFailingPlanRepository(DocumentIDE.Core.Domain.Repositories.IBatchPlanRepository inner, string failingPlanId)
+        {
+            _inner = inner;
+            _failingPlanId = failingPlanId;
+        }
+
+        public Task SavePlanAsync(BatchOperationPlan plan) => _inner.SavePlanAsync(plan);
+
+        public Task<BatchOperationPlan?> GetByIdAsync(string id) => _inner.GetByIdAsync(id);
+
+        public Task<BatchOperationPlan?> GetByIdempotencyKeyAsync(string workspaceId, string idempotencyKey) =>
+            _inner.GetByIdempotencyKeyAsync(workspaceId, idempotencyKey);
+
+        public Task<IReadOnlyList<BatchOperationPlan>> GetByWorkspaceAsync(string workspaceId) =>
+            _inner.GetByWorkspaceAsync(workspaceId);
+
+        public Task UpdateStatusAsync(string planId, BatchPlanStatus newStatus) =>
+            planId == _failingPlanId
+                ? throw new InvalidOperationException("injected repository failure")
+                : _inner.UpdateStatusAsync(planId, newStatus);
+
+        public Task DeleteAsync(string id) => _inner.DeleteAsync(id);
     }
 
     private sealed class FakeHistoryRecorder : IBatchApplyHistoryRecorder
