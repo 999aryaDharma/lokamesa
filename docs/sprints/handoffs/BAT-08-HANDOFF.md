@@ -26,7 +26,8 @@ SDK executable: `C:/Users/User/AppData/Local/Programs/FlyEnv-Data/app/dotnet/10.
 - `DocumentIDE.Core.Tests` → **440/440 passed, 0 skipped**.
 - `DocumentIDE.IntegrationTests` (full) → **230/232 passed, 0 skipped**; the 2 failures are `InstallerTests.Build_Release_Script_Packages_Wxs_Installer_And_ShareHost` and `ScriptTests.Release_Build_Embeds_Production_Web_Assets`, which require `artifacts/installer/DocumentIDE-Setup.msi` and `artifacts/desktop/...` produced by the release script. Proven pre-existing: both fail identically at the base commit with BAT-08 changes stashed (missing release artifacts in a fresh worktree), and are expected to pass once the controller's verification pipeline builds artifacts.
 - TDD evidence per behavior: `.superpowers/sdd/BAT-08-strict-font-font-size-operations/task-1-report.md`.
-- `scripts/verify.ps1` — controller runs full repository verification on this worktree.
+- `scripts/verify.ps1` → PASS on the sprint tree: build, 440 Core + 232 Integration (incl. 9 FontOperations tests) + 7 Architecture tests, Web build/tests, 0 skipped; log `.superpowers/sdd/BAT-08-strict-font-font-size-operations/verify-bat-08.log`.
+- Explicit `dotnet test tests/DocumentIDE.SecurityTests/...` → 52 passed, 0 skipped.
 
 ## Acceptance criteria
 - [x] **No normalize-to-template behavior** — the mutator rewrites only the reviewed run's font reference; tests assert the styles part and every other package entry byte-identical (`AssertOnlyPartChanged`), paragraph/section properties canonically unchanged (`AssertFormattingInvariantsUnchanged`), and `w:sz`/`w:spacing`/`w:pgMar`/`w:pgSz` values intact (`Apply_FontChangeLeavesSizeAndMarginsUnchanged`).

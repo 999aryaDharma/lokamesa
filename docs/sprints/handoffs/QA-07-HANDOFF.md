@@ -41,7 +41,8 @@
 - Affected `dotnet test tests\DocumentIDE.Core.Tests` → 440 passed, 0 failed, 0 skipped.
 - Affected `dotnet test tests\DocumentIDE.IntegrationTests` → **228 passed, 0 failed, 0 skipped** (includes the two release-artifact tests, which pass now that the release build has populated `artifacts/`; earlier they failed only because `artifacts/` was absent).
 - Extra: `dotnet test tests\DocumentIDE.ArchitectureTests` → 7/7; `dotnet test tests\DocumentIDE.SecurityTests` → 52/52 (API host now runs recovery at startup).
-- `scripts/verify.ps1` — controller runs full repository verification on this worktree.
+- `scripts/verify.ps1` → PASS on the sprint tree after review fixes: build, 12 SafetyTests + 440 Core + 228 Integration + 7 Architecture tests, Web build/tests, 0 skipped; log `.superpowers/sdd/QA-07-crash-interrupted-operation-recovery/verify-qa-07.log`.
+- Explicit `dotnet test tests/DocumentIDE.SecurityTests/...` → 52 passed, 0 skipped.
 
 Step → test evidence:
 
