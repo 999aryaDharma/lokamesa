@@ -115,14 +115,6 @@ public class DocumentMetadataRepository : IDocumentMetadataRepository
 
             await cmd.ExecuteNonQueryAsync();
 
-            // Mark document index status ready
-            using var statusCmd = conn.CreateCommand();
-            statusCmd.Transaction = tx;
-            statusCmd.CommandText = "UPDATE documents SET index_status = 'ready', updated_at = @updatedAt WHERE id = @documentId;";
-            statusCmd.Parameters.AddWithValue("@documentId", metadata.DocumentId);
-            statusCmd.Parameters.AddWithValue("@updatedAt", DateTime.UtcNow.ToString("O"));
-            await statusCmd.ExecuteNonQueryAsync();
-
             await tx.CommitAsync();
         }
         catch
@@ -204,14 +196,6 @@ public class DocumentMetadataRepository : IDocumentMetadataRepository
             cmd.Parameters.AddWithValue("@parserVersion", metadata.ParserVersion);
 
             await cmd.ExecuteNonQueryAsync();
-
-            // Mark document index status ready
-            using var statusCmd = conn.CreateCommand();
-            statusCmd.Transaction = tx;
-            statusCmd.CommandText = "UPDATE documents SET index_status = 'ready', updated_at = @updatedAt WHERE id = @documentId;";
-            statusCmd.Parameters.AddWithValue("@documentId", metadata.DocumentId);
-            statusCmd.Parameters.AddWithValue("@updatedAt", DateTime.UtcNow.ToString("O"));
-            await statusCmd.ExecuteNonQueryAsync();
 
             await tx.CommitAsync();
         }
