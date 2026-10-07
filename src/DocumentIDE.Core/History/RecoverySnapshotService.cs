@@ -2,17 +2,20 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 
 namespace DocumentIDE.Core.History
 {
     /// <summary>
     /// Service responsible for creating per‑operation recovery snapshots.
-    /// Each snapshot records metadata (size, fingerprint, expiry) and copies only the files
-    /// that were touched by the operation. Snapshots are stored under a configurable root
-    /// (defaults to `%LOCALAPPDATA%\DocumentIDE\snapshots`).
+    /// Each snapshot records per-file metadata (identity, original path, content fingerprint,
+    /// post-operation fingerprint) and copies only the files that were touched by the operation.
+    /// Snapshots are stored under a configurable root (defaults to `%LOCALAPPDATA%\DocumentIDE\snapshots`).
     /// </summary>
 
+    /// <summary>A file to include in a recovery snapshot, with the document identity that owns it.</summary>
+    public sealed record SnapshotSourceFile(string DocumentId, string Path);
 
     public class RecoverySnapshotService
     {
@@ -29,24 +32,24 @@ namespace DocumentIDE.Core.History
         /// Creates a snapshot for a given operation.
         /// </summary>
         /// <param name="operationId">Unique identifier of the operation.</param>
-        /// <param name="affectedFilePaths">Absolute paths of files that will be mutated.</param>
+        /// <param name="affectedFiles">Files (with their document identity) that will be mutated.</param>
         /// <returns>Metadata about the created snapshot.</returns>
-        public async Task<SnapshotMetadata> CreateSnapshotAsync(string operationId, IEnumerable<string> affectedFilePaths)
+        public async Task<SnapshotMetadata> CreateSnapshotAsync(string operationId, IEnumerable<SnapshotSourceFile> affectedFiles)
         {
             if (string.IsNullOrWhiteSpace(operationId))
                 throw new ArgumentException("Operation ID cannot be empty.", nameof(operationId));
 
-            var files = affectedFilePaths?.ToList() ?? new List<string>();
+            var files = affectedFiles?.ToList() ?? throw new ArgumentNullException(nameof(affectedFiles));
             if (!files.Any())
-                throw new ArgumentException("At least one affected file must be provided.", nameof(affectedFilePaths));
+                throw new ArgumentException("At least one affected file must be provided.", nameof(affectedFiles));
 
             // Compute total size of affected files without copying
             long totalSize = 0;
             foreach (var file in files)
             {
-                var info = new FileInfo(file);
+                var info = new FileInfo(file.Path);
                 if (!info.Exists)
-                    throw new FileNotFoundException($"Affected file not found: {file}");
+                    throw new FileNotFoundException($"Affected file not found: {file.Path}");
                 totalSize += info.Length;
             }
 
@@ -63,12 +66,25 @@ namespace DocumentIDE.Core.History
             var snapshotRoot = _storage.GetSnapshotRootPath(snapshotId);
             Directory.CreateDirectory(snapshotRoot);
 
-            // Copy affected files into snapshot directory
+            // Copy affected files into snapshot directory. Duplicate file names (same file
+            // name in different folders) get distinct snapshot names so every record maps
+            // to exactly one copy and a restore can never pick the wrong file.
+            var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var records = new List<SnapshotFileRecord>(files.Count);
             foreach (var file in files)
             {
-                var sourceInfo = new FileInfo(file);
-                var targetPath = Path.Combine(snapshotRoot, sourceInfo.Name);
+                var sourceInfo = new FileInfo(file.Path);
+                var snapshotFileName = AllocateSnapshotFileName(sourceInfo.Name, usedNames);
+                var targetPath = Path.Combine(snapshotRoot, snapshotFileName);
                 await CopyFileAsync(sourceInfo.FullName, targetPath);
+
+                records.Add(new SnapshotFileRecord
+                {
+                    DocumentId = file.DocumentId,
+                    OriginalPath = sourceInfo.FullName,
+                    SnapshotFileName = snapshotFileName,
+                    OriginalFingerprint = await ComputeFingerprintAsync(sourceInfo.FullName)
+                });
             }
 
             var metadata = new SnapshotMetadata
@@ -78,11 +94,50 @@ namespace DocumentIDE.Core.History
                 CreatedUtc = _clock.UtcNow,
                 ExpiryUtc = expiry,
                 SizeBytes = totalSize,
-                FileFingerprints = files.Select(ComputeFingerprint).ToList()
+                Files = records
             };
 
             await _storage.SaveMetadataAsync(metadata);
             return metadata;
+        }
+
+        /// <summary>
+        /// HIST-01 compatibility overload: snapshots by path only. Such snapshots carry no
+        /// document identity, so a conflict-aware undo cannot verify or restore them and
+        /// fails closed with a typed UnknownDocument outcome.
+        /// </summary>
+        public Task<SnapshotMetadata> CreateSnapshotAsync(string operationId, IEnumerable<string> affectedFilePaths)
+        {
+            ArgumentNullException.ThrowIfNull(affectedFilePaths);
+            return CreateSnapshotAsync(operationId, affectedFilePaths.Select(path => new SnapshotSourceFile(string.Empty, path)));
+        }
+
+        /// <summary>
+        /// Records the content fingerprint of a document *after* a successful mutation.
+        /// Undo compares the current file against this value to decide between restore and conflict.
+        /// </summary>
+        public async Task RecordPostOperationFingerprintAsync(SnapshotMetadata metadata, string documentId, string postOperationFingerprint)
+        {
+            ArgumentNullException.ThrowIfNull(metadata);
+            if (string.IsNullOrWhiteSpace(documentId))
+                throw new ArgumentException("Document ID cannot be empty.", nameof(documentId));
+            if (string.IsNullOrWhiteSpace(postOperationFingerprint))
+                throw new ArgumentException("Post-operation fingerprint cannot be empty.", nameof(postOperationFingerprint));
+
+            var record = metadata.Files.FirstOrDefault(f => string.Equals(f.DocumentId, documentId, StringComparison.Ordinal))
+                ?? throw new InvalidOperationException($"Snapshot has no recorded file for document '{documentId}'.");
+            record.PostOperationFingerprint = postOperationFingerprint;
+            await _storage.SaveMetadataAsync(metadata);
+        }
+
+        private static string AllocateSnapshotFileName(string sourceName, HashSet<string> usedNames)
+        {
+            var candidate = sourceName;
+            var stem = Path.GetFileNameWithoutExtension(sourceName);
+            var extension = Path.GetExtension(sourceName);
+            for (var index = 1; !usedNames.Add(candidate); index++)
+                candidate = $"{stem}-{index}{extension}";
+            return candidate;
         }
 
         private static async Task CopyFileAsync(string source, string destination)
@@ -92,10 +147,11 @@ namespace DocumentIDE.Core.History
             await sourceStream.CopyToAsync(destStream);
         }
 
-        private static string ComputeFingerprint(string path)
+        private static async Task<string> ComputeFingerprintAsync(string path)
         {
-            // Placeholder – a real implementation would hash file content.
-            return Path.GetFileName(path).GetHashCode().ToString("X8");
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
+            var hash = await SHA256.HashDataAsync(stream);
+            return Convert.ToHexString(hash);
         }
     }
 
@@ -127,6 +183,17 @@ namespace DocumentIDE.Core.History
         public DateTime CreatedUtc { get; set; }
         public DateTime ExpiryUtc { get; set; }
         public long SizeBytes { get; set; }
-        public List<string> FileFingerprints { get; set; } = new();
+
+        /// <summary>Per-file records: identity, original path, snapshot copy, fingerprints.</summary>
+        public List<SnapshotFileRecord> Files { get; set; } = new();
+    }
+
+    public class SnapshotFileRecord
+    {
+        public string DocumentId { get; set; } = string.Empty;
+        public string OriginalPath { get; set; } = string.Empty;
+        public string SnapshotFileName { get; set; } = string.Empty;
+        public string OriginalFingerprint { get; set; } = string.Empty;
+        public string? PostOperationFingerprint { get; set; }
     }
 }
