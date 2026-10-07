@@ -23,6 +23,16 @@ public class FileChangeCoordinator : IDisposable
     private readonly ConcurrentDictionary<string, PendingPathChange> _pendingChanges = new(StringComparer.OrdinalIgnoreCase);
     private readonly CancellationTokenSource _cts = new();
 
+    /// <summary>
+    /// Serializes the debounced verification stage. One filesystem operation (e.g. a move)
+    /// surfaces as several events for different paths — delete of the source, create of the
+    /// destination — that verify and update the same Document row. Concurrent
+    /// read-modify-write cycles let a late "Deleted" clobber the new path/identity already
+    /// written by the "Created" handler. Raw callbacks remain non-blocking; only this
+    /// debounced stage queues on the gate.
+    /// </summary>
+    private readonly SemaphoreSlim _processingGate = new(1, 1);
+
     public event EventHandler<FileChangeEvent>? OnFileChanged;
     public event EventHandler<string>? OnReconciliationScheduled;
 
@@ -130,6 +140,31 @@ public class FileChangeCoordinator : IDisposable
 
         if (_cts.IsCancellationRequested) return;
 
+        try
+        {
+            await _processingGate.WaitAsync(_cts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (ObjectDisposedException)
+        {
+            return;
+        }
+
+        try
+        {
+            await ProcessVerifiedChangeAsync(canonicalPath, pending);
+        }
+        finally
+        {
+            try { _processingGate.Release(); } catch (ObjectDisposedException) { }
+        }
+    }
+
+    private async Task ProcessVerifiedChangeAsync(string canonicalPath, PendingPathChange pending)
+    {
         try
         {
             bool exists = File.Exists(canonicalPath);
@@ -317,6 +352,7 @@ public class FileChangeCoordinator : IDisposable
             try { pending.Timer.Dispose(); } catch { }
         }
         _pendingChanges.Clear();
+        _processingGate.Dispose();
         _cts.Dispose();
     }
 }

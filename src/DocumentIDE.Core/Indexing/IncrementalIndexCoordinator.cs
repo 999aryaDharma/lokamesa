@@ -263,6 +263,28 @@ public class IncrementalIndexCoordinator : IDisposable
         var docs = await _documentRepo.GetByWorkspaceAsync(workspaceId);
         foreach (var doc in docs)
         {
+            // Only a truly absent file may take the Deleted/eviction path. The snapshot's
+            // AvailabilityStatus can be stale (e.g. the file was restored without a watcher
+            // event), and the filesystem is the source of truth: a present file always goes
+            // through the normal re-read/re-index path below, even when the snapshot says
+            // "missing". Conversely, a document with no readable path cannot be re-read.
+            if (doc.AvailabilityStatus == "missing" &&
+                (string.IsNullOrEmpty(doc.CurrentPath) || !File.Exists(doc.CurrentPath)))
+            {
+                // Converge the active index to the filesystem: a document whose file no
+                // longer exists must leave the searchable index instead of keeping stale
+                // rows (or failing a read and publishing an error state). This is the
+                // reindex-time counterpart of a live Deleted watcher event, used after
+                // reconciliation when the original event was lost (watcher overflow).
+                await ProcessFileChangeAsync(new FileChangeEvent
+                {
+                    ChangeType = FileChangeType.Deleted,
+                    DocumentId = doc.Id,
+                    Path = doc.CurrentPath
+                }, cancellationToken);
+                continue;
+            }
+
             await ReindexDocumentAsync(doc.Id, cancellationToken);
         }
     }
