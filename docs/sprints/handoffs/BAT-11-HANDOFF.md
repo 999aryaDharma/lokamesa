@@ -34,7 +34,7 @@ Environment: `D:\document-ide\.worktrees\bat-11\src\DocumentIDE.Web` (dependenci
 - `npm run build` (`tsc -b && vite build`) → **PASS** (`web-build-final.log`).
 - `npm run lint` (oxlint) → no errors; only pre-existing warnings in files outside this change.
 - TDD evidence: RED → GREEN per behavior, one cycle per implementation step; logs `.superpowers/sdd/BAT-11-batch-results-history-ui/cycle{1..7}-{red,green}.log`. The mandated first behavior (“Partial result is visible”) failed first as an unresolved `./HistoryPanel` module import (compile RED, expected: behavior absent).
-- `scripts/verify.ps1` — controller runs full repository verification on this worktree.
+- `scripts/verify.ps1` - PASS on the sprint tree: build + 12 Safety + 7 Architecture + 440 Core + 266 Integration + Web build/tests, 0 skipped (`.superpowers/sdd/BAT-11-batch-results-history-ui/verify-bat-11.log`).
 
 ## Acceptance criteria
 

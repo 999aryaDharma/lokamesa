@@ -52,7 +52,7 @@
 - `npm run build` in `src/DocumentIDE.Web` (`tsc -b && vite build`) → PASS
 - `dotnet test tests/DocumentIDE.Core.Tests/DocumentIDE.Core.Tests.csproj --filter FullyQualifiedName~CanvasDocumentService` → PASS (10/10)
 - `dotnet test tests/DocumentIDE.Core.Tests/DocumentIDE.Core.Tests.csproj` → PASS (450/450, includes the 10 new)
-- `scripts/verify.ps1 — controller runs full repository verification on this worktree.`
+- `scripts/verify.ps1` - PASS on the sprint tree: build + 7 Architecture + 12 Safety + 450 Core + 266 Integration + Web build/tests, 0 skipped (`.superpowers/sdd/CAN-04-folder-picker-file-release/verify-can-04.log`).
 
 ## Acceptance criteria
 

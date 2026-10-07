@@ -67,7 +67,7 @@
   tests (`InstallerTests`, `ScriptTests.Release_Build_Embeds_Production_Web_Assets`) that assert
   `artifacts/` produced by `scripts/verify.ps1`; expected in a fresh worktree. One filesystem
   watcher test flaked once and passed on focused re-run.
-- `scripts/verify.ps1` — controller runs full repository verification on this worktree.
+- `scripts/verify.ps1` - PASS on the sprint tree: build + 7 Architecture + 12 Safety + 449 Core + 266 Integration + Web build/tests, 0 skipped (`.superpowers/sdd/DOCX-04-document-lens-metadata/verify-docx-04.log`).
 
 ## Required tests → evidence
 

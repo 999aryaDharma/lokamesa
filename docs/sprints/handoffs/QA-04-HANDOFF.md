@@ -34,7 +34,7 @@
 - Full SafetyTests project (QA-04 + QA-07): `dotnet test tests\DocumentIDE.SafetyTests\DocumentIDE.SafetyTests.csproj --nologo` → **Passed: 24, Failed: 0, Skipped: 0** (`green-4-safetytests-full.log`).
 - Affected IntegrationTests: focused batch + undo classes (`FullyQualifiedName~SearchReplaceOperationTests|FullyQualifiedName~UndoTests`) → **31 passed, 0 failed, 0 skipped**. Full-project run: 264–266 passing; failures are **pre-existing/environmental and not attributable to this change** (this change adds only one file in a different assembly): (a) `ScriptTests.Release_Build_Embeds_Production_Web_Assets` and `InstallerTests.Build_Release_Script_Packages_Wxs_Installer_And_ShareHost` fail because `artifacts/` does not exist in the worktree — same known behavior recorded in the QA-07 handoff; the controller provides `artifacts/`; (b) intermittent `System.ObjectDisposedException: SQLitePCL.sqlite3` in the fully-parallel run, hitting a *different unrelated class each run* (`MoveCorrelationIntegrationTests` run 1, `SearchReplaceOperationTests`/`UndoTests` run 2), all of which pass in focused runs. Logs: `green-5-integration-full.log`, `green-5b-integration-rerun.log`.
 - `dotnet build tests\DocumentIDE.SafetyTests\DocumentIDE.SafetyTests.csproj` → Build succeeded, 0 errors, no warnings from the new file.
-- `scripts/verify.ps1` — controller runs full repository verification on this worktree.
+- `scripts/verify.ps1` - PASS on the sprint tree: build + 7 Architecture + 440 Core + 24 Safety + 266 Integration + Web build/tests, 0 skipped (`.superpowers/sdd/QA-04-batch-safety-regression-suite/verify-qa-04.log`).
 
 ### Step → test evidence
 

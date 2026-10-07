@@ -30,7 +30,7 @@ SDK executable: `C:/Users/User/AppData/Local/Programs/FlyEnv-Data/app/dotnet/10.
 - `DocumentIDE.Core.Tests` → **440/440 passed, 0 skipped** (re-run after the fix).
 - `DocumentIDE.IntegrationTests` (full, final tree with `artifacts/` present) → **284/284 passed, 0 skipped**.
 - TDD evidence per behavior (original cycles + spec-gap fix cycles): `.superpowers/sdd/BAT-09-strict-page-layout-operations/task-1-report.md`.
-- `scripts/verify.ps1` — controller runs full repository verification on this worktree.
+- `scripts/verify.ps1` - PASS on the sprint tree: build + 440 Core + 12 Safety + 7 Architecture + 284 Integration + Web build/tests, 0 skipped (`.superpowers/sdd/BAT-09-strict-page-layout-operations/verify-bat-09.log`).
 
 ## Acceptance criteria
 - [x] Every operation has separate type/preview semantics — distinct parameter records (`SetMarginsParameters`, `SetPaperSizeParameters`, `SetOrientationParameters`, `SetAlignmentParameters`), distinct preview result/occurrence types with distinct fields/IDs, four separate operation classes, four separate preview tests, and `BatchOperationType.SetMargins/SetPaperSize/SetOrientation/SetAlignment` are distinct values.

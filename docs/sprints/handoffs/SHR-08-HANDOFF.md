@@ -25,7 +25,7 @@
 - `dotnet test tests/DocumentIDE.IntegrationTests/DocumentIDE.IntegrationTests.csproj --filter "FullyQualifiedName~ShareWebSecurityTests"` → PASS (16/16)
 - `dotnet test tests/DocumentIDE.IntegrationTests/DocumentIDE.IntegrationTests.csproj --filter "FullyQualifiedName~IntegrationTests.Sharing"` → PASS (21/21; includes SHR-09 ngrok regressions)
 - `dotnet test tests/DocumentIDE.ArchitectureTests/DocumentIDE.ArchitectureTests.csproj` → PASS (7/7; proves ShareHost boots with the new middleware and benign HTML artifacts pass through unchanged)
-- `scripts/verify.ps1 — controller runs full repository verification on this worktree.`
+- `scripts/verify.ps1` - PASS on the sprint tree: build + 12 Safety + 440 Core + 7 Architecture + 282 Integration + Web build/tests, 0 skipped (`.superpowers/sdd/SHR-08-share-csp-sanitization-rate-limits/verify-shr-08.log`).
 
 ## Acceptance criteria
 - [x] Public request cannot trigger Word COM.

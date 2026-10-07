@@ -31,7 +31,7 @@
 - `npx vitest run src/features/list/DocumentList.test.tsx src/features/workspace/ViewSwitcher.test.tsx src/App.test.tsx` → PASS (3 files, 25 tests)
 - `npx vitest run` (full web suite) → PASS (22 files, 121 tests; baseline was 20 files / 96 tests)
 - `npm run build` (tsc -b && vite build) → PASS
-- `scripts/verify.ps1 — controller runs full repository verification on this worktree.`
+- `scripts/verify.ps1` - PASS on the sprint tree: build + 12 Safety + 7 Architecture + 440 Core + 266 Integration + Web build/tests, 0 skipped (`.superpowers/sdd/CAN-08-list-view-view-switch/verify-can-08-rerun.log`).
 
 ## TDD evidence (summary)
 

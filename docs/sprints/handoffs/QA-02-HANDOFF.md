@@ -40,7 +40,7 @@
 - Affected `dotnet test tests\DocumentIDE.IntegrationTests` → **266 passed, 0 failed, 0 skipped** (the two release-artifact tests passed once the controller-provided `artifacts/` landed; before that they failed only on missing `artifacts/` files, unrelated to this change).
 - Flake audit: 10 full IntegrationTests runs on this tree vs 10 on the base commit (changes stashed) — both trees show the same class of ~1/10 transient failures in *unrelated* parallel-load-sensitive tests (`SourceWatcherTests.Physical_SourceWatcher_Detects_Real_File_Creation`, `SafeApplyTests.Apply_CancellationLeavesNoHalfWrittenOriginal`, `FtsIndexTests.ConcurrentSearchWhileUpdate…`, `BatchPreviewHostTests…`); each failed at most once in 10 runs and passed standalone, on both trees.
 - `dotnet sln DocumentIDE.sln list` → lists `tests\DocumentIDE.SoakTests\DocumentIDE.SoakTests.csproj`.
-- `scripts/verify.ps1` — controller runs full repository verification on this worktree.
+- `scripts/verify.ps1` - PASS on the merged multi-sprint tip (`600bf67`): build + 39 GoldenTests + 7 Architecture + 459 Core + 24 Safety + 300 Integration + 6 SoakTests + Web build/tests, 0 skipped (`.superpowers/sdd/BATCH-B-DISPATCH-verify-final.log`).
 
 Step → test evidence:
 

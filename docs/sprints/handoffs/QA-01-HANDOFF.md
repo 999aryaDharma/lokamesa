@@ -34,7 +34,7 @@
 - `dotnet test tests\DocumentIDE.ArchitectureTests` → **7 passed, 0 failed**; `dotnet test tests\DocumentIDE.SafetyTests` → **12 passed, 0 failed**
 - `dotnet sln DocumentIDE.sln list` includes `tests\DocumentIDE.GoldenTests\DocumentIDE.GoldenTests.csproj`
 - Assertion-helper mutation sanity: intentionally wrong anchor + comparing changed parts both fail as expected (reverted; evidence in report)
-- `scripts/verify.ps1` — controller runs full repository verification on this worktree.
+- `scripts/verify.ps1` - PASS on the sprint tree: build + 39 GoldenTests + 440 Core + 12 Safety + 7 Architecture + 266 Integration + Web build/tests, 0 skipped (`.superpowers/sdd/QA-01-golden-docx-regression-corpus/verify-qa-01.log`).
 
 ## Acceptance criteria
 
