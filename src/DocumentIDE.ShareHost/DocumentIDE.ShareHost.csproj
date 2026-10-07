@@ -4,6 +4,14 @@
     <ProjectReference Include="..\DocumentIDE.Core\DocumentIDE.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Maintained sanitizer for rendered HTML/Markdown served to public viewers.
+         Shares the same maintained library family as the owner-side Markdown preview
+         pipeline (MD-02). 9.2.1039 includes the CVE-2026-25543 template-tag fix and
+         later URI/CSS sanitization hardening. -->
+    <PackageReference Include="HtmlSanitizer" Version="9.2.1039" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
