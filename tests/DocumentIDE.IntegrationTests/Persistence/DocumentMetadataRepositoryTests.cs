@@ -4,8 +4,13 @@ using System.IO;
 using System.Threading.Tasks;
 using DocumentIDE.Core.Domain;
 using DocumentIDE.Core.Domain.Repositories;
+using DocumentIDE.Core.Indexing;
+using DocumentIDE.Core.Markdown;
+using DocumentIDE.Infrastructure.Docx;
 using DocumentIDE.Infrastructure.Persistence;
 using DocumentIDE.Infrastructure.Persistence.Repositories;
+using DocumentIDE.Infrastructure.Search;
+using DocumentIDE.IntegrationTests.Docx;
 using Microsoft.Data.Sqlite;
 using Xunit;
 
@@ -14,6 +19,7 @@ namespace DocumentIDE.IntegrationTests.Persistence;
 public class DocumentMetadataRepositoryTests : IDisposable
 {
     private readonly string _dbPath;
+    private readonly string _tempDir;
     private AppDb _appDb;
     private DocumentMetadataRepository _metadataRepo;
     private DocumentRepository _docRepo;
@@ -21,6 +27,8 @@ public class DocumentMetadataRepositoryTests : IDisposable
     public DocumentMetadataRepositoryTests()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"docide_metadata_test_{Guid.NewGuid():N}.db");
+        _tempDir = Path.Combine(Path.GetTempPath(), $"docide_metadata_files_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(_tempDir);
         _appDb = new AppDb(_dbPath);
         _appDb.InitializeAsync().GetAwaiter().GetResult();
         _metadataRepo = new DocumentMetadataRepository(_appDb);
@@ -30,6 +38,7 @@ public class DocumentMetadataRepositoryTests : IDisposable
     public void Dispose()
     {
         SqliteConnection.ClearAllPools();
+        try { if (Directory.Exists(_tempDir)) Directory.Delete(_tempDir, true); } catch { }
         if (File.Exists(_dbPath))
         {
             try { File.Delete(_dbPath); } catch { }
@@ -158,10 +167,15 @@ public class DocumentMetadataRepositoryTests : IDisposable
     [Fact]
     public async Task DerivedMetadata_CanBeDeletedAndRebuilt()
     {
+        // A real package on disk: derived data is only rebuilt completely after a full
+        // indexing pass (metadata + FTS), never by a metadata-only save.
+        var docPath = Path.Combine(_tempDir, "sample.docx");
+        await File.WriteAllBytesAsync(docPath, DocxTestFixtureBuilder.CreateValidDocxPackage());
+
         var doc = new Document
         {
             Id = Guid.NewGuid().ToString(),
-            CurrentPath = @"D:\Docs\sample.docx",
+            CurrentPath = docPath,
             Filename = "sample.docx",
             Extension = ".docx",
             DocumentType = "docx"
@@ -204,8 +218,75 @@ public class DocumentMetadataRepositoryTests : IDisposable
         Assert.NotNull(afterRebuild);
         Assert.Equal(6, afterRebuild!.PageCount);
 
+        // Hard boundary: metadata is durable, but the document must not claim "ready"
+        // until the searchable index write has succeeded. A process kill here must
+        // never be recoverable as a false "ready".
         var docAfterRebuild = await _docRepo.GetByIdAsync(doc.Id);
-        Assert.Equal("ready", docAfterRebuild!.IndexStatus);
+        Assert.Equal("stale", docAfterRebuild!.IndexStatus);
+
+        // Only a complete indexing pass marks ready — after the FTS write succeeded.
+        var coordinator = new IncrementalIndexCoordinator(
+            _docRepo,
+            _metadataRepo,
+            new FtsIndex(_appDb),
+            new MarkdownStructureParser(),
+            new DocxStructureParser());
+        await coordinator.ReindexDocumentAsync(doc.Id);
+
+        Assert.Equal("ready", (await _docRepo.GetByIdAsync(doc.Id))!.IndexStatus);
+        // The docx parser's searchable body is currently the file name (placeholder
+        // until deep DOCX parsing lands); the file name is a durable FTS column, so a
+        // hit proves the search row exists.
+        Assert.Contains(
+            await new FtsIndex(_appDb).SearchAsync("sample"),
+            r => r.DocumentId == doc.Id);
+    }
+
+    [Fact]
+    public async Task MetadataSaveWithoutFts_DoesNotMarkReady_HardKillBoundary()
+    {
+        var docPath = Path.Combine(_tempDir, "boundary.md");
+        await File.WriteAllTextAsync(docPath, "# Boundary\n\nSome searchable text");
+        var doc = new Document
+        {
+            Id = Guid.NewGuid().ToString(),
+            CurrentPath = docPath,
+            Filename = "boundary.md",
+            Extension = ".md",
+            DocumentType = "markdown"
+        };
+        await _docRepo.CreateAsync(doc);
+        Assert.Equal("pending", (await _docRepo.GetByIdAsync(doc.Id))!.IndexStatus);
+
+        // The coordinator persists derived metadata before writing the FTS row. If the
+        // process is killed exactly in between, no search rows exist for the document,
+        // so it must not be readable as "ready".
+        await _metadataRepo.SaveMarkdownMetadataAsync(new MarkdownDocumentMetadata
+        {
+            DocumentId = doc.Id,
+            HeadingsJson = "[]",
+            UpdatedAt = DateTime.UtcNow.ToString("O"),
+            ParserVersion = "1.0.0"
+        });
+
+        var afterMetadataSave = await _docRepo.GetByIdAsync(doc.Id);
+        Assert.Equal("pending", afterMetadataSave!.IndexStatus);
+        Assert.NotEqual("ready", afterMetadataSave.IndexStatus);
+        Assert.NotNull(await _metadataRepo.GetMarkdownMetadataAsync(doc.Id));
+
+        // A complete indexing run is the only transition to ready, and it is backed by
+        // a real search row.
+        var coordinator = new IncrementalIndexCoordinator(
+            _docRepo,
+            _metadataRepo,
+            new FtsIndex(_appDb),
+            new MarkdownStructureParser());
+        await coordinator.ReindexDocumentAsync(doc.Id);
+
+        Assert.Equal("ready", (await _docRepo.GetByIdAsync(doc.Id))!.IndexStatus);
+        Assert.Contains(
+            await new FtsIndex(_appDb).SearchAsync("Boundary"),
+            r => r.DocumentId == doc.Id);
     }
 
     [Fact]

@@ -421,8 +421,9 @@ internal class FakeDocumentMetadataRepository : IDocumentMetadataRepository
 
     public Task SaveDocxMetadataAsync(DocumentMetadata metadata)
     {
+        // Metadata saves are durable metadata only: "ready" is a post-FTS transition
+        // owned by IncrementalIndexCoordinator.MarkStatusAsync (QA-07 hard-kill fix).
         _docxMeta[metadata.DocumentId] = metadata;
-        _statuses[metadata.DocumentId] = ("ready", null);
         return Task.CompletedTask;
     }
 
@@ -434,8 +435,9 @@ internal class FakeDocumentMetadataRepository : IDocumentMetadataRepository
 
     public Task SaveMarkdownMetadataAsync(MarkdownDocumentMetadata metadata)
     {
+        // Metadata saves are durable metadata only: "ready" is a post-FTS transition
+        // owned by IncrementalIndexCoordinator.MarkStatusAsync (QA-07 hard-kill fix).
         _mdMeta[metadata.DocumentId] = metadata;
-        _statuses[metadata.DocumentId] = ("ready", null);
         return Task.CompletedTask;
     }
 

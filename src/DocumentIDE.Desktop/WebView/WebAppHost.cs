@@ -6,7 +6,10 @@ using System.Threading.Tasks;
 using DocumentIDE.Api.Security;
 using DocumentIDE.Api;
 using DocumentIDE.Api.Controllers;
+using DocumentIDE.Core.Domain.Repositories;
+using DocumentIDE.Core.Filesystem;
 using DocumentIDE.Infrastructure.Persistence;
+using DocumentIDE.Infrastructure.Persistence.Repositories;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -15,6 +18,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace DocumentIDE.Desktop.WebView;
 
@@ -46,6 +50,9 @@ public class WebAppHost : IAsyncDisposable, IDisposable
         builder.Services.AddSingleton<ISessionTokenProvider, SessionTokenProvider>();
         if (database != null) builder.Services.AddSingleton(database);
         builder.Services.AddBatchPreviewServices();
+        builder.Services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
+        builder.Services.AddScoped<IFolderSourceRepository, FolderSourceRepository>();
+        builder.Services.AddScoped<StartupRecoveryService>();
         builder.Services.AddControllers()
             .AddApplicationPart(typeof(BatchPreviewController).Assembly)
             .ConfigureApplicationPartManager(manager =>
@@ -57,6 +64,18 @@ public class WebAppHost : IAsyncDisposable, IDisposable
 
         var app = builder.Build();
         await app.Services.GetRequiredService<AppDb>().InitializeAsync();
+
+        // QA-07: repair state a crashed previous process left behind (plans stuck in
+        // Executing, orphan ~apply-*.tmp artifacts) before serving any request. Safe
+        // no-op on an empty database.
+        using (var scope = app.Services.CreateScope())
+        {
+            var recovery = scope.ServiceProvider.GetRequiredService<StartupRecoveryService>();
+            var recoveryReport = await recovery.RecoverAsync();
+            StartupRecoveryLogging.LogReport(
+                scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("StartupRecovery"),
+                recoveryReport);
+        }
 
         app.UseMiddleware<PrivilegedRequestGuard>();
         app.MapControllers();

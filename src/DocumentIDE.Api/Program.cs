@@ -1,4 +1,5 @@
 using DocumentIDE.Infrastructure.Word;
+using DocumentIDE.Api;
 using DocumentIDE.Api.Security;
 using DocumentIDE.Core.Domain.Repositories;
 using DocumentIDE.Core.Filesystem;
@@ -27,7 +28,9 @@ builder.Services.AddSingleton<ISessionTokenProvider, SessionTokenProvider>();
 
 // Register Persistence & Services
 builder.Services.AddSingleton<AppDb>();
+builder.Services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
 builder.Services.AddScoped<IFolderSourceRepository, FolderSourceRepository>();
+builder.Services.AddScoped<StartupRecoveryService>();
 builder.Services.AddScoped<IFolderSourceService, FolderSourceService>();
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
 builder.Services.AddScoped<IFileIdentityProvider, WindowsFileIdentityProvider>();
@@ -57,6 +60,15 @@ using (var scope = app.Services.CreateScope())
 {
     var appDb = scope.ServiceProvider.GetRequiredService<AppDb>();
     await appDb.InitializeAsync();
+
+    // QA-07: repair state a crashed previous process left behind (plans stuck in
+    // Executing, orphan ~apply-*.tmp artifacts) before serving any request. Safe
+    // no-op on an empty database.
+    var recovery = scope.ServiceProvider.GetRequiredService<StartupRecoveryService>();
+    var recoveryReport = await recovery.RecoverAsync();
+    StartupRecoveryLogging.LogReport(
+        scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("StartupRecovery"),
+        recoveryReport);
 }
 
 // Step 3 & 4: Privileged Request Security Guard Middleware
