@@ -231,6 +231,18 @@ public class StrictTextMutator : IDocxOccurrenceMutator
             };
         }
 
+        // QA-01 (spec 06 §19): an identity replacement is a no-op and must not
+        // rewrite package bytes. Return before any I/O; nothing can change.
+        if (string.Equals(targetText, replacementText, StringComparison.Ordinal))
+        {
+            return new DocxMutationResult
+            {
+                Success = true,
+                ReplacementsApplied = 0,
+                MutatedFilePath = filePath
+            };
+        }
+
         options ??= new StrictMutationOptions();
 
         // Validate package preflight on source file

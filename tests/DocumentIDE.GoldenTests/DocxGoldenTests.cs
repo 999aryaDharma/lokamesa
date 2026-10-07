@@ -308,6 +308,44 @@ public class DocxGoldenTests : IDisposable
             $"[{fixture.Name}] indexing (preflight + search) must not modify the source package.");
     }
 
+    [Fact]
+    public void NoOpMutation_TargetAbsent_DoesNotModifyPackageBytes()
+    {
+        string path = WriteFixture("noop-target-absent", GoldenDocxFixtureBuilder.SplitRuns());
+        byte[] before = File.ReadAllBytes(path);
+
+        var mutator = new StrictTextMutator(new DocxPackagePreflight());
+        var result = mutator.MutateText(path, "ABSENT-TOKEN-XYZ", "anything", new StrictMutationOptions
+        {
+            CreateRecoverySnapshot = false
+        });
+
+        Assert.True(result.Success);
+        Assert.Equal(0, result.ReplacementsApplied);
+        Assert.True(
+            before.AsSpan().SequenceEqual(File.ReadAllBytes(path)),
+            "A mutation whose target does not occur must not rewrite the package bytes (spec 06 §19).");
+    }
+
+    [Fact]
+    public void NoOpMutation_IdentityReplacement_DoesNotModifyPackageBytes()
+    {
+        string path = WriteFixture("noop-identity", GoldenDocxFixtureBuilder.SplitRuns());
+        byte[] before = File.ReadAllBytes(path);
+
+        var mutator = new StrictTextMutator(new DocxPackagePreflight());
+        var result = mutator.MutateText(path, "NUSA-DUA-1", "NUSA-DUA-1", new StrictMutationOptions
+        {
+            CreateRecoverySnapshot = false
+        });
+
+        Assert.True(result.Success);
+        Assert.Equal(0, result.ReplacementsApplied);
+        Assert.True(
+            before.AsSpan().SequenceEqual(File.ReadAllBytes(path)),
+            "An identity replacement must not rewrite the package bytes (spec 06 §19).");
+    }
+
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
