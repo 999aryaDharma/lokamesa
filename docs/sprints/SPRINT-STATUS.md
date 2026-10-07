@@ -109,11 +109,11 @@ Rules:
 | BAT-08 | Strict Font & Font-Size Operations | READY | BAT-04, DOCX-03 |  |  |
 | BAT-09 | Strict Page-Layout Operations | READY | BAT-04, DOCX-03 |  |  |
 | BAT-10 | Strict Batch Rename | READY | BAT-04, FS-07 |  |  |
-| HIST-02 | Conflict-Aware Undo | IN_PROGRESS | HIST-01, BAT-04, FS-03 |  |  |
+| HIST-02 | Conflict-Aware Undo | DONE | HIST-01, BAT-04, FS-03 | fix/hist-02-conflict-aware-undo (c9e8ca4) | docs/sprints/handoffs/HIST-02-HANDOFF.md |
 | BAT-06 | Occurrence Review UX | DONE | BAT-05 | feat/bat-06-occurrence-review-ux (2bda93a) | docs/sprints/handoffs/BAT-06-HANDOFF.md |
 | BAT-11 | Batch Results & History UI | BLOCKED | BAT-10, HIST-02 |  |  |
 | QA-04 | Batch Safety Regression Suite | BLOCKED | BAT-10, HIST-02 |  |  |
-| QA-07 | Crash & Interrupted-Operation Recovery | BLOCKED | FND-04, HIST-02 |  |  |
+| QA-07 | Crash & Interrupted-Operation Recovery | READY | FND-04, HIST-02 |  |  |
 | BAT-07 | Regex Advanced Replace | DONE | BAT-06 | fix/bat-07-regex-advanced-replace (f8e220f) | docs/sprints/handoffs/BAT-07-HANDOFF.md |
 | REL-02 | Release Verification Pipeline | BLOCKED | REL-01, QA-01, QA-02, QA-04, QA-05, QA-06, QA-07 |  |  |
 | REL-03 | V1 Readiness Gate | BLOCKED | REL-02, SHR-11, CTX-04, AI-04, PDF-04 |  |  |
