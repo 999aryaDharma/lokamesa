@@ -32,3 +32,6 @@ $RECYCLE.BIN/
 *.tmp
 
 .agents/
+
+# Git worktrees for parallel sprint execution
+.worktrees/
