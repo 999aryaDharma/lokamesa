@@ -189,7 +189,21 @@ public class MoveCorrelationIntegrationTests : IDisposable
         mockWatcher.RaiseRawEvent(WatcherChangeTypes.Deleted, sourcePath, null, source.Id);
         mockWatcher.RaiseRawEvent(WatcherChangeTypes.Created, destPath, null, source.Id);
 
-        await Task.Delay(250);
+        // Wait for the debounced logical event with a generous timeout: a fixed sleep
+        // races the 50 ms debounce timer under parallel test load (same class of flake
+        // as SourceWatcherTests), so poll for the event and then let the debounce
+        // window settle before asserting that the delete+create pair correlated into
+        // exactly one rename.
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            lock (emittedEvents)
+            {
+                if (emittedEvents.Count > 0) break;
+            }
+            await Task.Delay(25);
+        }
+        await Task.Delay(200);
 
         try
         {
