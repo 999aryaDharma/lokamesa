@@ -19,6 +19,14 @@ public class ShareManifest
     /// earlier sprints; set to <c>shr04-v1</c> by SnapshotSharePublisher.
     /// </summary>
     public string? SnapshotVersion { get; set; }
+    /// <summary>
+    /// Live-share revision counter (SHR-05). Zero means never live-published;
+    /// <see cref="LiveSharePublisher"/> sets it to 1 on publish and increments
+    /// it on every explicit mutation (member refresh, add, remove). The
+    /// manifest and member artifacts are rewritten atomically (temp + move) so
+    /// viewers never observe a half-written revision.
+    /// </summary>
+    public int LiveRevision { get; set; }
     public string CreatedAt { get; set; } = DateTime.UtcNow.ToString("O");
     public List<SanitizedDocumentMetadata> Documents { get; set; } = new List<SanitizedDocumentMetadata>();
 
