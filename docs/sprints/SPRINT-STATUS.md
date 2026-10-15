@@ -103,7 +103,7 @@ Rules:
 | CAN-08 | List View & View Switch | DONE | CAN-03, SRCH-05 | feat/can-08-list-view-view-switch (0203af8) | docs/sprints/handoffs/CAN-08-HANDOFF.md |
 | QA-06 | Performance Benchmark Gate | READY | CAN-07, SRCH-05, GR-05, PDF-03 |  |  |
 | BAT-03 | Batch Preview API & Review Shell | DONE | BAT-01, BAT-02 | feat/bat-03-batch-preview-api-review-shell (4899761) | docs/sprints/handoffs/BAT-03-HANDOFF.md |
-| PDF-04 | PDF Finalization UX | READY | CAN-08, PDF-03 |  |  |
+| PDF-04 | PDF Finalization UX | DONE | CAN-08, PDF-03 | feat/pdf-04-pdf-finalization-ux | docs/sprints/handoffs/PDF-04-HANDOFF.md |
 | BAT-04 | Transactional Safe Apply Engine | DONE | BAT-03, HIST-01, FS-07 | fix/bat-04-transactional-safe-apply-engine (02f236e) | docs/sprints/handoffs/BAT-04-HANDOFF.md |
 | BAT-05 | Exact Search & Replace Operation | DONE | BAT-04, DOCX-03 | feat/bat-05-exact-search-replace-operation (9363e7b) | docs/sprints/handoffs/BAT-05-HANDOFF.md |
 | BAT-08 | Strict Font & Font-Size Operations | DONE | BAT-04, DOCX-03 | feat/bat-08-strict-font-font-size-operations (2f54e71) | docs/sprints/handoffs/BAT-08-HANDOFF.md |
