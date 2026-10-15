@@ -15,15 +15,18 @@ public class WordDesktopLauncher : IWordDesktopLauncher
     private readonly IDocumentRepository _documentRepository;
     private readonly Func<string, bool> _processLauncher;
     private readonly Func<bool> _availabilityChecker;
+    private readonly WordAutomationQueue? _automationQueue;
 
     public WordDesktopLauncher(
         IDocumentRepository documentRepository,
         Func<string, bool>? processLauncher = null,
-        Func<bool>? availabilityChecker = null)
+        Func<bool>? availabilityChecker = null,
+        WordAutomationQueue? automationQueue = null)
     {
         _documentRepository = documentRepository ?? throw new ArgumentNullException(nameof(documentRepository));
         _processLauncher = processLauncher ?? DefaultProcessLauncher;
         _availabilityChecker = availabilityChecker ?? DefaultAvailabilityChecker;
+        _automationQueue = automationQueue;
     }
 
     public bool IsWordAvailable()
@@ -61,6 +64,38 @@ public class WordDesktopLauncher : IWordDesktopLauncher
         }
 
         var canonicalPath = Path.GetFullPath(doc.CurrentPath);
+
+        // WORD-03: route the launch through the dedicated STA Word automation
+        // queue (concurrency exactly 1) when one is available; otherwise fall
+        // back to the local COM lock so behavior is unchanged in tests/hosts
+        // without a registered queue.
+        if (_automationQueue != null)
+        {
+            try
+            {
+                bool queued = await _automationQueue.EnqueueAsync(() => _processLauncher(canonicalPath));
+                if (!queued)
+                {
+                    return WordLaunchResult.Failed(
+                        WordLaunchStatus.ComError,
+                        $"Failed to launch Microsoft Word Desktop for file '{canonicalPath}'.",
+                        documentId,
+                        canonicalPath
+                    );
+                }
+
+                return WordLaunchResult.Ok(documentId, canonicalPath);
+            }
+            catch (Exception ex)
+            {
+                return WordLaunchResult.Failed(
+                    WordLaunchStatus.ComError,
+                    $"Exception while launching Microsoft Word: {ex.Message}",
+                    documentId,
+                    canonicalPath
+                );
+            }
+        }
 
         await ComLock.WaitAsync();
         try
