@@ -67,7 +67,7 @@ Rules:
 | PDF-02 | Batch Separate PDF Export | BLOCKED | PDF-01, FND-04 |  |  |
 | DOCX-03 | Strict DOCX Text Mutation | DONE | DOCX-02 | feat/docx-03-strict-docx-text-mutation (d58d337) | docs/sprints/handoffs/DOCX-03-HANDOFF.md |
 | CAN-04 | Folder Picker & File Release | DONE | CAN-02, CAN-03 | feat/can-04-folder-picker-file-release (7c32a2d) | docs/sprints/handoffs/CAN-04-HANDOFF.md |
-| WORD-04 | High-Fidelity Quick Look | READY | WORD-03, DOCX-04 |  |  |
+| WORD-04 | High-Fidelity Quick Look | DONE | WORD-03, DOCX-04 | feat/word-04-high-fidelity-quick-look (548ad8f) | docs/sprints/handoffs/WORD-04-HANDOFF.md |
 | IDX-06 | Incremental Index Scheduler | DONE | IDX-05, FS-03 | feat/idx-06-incremental-index-scheduler | docs/sprints/handoffs/IDX-06-HANDOFF.md |
 | SRCH-01 | Structured Query Parser | DONE | IDX-05 | feat/srch-01-structured-query-parser | docs/sprints/handoffs/SRCH-01-HANDOFF.md |
 | QA-05 | Public Share Security Audit | DONE | SHR-08, SHR-10 | security/qa-05-public-share-security-audit | docs/sprints/handoffs/QA-05-HANDOFF.md |
