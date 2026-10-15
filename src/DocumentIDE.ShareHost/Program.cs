@@ -5,6 +5,8 @@ using System.Text.Json;
 using DocumentIDE.Core.Sharing;
 using DocumentIDE.ShareHost;
 using DocumentIDE.ShareHost.Endpoints;
+using DocumentIDE.ShareHost.Graph;
+using DocumentIDE.ShareHost.Search;
 using DocumentIDE.ShareHost.Security;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -21,6 +23,8 @@ builder.WebHost.ConfigureKestrel(options =>
 
 builder.Services.AddSingleton<ShareTokenService>();
 builder.Services.AddSingleton<RenderedHtmlSanitizer>();
+builder.Services.AddSingleton<ShareSearchService>();
+builder.Services.AddSingleton<ShareGraphService>();
 builder.Services.AddShareRateLimits();
 
 
@@ -260,7 +264,71 @@ app.MapGet("/share/{shareId}/documents/{docId}/download-pdf", (string shareId, s
 
 SnapshotEndpoints.MapSnapshotShareEndpoints(app);
 
+// SHR-06: share-scoped viewer search. Scope is enforced server-side by
+// ShareSearchService against the frozen manifest member set: only member
+// documents are iterated, so nonmember content can never match.
+app.MapGet("/share/{shareId}/search", (string shareId, string? q, ShareTokenService tokenService, ShareSearchService search) =>
+{
+    try
+    {
+        var manifest = LoadShareManifest(tokenService, shareId);
+        if (manifest == null)
+        {
+            return Results.NotFound(new { error = "Share not found or invalid" });
+        }
+
+        var results = search.Search(manifest, q);
+        return Results.Ok(new { results });
+    }
+    catch (InvalidOperationException)
+    {
+        return Results.Problem(statusCode: 403, detail: "Access denied: invalid share identifier");
+    }
+    catch (Exception)
+    {
+        return Results.NotFound(new { error = "Share not found or invalid" });
+    }
+});
+
+// SHR-06: share-scoped viewer graph. ShareGraphService serves member nodes
+// plus only relations where both endpoints are members; edges to private
+// nodes are omitted entirely.
+app.MapGet("/share/{shareId}/graph", (string shareId, ShareTokenService tokenService, ShareGraphService graph) =>
+{
+    try
+    {
+        var manifest = LoadShareManifest(tokenService, shareId);
+        if (manifest == null)
+        {
+            return Results.NotFound(new { error = "Share not found or invalid" });
+        }
+
+        var payload = graph.BuildGraph(manifest);
+        return Results.Ok(new { nodes = payload.Nodes, edges = payload.Edges });
+    }
+    catch (InvalidOperationException)
+    {
+        return Results.Problem(statusCode: 403, detail: "Access denied: invalid share identifier");
+    }
+    catch (Exception)
+    {
+        return Results.NotFound(new { error = "Share not found or invalid" });
+    }
+});
+
 app.Run();
+
+static ShareManifest? LoadShareManifest(ShareTokenService tokenService, string shareId)
+{
+    var rootPath = tokenService.GetShareRootPath(shareId);
+    var manifestPath = Path.Combine(rootPath, "manifest.json");
+    if (!File.Exists(manifestPath))
+    {
+        return null;
+    }
+
+    return JsonSerializer.Deserialize<ShareManifest>(File.ReadAllText(manifestPath));
+}
 
 static string GetContentType(string filePath)
 {
