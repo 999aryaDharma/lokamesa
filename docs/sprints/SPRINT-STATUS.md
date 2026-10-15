@@ -70,7 +70,7 @@ Rules:
 | WORD-04 | High-Fidelity Quick Look | BLOCKED | WORD-03, DOCX-04 |  |  |
 | IDX-06 | Incremental Index Scheduler | DONE | IDX-05, FS-03 | feat/idx-06-incremental-index-scheduler | docs/sprints/handoffs/IDX-06-HANDOFF.md |
 | SRCH-01 | Structured Query Parser | DONE | IDX-05 | feat/srch-01-structured-query-parser | docs/sprints/handoffs/SRCH-01-HANDOFF.md |
-| QA-05 | Public Share Security Audit | READY | SHR-08, SHR-10 |  |  |
+| QA-05 | Public Share Security Audit | DONE | SHR-08, SHR-10 | security/qa-05-public-share-security-audit | docs/sprints/handoffs/QA-05-HANDOFF.md |
 | GR-02 | Backlinks & Reference Inspector | DONE | GR-01, MD-04 | feat/gr-02-backlinks-reference-inspector (c192481) | docs/sprints/handoffs/GR-02-HANDOFF.md |
 | PDF-03 | Streaming Ordered PDF Merge | BLOCKED | PDF-02 |  |  |
 | BAT-01 | Batch Operation Plan Domain | DONE | FND-03, DOCX-03 | feat/bat-01-batch-operation-plan-domain (3da7d3f) | docs/sprints/handoffs/BAT-01-HANDOFF.md |
