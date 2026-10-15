@@ -115,5 +115,5 @@ Rules:
 | QA-04 | Batch Safety Regression Suite | DONE | BAT-10, HIST-02 | fix/qa-04-batch-safety-regression-suite (188fa48) | docs/sprints/handoffs/QA-04-HANDOFF.md |
 | QA-07 | Crash & Interrupted-Operation Recovery | DONE | FND-04, HIST-02 | fix/qa-07-crash-interrupted-operation-recovery (536d8a4) | docs/sprints/handoffs/QA-07-HANDOFF.md |
 | BAT-07 | Regex Advanced Replace | DONE | BAT-06 | fix/bat-07-regex-advanced-replace (f8e220f) | docs/sprints/handoffs/BAT-07-HANDOFF.md |
-| REL-02 | Release Verification Pipeline | READY | REL-01, QA-01, QA-02, QA-04, QA-05, QA-06, QA-07 |  |  |
+| REL-02 | Release Verification Pipeline | DONE | REL-01, QA-01, QA-02, QA-04, QA-05, QA-06, QA-07 | chore/rel-02-release-verification-pipeline | docs/sprints/handoffs/REL-02-HANDOFF.md |
 | REL-03 | V1 Readiness Gate | BLOCKED | REL-02, SHR-11, CTX-04, AI-04, PDF-04 |  |  |

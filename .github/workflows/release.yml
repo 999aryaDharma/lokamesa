@@ -1,0 +1,68 @@
+name: release-verification
+
+# REL-02 — Release Verification Pipeline.
+# Any gate failure blocks packaging/release (scripts/verify-release.ps1 exits
+# nonzero BEFORE scripts/build-release.ps1 is invoked).
+#
+# Requires a capable self-hosted Windows runner WITH Microsoft Word installed
+# so the Word/COM suite really executes. There is deliberately NO implicit
+# Word skip on this pipeline: an EnvironmentGated Word result without an
+# explicit justification fails the release (no 'green by skipping').
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  verify-and-package:
+    runs-on: [self-hosted, windows, word]
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+
+      - name: Record commit
+        shell: pwsh
+        run: git rev-parse HEAD
+
+      - name: Setup .NET SDK 10.0.302
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.302"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: src/DocumentIDE.Web/package-lock.json
+
+      - name: Run release verification gate
+        shell: pwsh
+        # No -AllowEnvironmentGatedWordSkip here: Word MUST be present.
+        # To run on a Word-less runner instead, pass
+        # -AllowEnvironmentGatedWordSkip -WordSkipJustification "<reason>"
+        # explicitly; the skip is then recorded in the verification report.
+        run: ./scripts/verify-release.ps1
+
+      - name: Upload verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-report
+          path: |
+            artifacts/release-verify/verification-report.json
+            artifacts/release-verify/verification-report.md
+            artifacts/release-verify/checksums.sha256
+            artifacts/release-verify/test-results/**/*.trx
+
+      - name: Upload release artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: |
+            artifacts/installer/**
+            artifacts/desktop/DocumentIDE.Desktop.exe
+            artifacts/desktop/DocumentIDE.ShareHost.exe
