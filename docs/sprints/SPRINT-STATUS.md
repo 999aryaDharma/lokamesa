@@ -83,7 +83,7 @@ Rules:
 | CTX-01 | Context Pack Core | DONE | MD-03, GR-02 | feat/ctx-01-context-pack-core | docs/sprints/handoffs/CTX-01-HANDOFF.md |
 | GR-03 | Graph View | DONE | GR-02, CAN-01 | feat/gr-03-graph-view | docs/sprints/handoffs/GR-03-HANDOFF.md |
 | CAN-06 | Position Persistence & Pinning | DONE | CAN-05, FS-05 | feat/can-06-position-persistence-pinning | docs/sprints/handoffs/CAN-06-HANDOFF.md |
-| SHR-05 | Membership-Safe Live Share | READY | SHR-04, FS-03 |  |  |
+| SHR-05 | Membership-Safe Live Share | DONE | SHR-04, FS-03 | security/shr-05-membership-safe-live-share | docs/sprints/handoffs/SHR-05-HANDOFF.md |
 | SHR-07 | Share Download Permissions | READY | SHR-04, PDF-01 |  |  |
 | AI-02 | Local Embedding Provider | DONE | AI-01 | feat/ai-02-local-embedding-provider (d28bdb7) | docs/sprints/handoffs/AI-02-HANDOFF.md |
 | SRCH-03 | Metadata Filters | DONE | SRCH-02 | feat/srch-03-metadata-filters | docs/sprints/handoffs/SRCH-03-HANDOFF.md |
@@ -93,7 +93,7 @@ Rules:
 | GR-04 | Manual Relations | DONE | GR-01, GR-03 | feat/gr-04-manual-relations | docs/sprints/handoffs/GR-04-HANDOFF.md |
 | GR-05 | Bounded Graph Rendering | DONE | GR-03 | perf/gr-05-bounded-graph-rendering | docs/sprints/handoffs/GR-05-HANDOFF.md |
 | CAN-07 | Multi-Select, Group Drag & Tidy | DONE | CAN-06 | feat/can-07-multi-select-group-drag-tidy | docs/sprints/handoffs/CAN-07-HANDOFF.md |
-| SHR-06 | Share-Scoped Search & Graph | BLOCKED | SHR-05, SRCH-02, GR-03 |  |  |
+| SHR-06 | Share-Scoped Search & Graph | READY | SHR-05, SRCH-02, GR-03 |  |  |
 | SHR-11 | Owner Share Management UI | BLOCKED | SHR-05, SHR-07, SHR-09 |  |  |
 | SRCH-05 | Realtime Search UI & Selection | DONE | SRCH-03, SRCH-04, FND-07 | feat/srch-05-realtime-search-ui-selection | docs/sprints/handoffs/SRCH-05-HANDOFF.md |
 | CTX-04 | Token Estimate & Context Export | DONE | CTX-02, CTX-03 | feat/ctx-04-token-estimate-context-export | docs/sprints/handoffs/CTX-04-HANDOFF.md |
