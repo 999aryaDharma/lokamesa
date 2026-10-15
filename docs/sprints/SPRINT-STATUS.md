@@ -72,7 +72,7 @@ Rules:
 | SRCH-01 | Structured Query Parser | DONE | IDX-05 | feat/srch-01-structured-query-parser | docs/sprints/handoffs/SRCH-01-HANDOFF.md |
 | QA-05 | Public Share Security Audit | DONE | SHR-08, SHR-10 | security/qa-05-public-share-security-audit | docs/sprints/handoffs/QA-05-HANDOFF.md |
 | GR-02 | Backlinks & Reference Inspector | DONE | GR-01, MD-04 | feat/gr-02-backlinks-reference-inspector (c192481) | docs/sprints/handoffs/GR-02-HANDOFF.md |
-| PDF-03 | Streaming Ordered PDF Merge | BLOCKED | PDF-02 |  |  |
+| PDF-03 | Streaming Ordered PDF Merge | READY | PDF-02 |  |  |
 | BAT-01 | Batch Operation Plan Domain | DONE | FND-03, DOCX-03 | feat/bat-01-batch-operation-plan-domain (3da7d3f) | docs/sprints/handoffs/BAT-01-HANDOFF.md |
 | QA-01 | Golden DOCX Regression Corpus | DONE | DOCX-03 | test/qa-01-golden-docx-regression-corpus (71f2975) | docs/sprints/handoffs/QA-01-HANDOFF.md |
 | CAN-05 | Spatially Indexed Assisted Placement | DONE | CAN-04 | perf/can-05-spatially-indexed-assisted-placement | docs/sprints/handoffs/CAN-05-HANDOFF.md |
@@ -83,8 +83,8 @@ Rules:
 | CTX-01 | Context Pack Core | DONE | MD-03, GR-02 | feat/ctx-01-context-pack-core | docs/sprints/handoffs/CTX-01-HANDOFF.md |
 | GR-03 | Graph View | DONE | GR-02, CAN-01 | feat/gr-03-graph-view | docs/sprints/handoffs/GR-03-HANDOFF.md |
 | CAN-06 | Position Persistence & Pinning | DONE | CAN-05, FS-05 | feat/can-06-position-persistence-pinning | docs/sprints/handoffs/CAN-06-HANDOFF.md |
-| SHR-05 | Membership-Safe Live Share | BLOCKED | SHR-04, FS-03 |  |  |
-| SHR-07 | Share Download Permissions | BLOCKED | SHR-04, PDF-01 |  |  |
+| SHR-05 | Membership-Safe Live Share | READY | SHR-04, FS-03 |  |  |
+| SHR-07 | Share Download Permissions | READY | SHR-04, PDF-01 |  |  |
 | AI-02 | Local Embedding Provider | DONE | AI-01 | feat/ai-02-local-embedding-provider (d28bdb7) | docs/sprints/handoffs/AI-02-HANDOFF.md |
 | SRCH-03 | Metadata Filters | DONE | SRCH-02 | feat/srch-03-metadata-filters | docs/sprints/handoffs/SRCH-03-HANDOFF.md |
 | SRCH-04 | Fuzzy Exploratory Search | DONE | SRCH-02 | feat/srch-04-fuzzy-exploratory-search | docs/sprints/handoffs/SRCH-04-HANDOFF.md |
