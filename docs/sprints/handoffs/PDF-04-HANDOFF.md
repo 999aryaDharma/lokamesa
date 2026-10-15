@@ -2,7 +2,7 @@
 
 **Status:** DONE
 **Branch:** `feat/pdf-04-pdf-finalization-ux`
-**Commits:** `<filled at commit time>`
+**Commits:** `a6e2b22` (implementation + status) + docs follow-up (this handoff hash fill)
 
 ## What changed
 
