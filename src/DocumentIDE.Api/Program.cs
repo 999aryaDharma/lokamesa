@@ -38,6 +38,7 @@ builder.Services.AddScoped<DocumentIdentityService>();
 builder.Services.AddScoped<IMoveCorrelationService, MoveCorrelationService>();
 builder.Services.AddScoped<IStartupReconciler, StartupReconciler>();
 builder.Services.AddScoped<IWordDesktopLauncher, WordDesktopLauncher>();
+builder.Services.AddSingleton<DocumentIDE.Infrastructure.Word.WordAutomationQueue>();
 builder.Services.AddScoped<IRecycleBin, WindowsRecycleBin>();
 builder.Services.AddScoped<IPhysicalFileOperations, PhysicalFileOperations>();
 builder.Services.AddScoped<IDocumentMetadataRepository, DocumentMetadataRepository>();
