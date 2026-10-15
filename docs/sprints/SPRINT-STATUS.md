@@ -75,7 +75,7 @@ Rules:
 | PDF-03 | Streaming Ordered PDF Merge | BLOCKED | PDF-02 |  |  |
 | BAT-01 | Batch Operation Plan Domain | DONE | FND-03, DOCX-03 | feat/bat-01-batch-operation-plan-domain (3da7d3f) | docs/sprints/handoffs/BAT-01-HANDOFF.md |
 | QA-01 | Golden DOCX Regression Corpus | DONE | DOCX-03 | test/qa-01-golden-docx-regression-corpus (71f2975) | docs/sprints/handoffs/QA-01-HANDOFF.md |
-| CAN-05 | Spatially Indexed Assisted Placement | READY | CAN-04 |  |  |
+| CAN-05 | Spatially Indexed Assisted Placement | DONE | CAN-04 | perf/can-05-spatially-indexed-assisted-placement | docs/sprints/handoffs/CAN-05-HANDOFF.md |
 | SHR-04 | Snapshot Share | BLOCKED | SHR-03, WORD-04, MD-02 |  |  |
 | AI-01 | Embedding Provider Abstraction | DONE | FND-05, IDX-06 | feat/ai-01-embedding-provider-abstraction | docs/sprints/handoffs/AI-01-HANDOFF.md |
 | QA-02 | Filesystem & Indexing Soak | DONE | FS-08, IDX-06 | test/qa-02-filesystem-indexing-soak (5c4e064) | docs/sprints/handoffs/QA-02-HANDOFF.md |
