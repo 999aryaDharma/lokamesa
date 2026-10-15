@@ -82,7 +82,7 @@ Rules:
 | SRCH-02 | Exact Ranked Search | DONE | SRCH-01 | feat/srch-02-exact-ranked-search | docs/sprints/handoffs/SRCH-02-HANDOFF.md |
 | CTX-01 | Context Pack Core | DONE | MD-03, GR-02 | feat/ctx-01-context-pack-core | docs/sprints/handoffs/CTX-01-HANDOFF.md |
 | GR-03 | Graph View | DONE | GR-02, CAN-01 | feat/gr-03-graph-view | docs/sprints/handoffs/GR-03-HANDOFF.md |
-| CAN-06 | Position Persistence & Pinning | READY | CAN-05, FS-05 |  |  |
+| CAN-06 | Position Persistence & Pinning | DONE | CAN-05, FS-05 | feat/can-06-position-persistence-pinning | docs/sprints/handoffs/CAN-06-HANDOFF.md |
 | SHR-05 | Membership-Safe Live Share | BLOCKED | SHR-04, FS-03 |  |  |
 | SHR-07 | Share Download Permissions | BLOCKED | SHR-04, PDF-01 |  |  |
 | AI-02 | Local Embedding Provider | DONE | AI-01 | feat/ai-02-local-embedding-provider (d28bdb7) | docs/sprints/handoffs/AI-02-HANDOFF.md |
