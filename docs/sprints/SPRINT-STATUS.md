@@ -64,7 +64,7 @@ Rules:
 | SHR-08 | Share CSP, Sanitization & Rate Limits | DONE | SHR-03, MD-02 | security/shr-08-share-csp-sanitization-rate-limits (b404eb5) | docs/sprints/handoffs/SHR-08-HANDOFF.md |
 | GR-01 | Relation Store & Extraction | DONE | MD-03, FND-03 | feat/gr-01-relation-store-extraction | docs/sprints/handoffs/GR-01-HANDOFF.md |
 | MD-04 | Wikilink Resolution & Backlink Inputs | DONE | MD-03 | feat/md-04-wikilink-resolution-backlink-inputs (b6ace97) | docs/sprints/handoffs/MD-04-HANDOFF.md |
-| PDF-02 | Batch Separate PDF Export | READY | PDF-01, FND-04 |  |  |
+| PDF-02 | Batch Separate PDF Export | DONE | PDF-01, FND-04 | feat/pdf-02-batch-separate-pdf-export (a978e51) | docs/sprints/handoffs/PDF-02-HANDOFF.md |
 | DOCX-03 | Strict DOCX Text Mutation | DONE | DOCX-02 | feat/docx-03-strict-docx-text-mutation (d58d337) | docs/sprints/handoffs/DOCX-03-HANDOFF.md |
 | CAN-04 | Folder Picker & File Release | DONE | CAN-02, CAN-03 | feat/can-04-folder-picker-file-release (7c32a2d) | docs/sprints/handoffs/CAN-04-HANDOFF.md |
 | WORD-04 | High-Fidelity Quick Look | DONE | WORD-03, DOCX-04 | feat/word-04-high-fidelity-quick-look (548ad8f) | docs/sprints/handoffs/WORD-04-HANDOFF.md |
