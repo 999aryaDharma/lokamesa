@@ -28,7 +28,10 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DocumentIDE.SafetyTests", "tests\DocumentIDE.SafetyTests\DocumentIDE.SafetyTests.csproj", "{C7A7C0DE-0001-4000-8000-000000000001}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DocumentIDE.GoldenTests", "tests\DocumentIDE.GoldenTests\DocumentIDE.GoldenTests.csproj", "{D4A7C2E8-3F61-4B9A-8C55-12E9B7A0F31D}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DocumentIDE.SoakTests", "tests\DocumentIDE.SoakTests\DocumentIDE.SoakTests.csproj", "{66F1C36E-3D6F-4262-9F2A-6EF45ED22949}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DocumentIDE.PerformanceTests", "tests\DocumentIDE.PerformanceTests\DocumentIDE.PerformanceTests.csproj", "{667AA77E-4A99-414D-80F4-F31771128B48}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -172,6 +175,18 @@ Global
 		{66F1C36E-3D6F-4262-9F2A-6EF45ED22949}.Release|x64.Build.0 = Release|Any CPU
 		{66F1C36E-3D6F-4262-9F2A-6EF45ED22949}.Release|x86.ActiveCfg = Release|Any CPU
 		{66F1C36E-3D6F-4262-9F2A-6EF45ED22949}.Release|x86.Build.0 = Release|Any CPU
+		{667AA77E-4A99-414D-80F4-F31771128B48}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{667AA77E-4A99-414D-80F4-F31771128B48}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{667AA77E-4A99-414D-80F4-F31771128B48}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{667AA77E-4A99-414D-80F4-F31771128B48}.Debug|x64.Build.0 = Debug|Any CPU
+		{667AA77E-4A99-414D-80F4-F31771128B48}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{667AA77E-4A99-414D-80F4-F31771128B48}.Debug|x86.Build.0 = Debug|Any CPU
+		{667AA77E-4A99-414D-80F4-F31771128B48}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{667AA77E-4A99-414D-80F4-F31771128B48}.Release|Any CPU.Build.0 = Release|Any CPU
+		{667AA77E-4A99-414D-80F4-F31771128B48}.Release|x64.ActiveCfg = Release|Any CPU
+		{667AA77E-4A99-414D-80F4-F31771128B48}.Release|x64.Build.0 = Release|Any CPU
+		{667AA77E-4A99-414D-80F4-F31771128B48}.Release|x86.ActiveCfg = Release|Any CPU
+		{667AA77E-4A99-414D-80F4-F31771128B48}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -189,5 +204,6 @@ Global
 		{C7A7C0DE-0001-4000-8000-000000000001} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{D4A7C2E8-3F61-4B9A-8C55-12E9B7A0F31D} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{66F1C36E-3D6F-4262-9F2A-6EF45ED22949} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{667AA77E-4A99-414D-80F4-F31771128B48} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal

@@ -101,7 +101,7 @@ Rules:
 | AI-03 | Semantic Search Mode | DONE | AI-02, SRCH-05 | feat/ai-03-semantic-search-mode | docs/sprints/handoffs/AI-03-HANDOFF.md |
 | BAT-02 | Batch Scope Resolver | DONE | FS-01, SRCH-05, BAT-01 | feat/bat-02-batch-scope-resolver (60593a1) | docs/sprints/handoffs/BAT-02-HANDOFF.md |
 | CAN-08 | List View & View Switch | DONE | CAN-03, SRCH-05 | feat/can-08-list-view-view-switch (0203af8) | docs/sprints/handoffs/CAN-08-HANDOFF.md |
-| QA-06 | Performance Benchmark Gate | READY | CAN-07, SRCH-05, GR-05, PDF-03 |  |  |
+| QA-06 | Performance Benchmark Gate | DONE | CAN-07, SRCH-05, GR-05, PDF-03 | perf/qa-06-performance-benchmark-gate | docs/sprints/handoffs/QA-06-HANDOFF.md |
 | BAT-03 | Batch Preview API & Review Shell | DONE | BAT-01, BAT-02 | feat/bat-03-batch-preview-api-review-shell (4899761) | docs/sprints/handoffs/BAT-03-HANDOFF.md |
 | PDF-04 | PDF Finalization UX | DONE | CAN-08, PDF-03 | feat/pdf-04-pdf-finalization-ux | docs/sprints/handoffs/PDF-04-HANDOFF.md |
 | BAT-04 | Transactional Safe Apply Engine | DONE | BAT-03, HIST-01, FS-07 | fix/bat-04-transactional-safe-apply-engine (02f236e) | docs/sprints/handoffs/BAT-04-HANDOFF.md |
