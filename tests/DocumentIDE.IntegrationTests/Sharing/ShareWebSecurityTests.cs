@@ -142,12 +142,14 @@ public sealed class ShareWebSecurityTests : IClassFixture<WebApplicationFactory<
         var clientIp = NewClientIp();
         using var client = _factory.CreateClient();
 
-        // Reserved share search route (GET /share/{token}/search); the default budget is
-        // 30/minute/IP and must apply even before the SHR-06 search implementation lands.
+        // Share-scoped search route (GET /share/{token}/search); the default budget is
+        // 30/minute/IP. Since SHR-06 landed, the route is implemented server-side and a
+        // non-matching query returns 200 with empty results (the 404 expectation only
+        // applied while the route was still reserved-but-unimplemented).
         for (var i = 0; i < 30; i++)
         {
             var response = await SendAsync(client, $"/share/{shareId}/search?q=hello", clientIp);
-            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         }
 
         var limited = await SendAsync(client, $"/share/{shareId}/search?q=hello", clientIp);
