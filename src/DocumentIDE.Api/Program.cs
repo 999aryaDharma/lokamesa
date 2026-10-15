@@ -11,6 +11,7 @@ using DocumentIDE.Infrastructure.Diagnostics;
 using DocumentIDE.Core.Search;
 using DocumentIDE.Infrastructure.Search;
 using DocumentIDE.Core.Indexing;
+using DocumentIDE.Core.Pdf;
 using DocumentIDE.Infrastructure.Docx;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -39,6 +40,9 @@ builder.Services.AddScoped<IMoveCorrelationService, MoveCorrelationService>();
 builder.Services.AddScoped<IStartupReconciler, StartupReconciler>();
 builder.Services.AddScoped<IWordDesktopLauncher, WordDesktopLauncher>();
 builder.Services.AddSingleton<DocumentIDE.Infrastructure.Word.WordAutomationQueue>();
+builder.Services.AddSingleton<IWordAutomationQueue, WordAutomationQueueAdapter>();
+builder.Services.AddSingleton<IWordPdfRenderer, WordPdfRenderer>();
+builder.Services.AddScoped<PdfExportService>();
 builder.Services.AddScoped<IRecycleBin, WindowsRecycleBin>();
 builder.Services.AddScoped<IPhysicalFileOperations, PhysicalFileOperations>();
 builder.Services.AddScoped<IDocumentMetadataRepository, DocumentMetadataRepository>();

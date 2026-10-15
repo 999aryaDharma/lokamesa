@@ -56,7 +56,7 @@ Rules:
 | IDX-04 | Metadata Persistence | DONE | IDX-02, IDX-03, FND-03 | feat/idx-04-metadata-persistence (5ec2a91) | docs/sprints/handoffs/IDX-04-HANDOFF.md |
 | MD-02 | Markdown Preview & Sanitization | DONE | MD-01 | feat/md-02-markdown-preview (abcdef12) | docs/sprints/handoffs/MD-02-HANDOFF.md |
 | MD-03 | Frontmatter & Explicit Link Index | DONE | IDX-03, MD-01 | feat/md-03-frontmatter-explicit-link-index (1398e2c) | docs/sprints/handoffs/MD-03-HANDOFF.md |
-| PDF-01 | Single DOCX PDF Export | READY | WORD-03 |  |  |
+| PDF-01 | Single DOCX PDF Export | DONE | WORD-03 | feat/pdf-01-single-docx-pdf-export | docs/sprints/handoffs/PDF-01-HANDOFF.md |
 | DOCX-02 | Logical Search Across Runs | DONE | DOCX-01 | feat/docx-02-logical-search-across-runs (ee88815) | docs/sprints/handoffs/DOCX-02-HANDOFF.md |
 | CAN-03 | Document Paper Object & Thumbnail Shell | DONE | IDX-04, CAN-01 | feat/can-03-document-paper-object-thumbnail-shell | docs/sprints/handoffs/CAN-03-HANDOFF.md |
 | DOCX-04 | Document Lens Metadata | DONE | IDX-04 | feat/docx-04-document-lens-metadata (84f8c61) | docs/sprints/handoffs/DOCX-04-HANDOFF.md |
