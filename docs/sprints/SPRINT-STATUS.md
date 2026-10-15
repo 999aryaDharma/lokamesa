@@ -84,7 +84,7 @@ Rules:
 | GR-03 | Graph View | DONE | GR-02, CAN-01 | feat/gr-03-graph-view | docs/sprints/handoffs/GR-03-HANDOFF.md |
 | CAN-06 | Position Persistence & Pinning | DONE | CAN-05, FS-05 | feat/can-06-position-persistence-pinning | docs/sprints/handoffs/CAN-06-HANDOFF.md |
 | SHR-05 | Membership-Safe Live Share | READY | SHR-04, FS-03 |  |  |
-| SHR-07 | Share Download Permissions | READY | SHR-04, PDF-01 |  |  |
+| SHR-07 | Share Download Permissions | DONE | SHR-04, PDF-01 | security/shr-07-share-download-permissions | docs/sprints/handoffs/SHR-07-HANDOFF.md |
 | AI-02 | Local Embedding Provider | DONE | AI-01 | feat/ai-02-local-embedding-provider (d28bdb7) | docs/sprints/handoffs/AI-02-HANDOFF.md |
 | SRCH-03 | Metadata Filters | DONE | SRCH-02 | feat/srch-03-metadata-filters | docs/sprints/handoffs/SRCH-03-HANDOFF.md |
 | SRCH-04 | Fuzzy Exploratory Search | DONE | SRCH-02 | feat/srch-04-fuzzy-exploratory-search | docs/sprints/handoffs/SRCH-04-HANDOFF.md |
