@@ -56,7 +56,7 @@ Rules:
 | IDX-04 | Metadata Persistence | DONE | IDX-02, IDX-03, FND-03 | feat/idx-04-metadata-persistence (5ec2a91) | docs/sprints/handoffs/IDX-04-HANDOFF.md |
 | MD-02 | Markdown Preview & Sanitization | DONE | MD-01 | feat/md-02-markdown-preview (abcdef12) | docs/sprints/handoffs/MD-02-HANDOFF.md |
 | MD-03 | Frontmatter & Explicit Link Index | DONE | IDX-03, MD-01 | feat/md-03-frontmatter-explicit-link-index (1398e2c) | docs/sprints/handoffs/MD-03-HANDOFF.md |
-| PDF-01 | Single DOCX PDF Export | BLOCKED | WORD-03 |  |  |
+| PDF-01 | Single DOCX PDF Export | READY | WORD-03 |  |  |
 | DOCX-02 | Logical Search Across Runs | DONE | DOCX-01 | feat/docx-02-logical-search-across-runs (ee88815) | docs/sprints/handoffs/DOCX-02-HANDOFF.md |
 | CAN-03 | Document Paper Object & Thumbnail Shell | DONE | IDX-04, CAN-01 | feat/can-03-document-paper-object-thumbnail-shell | docs/sprints/handoffs/CAN-03-HANDOFF.md |
 | DOCX-04 | Document Lens Metadata | DONE | IDX-04 | feat/docx-04-document-lens-metadata (84f8c61) | docs/sprints/handoffs/DOCX-04-HANDOFF.md |
@@ -67,7 +67,7 @@ Rules:
 | PDF-02 | Batch Separate PDF Export | BLOCKED | PDF-01, FND-04 |  |  |
 | DOCX-03 | Strict DOCX Text Mutation | DONE | DOCX-02 | feat/docx-03-strict-docx-text-mutation (d58d337) | docs/sprints/handoffs/DOCX-03-HANDOFF.md |
 | CAN-04 | Folder Picker & File Release | DONE | CAN-02, CAN-03 | feat/can-04-folder-picker-file-release (7c32a2d) | docs/sprints/handoffs/CAN-04-HANDOFF.md |
-| WORD-04 | High-Fidelity Quick Look | BLOCKED | WORD-03, DOCX-04 |  |  |
+| WORD-04 | High-Fidelity Quick Look | READY | WORD-03, DOCX-04 |  |  |
 | IDX-06 | Incremental Index Scheduler | DONE | IDX-05, FS-03 | feat/idx-06-incremental-index-scheduler | docs/sprints/handoffs/IDX-06-HANDOFF.md |
 | SRCH-01 | Structured Query Parser | DONE | IDX-05 | feat/srch-01-structured-query-parser | docs/sprints/handoffs/SRCH-01-HANDOFF.md |
 | QA-05 | Public Share Security Audit | DONE | SHR-08, SHR-10 | security/qa-05-public-share-security-audit | docs/sprints/handoffs/QA-05-HANDOFF.md |
@@ -82,7 +82,7 @@ Rules:
 | SRCH-02 | Exact Ranked Search | DONE | SRCH-01 | feat/srch-02-exact-ranked-search | docs/sprints/handoffs/SRCH-02-HANDOFF.md |
 | CTX-01 | Context Pack Core | DONE | MD-03, GR-02 | feat/ctx-01-context-pack-core | docs/sprints/handoffs/CTX-01-HANDOFF.md |
 | GR-03 | Graph View | DONE | GR-02, CAN-01 | feat/gr-03-graph-view | docs/sprints/handoffs/GR-03-HANDOFF.md |
-| CAN-06 | Position Persistence & Pinning | BLOCKED | CAN-05, FS-05 |  |  |
+| CAN-06 | Position Persistence & Pinning | READY | CAN-05, FS-05 |  |  |
 | SHR-05 | Membership-Safe Live Share | BLOCKED | SHR-04, FS-03 |  |  |
 | SHR-07 | Share Download Permissions | BLOCKED | SHR-04, PDF-01 |  |  |
 | AI-02 | Local Embedding Provider | DONE | AI-01 | feat/ai-02-local-embedding-provider (d28bdb7) | docs/sprints/handoffs/AI-02-HANDOFF.md |
