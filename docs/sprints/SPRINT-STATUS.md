@@ -94,16 +94,16 @@ Rules:
 | GR-05 | Bounded Graph Rendering | DONE | GR-03 | perf/gr-05-bounded-graph-rendering | docs/sprints/handoffs/GR-05-HANDOFF.md |
 | CAN-07 | Multi-Select, Group Drag & Tidy | DONE | CAN-06 | feat/can-07-multi-select-group-drag-tidy | docs/sprints/handoffs/CAN-07-HANDOFF.md |
 | SHR-06 | Share-Scoped Search & Graph | READY | SHR-05, SRCH-02, GR-03 |  |  |
-| SHR-11 | Owner Share Management UI | BLOCKED | SHR-05, SHR-07, SHR-09 |  |  |
+| SHR-11 | Owner Share Management UI | READY | SHR-05, SHR-07, SHR-09 |  |  |
 | SRCH-05 | Realtime Search UI & Selection | DONE | SRCH-03, SRCH-04, FND-07 | feat/srch-05-realtime-search-ui-selection | docs/sprints/handoffs/SRCH-05-HANDOFF.md |
 | CTX-04 | Token Estimate & Context Export | DONE | CTX-02, CTX-03 | feat/ctx-04-token-estimate-context-export | docs/sprints/handoffs/CTX-04-HANDOFF.md |
 | AI-04 | Semantic Graph Suggestions | DONE | AI-02, GR-05 | feat/ai-04-semantic-graph-suggestions | docs/sprints/handoffs/AI-04-HANDOFF.md |
 | AI-03 | Semantic Search Mode | DONE | AI-02, SRCH-05 | feat/ai-03-semantic-search-mode | docs/sprints/handoffs/AI-03-HANDOFF.md |
 | BAT-02 | Batch Scope Resolver | DONE | FS-01, SRCH-05, BAT-01 | feat/bat-02-batch-scope-resolver (60593a1) | docs/sprints/handoffs/BAT-02-HANDOFF.md |
 | CAN-08 | List View & View Switch | DONE | CAN-03, SRCH-05 | feat/can-08-list-view-view-switch (0203af8) | docs/sprints/handoffs/CAN-08-HANDOFF.md |
-| QA-06 | Performance Benchmark Gate | BLOCKED | CAN-07, SRCH-05, GR-05, PDF-03 |  |  |
+| QA-06 | Performance Benchmark Gate | READY | CAN-07, SRCH-05, GR-05, PDF-03 |  |  |
 | BAT-03 | Batch Preview API & Review Shell | DONE | BAT-01, BAT-02 | feat/bat-03-batch-preview-api-review-shell (4899761) | docs/sprints/handoffs/BAT-03-HANDOFF.md |
-| PDF-04 | PDF Finalization UX | BLOCKED | CAN-08, PDF-03 |  |  |
+| PDF-04 | PDF Finalization UX | READY | CAN-08, PDF-03 |  |  |
 | BAT-04 | Transactional Safe Apply Engine | DONE | BAT-03, HIST-01, FS-07 | fix/bat-04-transactional-safe-apply-engine (02f236e) | docs/sprints/handoffs/BAT-04-HANDOFF.md |
 | BAT-05 | Exact Search & Replace Operation | DONE | BAT-04, DOCX-03 | feat/bat-05-exact-search-replace-operation (9363e7b) | docs/sprints/handoffs/BAT-05-HANDOFF.md |
 | BAT-08 | Strict Font & Font-Size Operations | DONE | BAT-04, DOCX-03 | feat/bat-08-strict-font-font-size-operations (2f54e71) | docs/sprints/handoffs/BAT-08-HANDOFF.md |
