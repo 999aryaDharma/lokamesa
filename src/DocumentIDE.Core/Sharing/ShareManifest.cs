@@ -14,6 +14,11 @@ public class ShareManifest
     public string AccessMode { get; set; } = DocumentIDE.Core.Domain.Sharing.AccessMode.SecretToken.ToString();
     public bool AllowOriginalDownload { get; set; }
     public bool AllowPdfDownload { get; set; }
+    /// <summary>
+    /// Frozen snapshot format marker (SHR-04). Null for manifests created by
+    /// earlier sprints; set to <c>shr04-v1</c> by SnapshotSharePublisher.
+    /// </summary>
+    public string? SnapshotVersion { get; set; }
     public string CreatedAt { get; set; } = DateTime.UtcNow.ToString("O");
     public List<SanitizedDocumentMetadata> Documents { get; set; } = new List<SanitizedDocumentMetadata>();
 

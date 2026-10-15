@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using DocumentIDE.Core.Sharing;
 using DocumentIDE.ShareHost;
+using DocumentIDE.ShareHost.Endpoints;
 using DocumentIDE.ShareHost.Security;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -256,6 +257,8 @@ app.MapGet("/share/{shareId}/documents/{docId}/download-pdf", (string shareId, s
         return Results.NotFound(new { error = "Download failed" });
     }
 });
+
+SnapshotEndpoints.MapSnapshotShareEndpoints(app);
 
 app.Run();
 
