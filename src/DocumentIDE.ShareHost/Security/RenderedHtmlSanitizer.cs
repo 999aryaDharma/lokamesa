@@ -34,9 +34,15 @@ namespace DocumentIDE.ShareHost.Security
             // The maintained library default allow-list already excludes these elements;
             // removing them explicitly is defense in depth against a future default change
             // that could re-enable scripting-capable or embedded active content.
+            // QA-05: "form"/"button" are also removed. The public viewer is read-only and
+            // the viewer CSP already declares form-action 'none', so interactive forms have
+            // no legitimate role here; stripping them keeps the sanitizer consistent with
+            // the CSP intent. "input" stays allowed so owner-rendered GFM task-list
+            // checkboxes (disabled) keep their fidelity.
             foreach (var tag in new[]
                      {
-                         "script", "iframe", "frame", "frameset", "object", "embed", "applet", "template", "style"
+                         "script", "iframe", "frame", "frameset", "object", "embed", "applet", "template", "style",
+                         "form", "button"
                      })
             {
                 sanitizer.AllowedTags.Remove(tag);

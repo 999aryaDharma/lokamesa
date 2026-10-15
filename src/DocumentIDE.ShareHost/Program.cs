@@ -121,6 +121,27 @@ app.MapGet("/share/{shareId}/artifacts/{*relativePath}", (string shareId, string
             return Results.NotFound(new { error = "Artifact not found" });
         }
 
+        // QA-05: download-gated directories must not bypass permissions via the generic
+        // artifact route. When a manifest exists and the permission is OFF, originals/
+        // and pdfs/ artifacts return forbidden instead of the file bytes.
+        var normalizedRelative = relativePath.Replace('\\', '/').TrimStart('/');
+        var shareRootForGate = tokenService.GetShareRootPath(shareId);
+        var gateManifestPath = Path.Combine(shareRootForGate, "manifest.json");
+        if (File.Exists(gateManifestPath))
+        {
+            var gateManifest = JsonSerializer.Deserialize<ShareManifest>(File.ReadAllText(gateManifestPath));
+            if (normalizedRelative.StartsWith("originals/", StringComparison.OrdinalIgnoreCase) &&
+                gateManifest?.AllowOriginalDownload != true)
+            {
+                return Results.Problem(statusCode: 403, detail: "Original download is disabled for this share");
+            }
+            if (normalizedRelative.StartsWith("pdfs/", StringComparison.OrdinalIgnoreCase) &&
+                gateManifest?.AllowPdfDownload != true)
+            {
+                return Results.Problem(statusCode: 403, detail: "PDF download is disabled for this share");
+            }
+        }
+
         var contentType = GetContentType(artifactPath);
 
         if (contentType == "text/html")
