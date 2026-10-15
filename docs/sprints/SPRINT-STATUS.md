@@ -64,7 +64,7 @@ Rules:
 | SHR-08 | Share CSP, Sanitization & Rate Limits | DONE | SHR-03, MD-02 | security/shr-08-share-csp-sanitization-rate-limits (b404eb5) | docs/sprints/handoffs/SHR-08-HANDOFF.md |
 | GR-01 | Relation Store & Extraction | DONE | MD-03, FND-03 | feat/gr-01-relation-store-extraction | docs/sprints/handoffs/GR-01-HANDOFF.md |
 | MD-04 | Wikilink Resolution & Backlink Inputs | DONE | MD-03 | feat/md-04-wikilink-resolution-backlink-inputs (b6ace97) | docs/sprints/handoffs/MD-04-HANDOFF.md |
-| PDF-02 | Batch Separate PDF Export | BLOCKED | PDF-01, FND-04 |  |  |
+| PDF-02 | Batch Separate PDF Export | READY | PDF-01, FND-04 |  |  |
 | DOCX-03 | Strict DOCX Text Mutation | DONE | DOCX-02 | feat/docx-03-strict-docx-text-mutation (d58d337) | docs/sprints/handoffs/DOCX-03-HANDOFF.md |
 | CAN-04 | Folder Picker & File Release | DONE | CAN-02, CAN-03 | feat/can-04-folder-picker-file-release (7c32a2d) | docs/sprints/handoffs/CAN-04-HANDOFF.md |
 | WORD-04 | High-Fidelity Quick Look | DONE | WORD-03, DOCX-04 | feat/word-04-high-fidelity-quick-look (548ad8f) | docs/sprints/handoffs/WORD-04-HANDOFF.md |
@@ -76,7 +76,7 @@ Rules:
 | BAT-01 | Batch Operation Plan Domain | DONE | FND-03, DOCX-03 | feat/bat-01-batch-operation-plan-domain (3da7d3f) | docs/sprints/handoffs/BAT-01-HANDOFF.md |
 | QA-01 | Golden DOCX Regression Corpus | DONE | DOCX-03 | test/qa-01-golden-docx-regression-corpus (71f2975) | docs/sprints/handoffs/QA-01-HANDOFF.md |
 | CAN-05 | Spatially Indexed Assisted Placement | DONE | CAN-04 | perf/can-05-spatially-indexed-assisted-placement | docs/sprints/handoffs/CAN-05-HANDOFF.md |
-| SHR-04 | Snapshot Share | BLOCKED | SHR-03, WORD-04, MD-02 |  |  |
+| SHR-04 | Snapshot Share | READY | SHR-03, WORD-04, MD-02 |  |  |
 | AI-01 | Embedding Provider Abstraction | DONE | FND-05, IDX-06 | feat/ai-01-embedding-provider-abstraction | docs/sprints/handoffs/AI-01-HANDOFF.md |
 | QA-02 | Filesystem & Indexing Soak | DONE | FS-08, IDX-06 | test/qa-02-filesystem-indexing-soak (5c4e064) | docs/sprints/handoffs/QA-02-HANDOFF.md |
 | SRCH-02 | Exact Ranked Search | DONE | SRCH-01 | feat/srch-02-exact-ranked-search | docs/sprints/handoffs/SRCH-02-HANDOFF.md |
@@ -92,7 +92,7 @@ Rules:
 | CTX-03 | DOCX Context Representation | DONE | CTX-01, IDX-02 | feat/ctx-03-docx-context-representation (0cd43a4) | docs/sprints/handoffs/CTX-03-HANDOFF.md |
 | GR-04 | Manual Relations | DONE | GR-01, GR-03 | feat/gr-04-manual-relations | docs/sprints/handoffs/GR-04-HANDOFF.md |
 | GR-05 | Bounded Graph Rendering | DONE | GR-03 | perf/gr-05-bounded-graph-rendering | docs/sprints/handoffs/GR-05-HANDOFF.md |
-| CAN-07 | Multi-Select, Group Drag & Tidy | BLOCKED | CAN-06 |  |  |
+| CAN-07 | Multi-Select, Group Drag & Tidy | READY | CAN-06 |  |  |
 | SHR-06 | Share-Scoped Search & Graph | BLOCKED | SHR-05, SRCH-02, GR-03 |  |  |
 | SHR-11 | Owner Share Management UI | BLOCKED | SHR-05, SHR-07, SHR-09 |  |  |
 | SRCH-05 | Realtime Search UI & Selection | DONE | SRCH-03, SRCH-04, FND-07 | feat/srch-05-realtime-search-ui-selection | docs/sprints/handoffs/SRCH-05-HANDOFF.md |
