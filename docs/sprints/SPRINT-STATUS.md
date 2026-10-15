@@ -72,7 +72,7 @@ Rules:
 | SRCH-01 | Structured Query Parser | DONE | IDX-05 | feat/srch-01-structured-query-parser | docs/sprints/handoffs/SRCH-01-HANDOFF.md |
 | QA-05 | Public Share Security Audit | DONE | SHR-08, SHR-10 | security/qa-05-public-share-security-audit | docs/sprints/handoffs/QA-05-HANDOFF.md |
 | GR-02 | Backlinks & Reference Inspector | DONE | GR-01, MD-04 | feat/gr-02-backlinks-reference-inspector (c192481) | docs/sprints/handoffs/GR-02-HANDOFF.md |
-| PDF-03 | Streaming Ordered PDF Merge | READY | PDF-02 |  |  |
+| PDF-03 | Streaming Ordered PDF Merge | DONE | PDF-02 | perf/pdf-03-streaming-ordered-pdf-merge | docs/sprints/handoffs/PDF-03-HANDOFF.md |
 | BAT-01 | Batch Operation Plan Domain | DONE | FND-03, DOCX-03 | feat/bat-01-batch-operation-plan-domain (3da7d3f) | docs/sprints/handoffs/BAT-01-HANDOFF.md |
 | QA-01 | Golden DOCX Regression Corpus | DONE | DOCX-03 | test/qa-01-golden-docx-regression-corpus (71f2975) | docs/sprints/handoffs/QA-01-HANDOFF.md |
 | CAN-05 | Spatially Indexed Assisted Placement | DONE | CAN-04 | perf/can-05-spatially-indexed-assisted-placement | docs/sprints/handoffs/CAN-05-HANDOFF.md |

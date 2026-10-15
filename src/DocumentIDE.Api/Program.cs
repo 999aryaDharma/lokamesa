@@ -44,6 +44,7 @@ builder.Services.AddSingleton<IWordAutomationQueue, WordAutomationQueueAdapter>(
 builder.Services.AddSingleton<IWordPdfRenderer, WordPdfRenderer>();
 builder.Services.AddScoped<PdfExportService>();
 builder.Services.AddScoped<BatchPdfExportService>();
+builder.Services.AddScoped<PdfMergeService>();
 builder.Services.AddScoped<IRecycleBin, WindowsRecycleBin>();
 builder.Services.AddScoped<IPhysicalFileOperations, PhysicalFileOperations>();
 builder.Services.AddScoped<IDocumentMetadataRepository, DocumentMetadataRepository>();
