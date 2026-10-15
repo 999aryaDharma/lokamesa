@@ -51,7 +51,7 @@ Rules:
 | MD-01 | Source-First Markdown Editor | DONE | FND-07, IDX-03 | feat/md-01-source-first-markdown-editor (a1b2c3d4) | docs/sprints/handoffs/MD-01-HANDOFF.md |
 | WORD-02 | Word Editing/Lock Detection | IN_PROGRESS | WORD-01, FS-03 |  |  |
 | WORD-03 | Dedicated STA Word Automation Queue | IN_PROGRESS | FND-04, WORD-01 |  |  |
-| FS-06 | Missing File & Folder Recovery | IN_PROGRESS | FS-04 |  |  |
+| FS-06 | Missing File & Folder Recovery | DONE | FS-04 | feat/fs-06-missing-file-folder-recovery | docs/sprints/handoffs/FS-06-HANDOFF.md |
 | DOCX-01 | Logical DOCX Text/Run Map | DONE | IDX-02 | feat/docx-01-logical-docx-text-run-map (4758752) | docs/sprints/handoffs/DOCX-01-HANDOFF.md |
 | IDX-04 | Metadata Persistence | DONE | IDX-02, IDX-03, FND-03 | feat/idx-04-metadata-persistence (5ec2a91) | docs/sprints/handoffs/IDX-04-HANDOFF.md |
 | MD-02 | Markdown Preview & Sanitization | DONE | MD-01 | feat/md-02-markdown-preview (abcdef12) | docs/sprints/handoffs/MD-02-HANDOFF.md |
