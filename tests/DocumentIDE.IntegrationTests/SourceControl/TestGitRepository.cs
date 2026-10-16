@@ -70,6 +70,34 @@ internal sealed class TestGitRepository : IDisposable
         return process.ExitCode;
     }
 
+    /// <summary>
+    /// SCM-02 additive fixture helper: runs the system Git and returns captured
+    /// standard output (used to pin expected HEAD commit ids independently of
+    /// the code under test).
+    /// </summary>
+    public static string RunGitCapture(string workingDirectory, params string[] arguments)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "git",
+            WorkingDirectory = workingDirectory,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+        foreach (string argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        using Process process = Process.Start(startInfo)!;
+        string stdout = process.StandardOutput.ReadToEnd();
+        process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        return stdout;
+    }
+
     private static void RunGitOrThrow(string workingDirectory, params string[] arguments)
     {
         int exitCode = RunGit(workingDirectory, arguments);
