@@ -119,9 +119,9 @@ Rules:
 | REL-03 | V1 Readiness Gate | REVIEW | REL-02, SHR-11, CTX-04, AI-04, PDF-04 | chore/rel-03-v1-readiness-gate | docs/sprints/handoffs/REL-03-HANDOFF.md |
 | SCM-01 | Git Capability & Controlled Process Runner | DONE | FND-03, FND-07, FS-02 | feat/git-capability-controlled-process-runner | docs/sprints/handoffs/SCM-01-HANDOFF.md |
 | SCM-02 | Git Repository, Worktree & Status Domain | DONE | SCM-01, FS-03 | feat/git-repository-worktree-status-domain | docs/sprints/handoffs/SCM-02-HANDOFF.md |
-| SCM-03 | Source Control Changes Pane | BLOCKED | SCM-02, FND-07 |  |  |
-| SCM-04 | Markdown Git Diff | BLOCKED | SCM-02, MD-01 |  |  |
-| SCM-05 | DOCX Document-Aware Git Diff | BLOCKED | SCM-02, IDX-02, DOCX-01 |  |  |
+| SCM-03 | Source Control Changes Pane | READY | SCM-02, FND-07 |  |  |
+| SCM-04 | Markdown Git Diff | READY | SCM-02, MD-01 |  |  |
+| SCM-05 | DOCX Document-Aware Git Diff | READY | SCM-02, IDX-02, DOCX-01 |  |  |
 | SCM-06 | Git Stage & Unstage | BLOCKED | SCM-02, SCM-03 |  |  |
 | SCM-07 | Git Commit & Commit All | BLOCKED | SCM-06, SCM-05 |  |  |
 | SCM-08 | Git Commit History & File History | BLOCKED | SCM-02, SCM-07 |  |  |
@@ -132,7 +132,7 @@ Rules:
 | SCM-13 | Explicit Git Push | BLOCKED | SCM-11, SCM-07 |  |  |
 | SCM-14 | Git Conflict State & Resolution Shell | BLOCKED | SCM-12, SCM-05 |  |  |
 | SCM-15 | Git Worktree Discovery & Open Existing | DONE | SCM-01, FS-03, FND-07 | feat/git-worktree-discovery-open-existing | docs/sprints/handoffs/SCM-15-HANDOFF.md |
-| SCM-16 | Safe Git Worktree Create & Remove | BLOCKED | SCM-15, FS-07 |  |  |
+| SCM-16 | Safe Git Worktree Create & Remove | READY | SCM-15, FS-07 |  |  |
 | SCM-17 | Source Control Regression & Release Hardening | BLOCKED | SCM-04, SCM-05, SCM-09, SCM-12, SCM-13, SCM-14, SCM-16, QA-02 |  |  |
 
 **REL-03 review notes (2026-10-16) — product verdict BLOCKED.** `docs/quality/v1-readiness-report.md` maps all 22 spec-12 completion gates; 16 PASS, 6 FAIL. Blockers: (1) graph view is a placeholder (GR-03 steps 1/3/4/5 unmet, §27.2/§89 not deliverable); (2) batch Apply unreachable (`BatchPreviewPanel.tsx:147` disabled; no apply/undo route); (3) `/api/word/open` 404 in the shipped desktop host (`BatchPreviewHostTests.cs:91`); (4) no `/api/search` endpoint + search UI unmounted; (5) share lifecycle unwired (SHR-11 callback deferral, no create/revoke endpoints); (6) workspace/canvas bootstrap not wired (canvas never populated outside tests); (7) Markdown editor is a stub and unmounted; (8) E2E administrative workflow test missing (spec 11 §20/§27). Integration sprints are required before V1; gap list G1–G9 with file:line evidence is in the report and handoff.
