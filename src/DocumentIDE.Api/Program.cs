@@ -13,6 +13,8 @@ using DocumentIDE.Infrastructure.Search;
 using DocumentIDE.Core.Indexing;
 using DocumentIDE.Core.Pdf;
 using DocumentIDE.Infrastructure.Docx;
+using DocumentIDE.Core.SourceControl;
+using DocumentIDE.Infrastructure.SourceControl;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseDiagnostics();
@@ -42,6 +44,16 @@ builder.Services.AddScoped<IWordDesktopLauncher, WordDesktopLauncher>();
 builder.Services.AddSingleton<DocumentIDE.Infrastructure.Word.WordAutomationQueue>();
 builder.Services.AddSingleton<IWordAutomationQueue, WordAutomationQueueAdapter>();
 builder.Services.AddSingleton<IWordPdfRenderer, WordPdfRenderer>();
+
+// SCM-01: controlled Git process runner. The per-worktree mutation queue
+// serializes index/worktree mutations per worktree (spec 13 §19); read-only
+// history/status commands bypass it via the runner's deterministic
+// classifier. Process policy (structured args, no shell, prompts/pagers
+// disabled, LC_ALL=C) lives in GitProcessRunnerOptions.
+builder.Services.AddSingleton(GitProcessRunnerOptions.Default);
+builder.Services.AddSingleton<GitWorktreeMutationQueue>();
+builder.Services.AddSingleton<IGitProcessRunner, GitProcessRunner>();
+
 builder.Services.AddScoped<PdfExportService>();
 builder.Services.AddScoped<BatchPdfExportService>();
 builder.Services.AddScoped<PdfMergeService>();
