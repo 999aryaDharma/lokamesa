@@ -7,7 +7,7 @@ This file is the first instruction file for any AI coding agent working in this 
 When requirements conflict, obey in this order:
 
 1. `docs/specs/00-master-product-technical-spec.md`
-2. relevant subsystem spec in `docs/specs/01..11`
+2. relevant subsystem spec in `docs/specs/01..11` or `docs/specs/13-source-control-git-worktree-spec.md`
 3. `docs/specs/12-implementation-plan.md`
 4. current sprint spec in `docs/sprints/**`
 5. implementation code/tests

@@ -1,6 +1,6 @@
 # Sprint Index
 
-**Total implementation sprints:** 98
+**Total implementation sprints:** 115
 
 ## Operating rule
 
@@ -91,6 +91,23 @@ Initial ready queue:
 | `SHR-06` | Share-Scoped Search & Graph | P1 | sharing | `SHR-05`, `SRCH-02`, `GR-03` | BLOCKED |
 | `SHR-11` | Owner Share Management UI | P0 | sharing | `SHR-05`, `SHR-07`, `SHR-09` | BLOCKED |
 | `SRCH-05` | Realtime Search UI & Selection | P0 | search | `SRCH-03`, `SRCH-04`, `FND-07` | BLOCKED |
+| `SCM-01` | Git Capability & Controlled Process Runner | P0 | source-control | `FND-03`, `FND-07`, `FS-02` | READY |
+| `SCM-02` | Git Repository, Worktree & Status Domain | P0 | source-control | `SCM-01`, `FS-03` | BLOCKED |
+| `SCM-03` | Source Control Changes Pane | P0 | source-control | `SCM-02`, `FND-07` | BLOCKED |
+| `SCM-04` | Markdown Git Diff | P1 | source-control | `SCM-02`, `MD-01` | BLOCKED |
+| `SCM-05` | DOCX Document-Aware Git Diff | P0 | source-control | `SCM-02`, `IDX-02`, `DOCX-01` | BLOCKED |
+| `SCM-06` | Git Stage & Unstage | P0 | source-control | `SCM-02`, `SCM-03` | BLOCKED |
+| `SCM-07` | Git Commit & Commit All | P0 | source-control | `SCM-06`, `SCM-05` | BLOCKED |
+| `SCM-08` | Git Commit History & File History | P1 | source-control | `SCM-02`, `SCM-07` | BLOCKED |
+| `SCM-09` | Document IDE History ↔ Git Correlation | P1 | source-control | `SCM-07`, `HIST-01` | BLOCKED |
+| `SCM-10` | Safe Git Discard & Restore | P0 | source-control | `SCM-08`, `HIST-01`, `FS-07` | BLOCKED |
+| `SCM-11` | Git Remote State & Fetch | P0 | source-control | `SCM-02`, `SCM-07` | BLOCKED |
+| `SCM-12` | Safe Fast-Forward Pull | P0 | source-control | `SCM-11`, `SCM-10` | BLOCKED |
+| `SCM-13` | Explicit Git Push | P0 | source-control | `SCM-11`, `SCM-07` | BLOCKED |
+| `SCM-14` | Git Conflict State & Resolution Shell | P1 | source-control | `SCM-12`, `SCM-05` | BLOCKED |
+| `SCM-15` | Git Worktree Discovery & Open Existing | P1 | source-control | `SCM-01`, `FS-03`, `FND-07` | BLOCKED |
+| `SCM-16` | Safe Git Worktree Create & Remove | P1 | source-control | `SCM-15`, `FS-07` | BLOCKED |
+| `SCM-17` | Source Control Regression & Release Hardening | P0 | source-control | `SCM-04`, `SCM-05`, `SCM-09`, `SCM-12`, `SCM-13`, `SCM-14`, `SCM-16`, `QA-02` | BLOCKED |
 | `CTX-04` | Token Estimate & Context Export | P1 | context-packs | `CTX-02`, `CTX-03` | BLOCKED |
 | `AI-04` | Semantic Graph Suggestions | P1 | semantic | `AI-02`, `GR-05` | BLOCKED |
 | `AI-03` | Semantic Search Mode | P1 | semantic | `AI-02`, `SRCH-05` | BLOCKED |

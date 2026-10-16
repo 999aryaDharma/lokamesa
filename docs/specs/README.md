@@ -17,6 +17,7 @@ This directory contains the implementation-facing technical specifications deriv
 11. `10-sharing-security-ngrok.md` — read-only public share security.
 12. `11-testing-strategy.md` — verification and release gates.
 13. `12-implementation-plan.md` — phased agent execution plan.
+14. `13-source-control-git-worktree-spec.md` — source control (Git) status, diff, stage, commit, remote, conflict and worktree behavior.
 
 ## Conflict rule
 

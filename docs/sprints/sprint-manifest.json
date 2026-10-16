@@ -1,7 +1,7 @@
 {
   "project": "Document IDE",
   "version": 1,
-  "total_sprints": 98,
+  "total_sprints": 115,
   "topological_order": [
     "FND-01",
     "FND-02",
@@ -100,7 +100,24 @@
     "QA-07",
     "BAT-07",
     "REL-02",
-    "REL-03"
+    "REL-03",
+    "SCM-01",
+    "SCM-02",
+    "SCM-15",
+    "SCM-03",
+    "SCM-04",
+    "SCM-16",
+    "SCM-05",
+    "SCM-06",
+    "SCM-07",
+    "SCM-08",
+    "SCM-09",
+    "SCM-11",
+    "SCM-10",
+    "SCM-13",
+    "SCM-12",
+    "SCM-14",
+    "SCM-17"
   ],
   "sprints": [
     {
@@ -3789,6 +3806,826 @@
         "Generate V1 readiness report."
       ],
       "depth": 20
+    },
+    {
+      "id": "SCM-01",
+      "title": "Git Capability & Controlled Process Runner",
+      "goal": "Establish a controlled backend boundary for invoking the system Git executable, including capability detection, structured arguments, cancellation, timeouts, typed errors, and per-worktree mutation serialization.",
+      "deps": [
+        "FND-03",
+        "FND-07",
+        "FS-02"
+      ],
+      "specs": [
+        "00-master-product-technical-spec.md",
+        "01-system-architecture.md",
+        "13-source-control-git-worktree-spec.md"
+      ],
+      "tests": [
+        "git --version capability detection succeeds or yields a typed unavailable state.",
+        "Argument injection fixtures cannot alter Git command semantics.",
+        "Two index-mutating operations against one worktree are serialized."
+      ],
+      "acceptance": [
+        "Frontend cannot invoke git.exe directly.",
+        "Git process failures are typed and inspectable.",
+        "Background operations can be cancelled without leaving orphaned Git processes."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/SourceControl/GitProcessResult.cs",
+        "src/DocumentIDE.Infrastructure/SourceControl/GitProcessRunner.cs",
+        "src/DocumentIDE.Infrastructure/SourceControl/GitWorktreeMutationQueue.cs",
+        "tests/DocumentIDE.UnitTests/SourceControl/GitProcessRunnerTests.cs"
+      ],
+      "failures": [
+        "Git is not installed or is not discoverable.",
+        "Repository/worktree disappears during an operation.",
+        "File path contains spaces, Unicode, or special characters.",
+        "Git operation is already running elsewhere and index lock is unavailable.",
+        "Word has changed a DOCX between status/diff/stage operations.",
+        "Repository reports a hook, permission, authentication, conflict, or remote rejection failure."
+      ],
+      "kind": "foundation",
+      "priority": "P0",
+      "path": "docs/sprints/source-control/SCM-01-git-capability-controlled-process-runner.md",
+      "tasks": [
+        "Create capability/version probe.",
+        "Implement structured process runner with controlled working directory and environment.",
+        "Add cancellation, timeout, stdout/stderr capture, and exit-code handling.",
+        "Add per-worktree mutation queue.",
+        "Add security regression tests for path/argument injection."
+      ],
+      "depth": 7
+    },
+    {
+      "id": "SCM-02",
+      "title": "Git Repository, Worktree & Status Domain",
+      "goal": "Discover the active Git repository/worktree and model machine-readable Git status without duplicating Git state in SQLite.",
+      "deps": [
+        "SCM-01",
+        "FS-03"
+      ],
+      "specs": [
+        "04-filesystem-sync-spec.md",
+        "13-source-control-git-worktree-spec.md",
+        "02-domain-data-model.md"
+      ],
+      "tests": [
+        "Repository/worktree discovery fixtures pass.",
+        "Porcelain v2 status parser covers staged, unstaged, untracked, and conflict states.",
+        "Non-Git folders return a typed no-repository state."
+      ],
+      "acceptance": [
+        "Git status is derived from Git, not a parallel database.",
+        "Status distinguishes index changes from working-tree changes.",
+        "Filesystem events trigger debounced status refresh."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/SourceControl/GitRepositoryContext.cs",
+        "src/DocumentIDE.Core/SourceControl/GitStatusEntry.cs",
+        "src/DocumentIDE.Infrastructure/SourceControl/GitRepositoryService.cs",
+        "tests/DocumentIDE.IntegrationTests/SourceControl/GitStatusTests.cs"
+      ],
+      "failures": [
+        "Git is not installed or is not discoverable.",
+        "Repository/worktree disappears during an operation.",
+        "File path contains spaces, Unicode, or special characters.",
+        "Git operation is already running elsewhere and index lock is unavailable.",
+        "Word has changed a DOCX between status/diff/stage operations.",
+        "Repository reports a hook, permission, authentication, conflict, or remote rejection failure."
+      ],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/source-control/SCM-02-git-repository-worktree-status-domain.md",
+      "tasks": [
+        "Implement repository/worktree discovery.",
+        "Parse status --porcelain=v2 -z --branch.",
+        "Map Git states into typed domain records.",
+        "Integrate debounced refresh with filesystem watcher."
+      ],
+      "depth": 8
+    },
+    {
+      "id": "SCM-15",
+      "title": "Git Worktree Discovery & Open Existing",
+      "goal": "Expose registered Git worktrees and let the user open an existing worktree as the active Document IDE context.",
+      "deps": [
+        "SCM-01",
+        "FS-03",
+        "FND-07"
+      ],
+      "specs": [
+        "04-filesystem-sync-spec.md",
+        "13-source-control-git-worktree-spec.md",
+        "03-workspace-canvas-spec.md"
+      ],
+      "tests": [
+        "Main and linked worktrees are listed.",
+        "Open existing worktree updates active filesystem context.",
+        "No branch switch occurs when opening a worktree."
+      ],
+      "acceptance": [
+        "Worktree list is derived from Git.",
+        "Current branch metadata is read-only.",
+        "Opening worktree does not create a branch or alter Git history."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Infrastructure/SourceControl/GitWorktreeService.cs",
+        "src/DocumentIDE.Web/src/features/source-control/WorktreeList.tsx",
+        "tests/DocumentIDE.IntegrationTests/SourceControl/GitWorktreeDiscoveryTests.cs"
+      ],
+      "failures": [
+        "Git is not installed or is not discoverable.",
+        "Repository/worktree disappears during an operation.",
+        "File path contains spaces, Unicode, or special characters.",
+        "Git operation is already running elsewhere and index lock is unavailable.",
+        "Word has changed a DOCX between status/diff/stage operations.",
+        "Repository reports a hook, permission, authentication, conflict, or remote rejection failure."
+      ],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/source-control/SCM-15-git-worktree-discovery-open-existing.md",
+      "tasks": [
+        "Implement worktree list parser.",
+        "Resolve worktree paths safely.",
+        "Wire open-existing-worktree action to workspace/source context.",
+        "Preserve existing canvas spatial memory when context changes."
+      ],
+      "depth": 8
+    },
+    {
+      "id": "SCM-03",
+      "title": "Source Control Changes Pane",
+      "goal": "Provide the primary Changes UI with staged/unstaged/untracked/conflict groups and read-only Git context.",
+      "deps": [
+        "SCM-02",
+        "FND-07"
+      ],
+      "specs": [
+        "00-master-product-technical-spec.md",
+        "03-workspace-canvas-spec.md",
+        "13-source-control-git-worktree-spec.md"
+      ],
+      "tests": [
+        "Three modified documents appear as three changes.",
+        "Staged and unstaged groups remain separate.",
+        "Status refresh updates the pane without losing selection."
+      ],
+      "acceptance": [
+        "The pane shows exactly the current Git state.",
+        "Current branch/worktree information is read-only.",
+        "No branch-management controls are present."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Api/Controllers/SourceControlController.cs",
+        "src/DocumentIDE.Web/src/features/source-control/SourceControlPanel.tsx",
+        "src/DocumentIDE.Web/src/features/source-control/sourceControlModels.ts",
+        "tests/DocumentIDE.IntegrationTests/SourceControl/SourceControlPanelTests.cs"
+      ],
+      "failures": [
+        "Git is not installed or is not discoverable.",
+        "Repository/worktree disappears during an operation.",
+        "File path contains spaces, Unicode, or special characters.",
+        "Git operation is already running elsewhere and index lock is unavailable.",
+        "Word has changed a DOCX between status/diff/stage operations.",
+        "Repository reports a hook, permission, authentication, conflict, or remote rejection failure."
+      ],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/source-control/SCM-03-source-control-changes-pane.md",
+      "tasks": [
+        "Add source-control API surface.",
+        "Render staged/unstaged/untracked/conflict sections.",
+        "Show ahead/behind placeholders for later remote sprint.",
+        "Wire file selection to existing document opening/inspection flow."
+      ],
+      "depth": 9
+    },
+    {
+      "id": "SCM-04",
+      "title": "Markdown Git Diff",
+      "goal": "Add reviewable Markdown diffs for staged and working-tree changes.",
+      "deps": [
+        "SCM-02",
+        "MD-01"
+      ],
+      "specs": [
+        "08-markdown-graph-spec.md",
+        "13-source-control-git-worktree-spec.md"
+      ],
+      "tests": [
+        "HEAD\u2194working-tree diff matches fixture.",
+        "HEAD\u2194index diff matches staged fixture.",
+        "Unicode filenames/content are rendered safely."
+      ],
+      "acceptance": [
+        "User can inspect Markdown changes before commit.",
+        "Diff never writes to repository files.",
+        "Staged and unstaged diff targets are correct."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Infrastructure/SourceControl/GitDiffService.cs",
+        "src/DocumentIDE.Web/src/features/source-control/MarkdownGitDiff.tsx",
+        "tests/DocumentIDE.IntegrationTests/SourceControl/MarkdownGitDiffTests.cs"
+      ],
+      "failures": [
+        "Git is not installed or is not discoverable.",
+        "Repository/worktree disappears during an operation.",
+        "File path contains spaces, Unicode, or special characters.",
+        "Git operation is already running elsewhere and index lock is unavailable.",
+        "Word has changed a DOCX between status/diff/stage operations.",
+        "Repository reports a hook, permission, authentication, conflict, or remote rejection failure."
+      ],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/source-control/SCM-04-markdown-git-diff.md",
+      "tasks": [
+        "Implement file-version materialization from Git.",
+        "Render textual diff.",
+        "Handle staged vs working-tree targets.",
+        "Add edge-case fixtures."
+      ],
+      "depth": 9
+    },
+    {
+      "id": "SCM-16",
+      "title": "Safe Git Worktree Create & Remove",
+      "goal": "Create worktrees from existing Git refs and remove clean worktrees safely without adding branch-management UX.",
+      "deps": [
+        "SCM-15",
+        "FS-07"
+      ],
+      "specs": [
+        "13-source-control-git-worktree-spec.md",
+        "04-filesystem-sync-spec.md"
+      ],
+      "tests": [
+        "Create from existing branch/ref/commit succeeds.",
+        "Dirty worktree removal is blocked.",
+        "Clean worktree removal succeeds.",
+        "Path normalization/containment is safe on Windows."
+      ],
+      "acceptance": [
+        "No branch is created implicitly.",
+        "Dirty worktree cannot be removed through V1.",
+        "Removal is explicit and reviewed."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Infrastructure/SourceControl/GitWorktreeMutationService.cs",
+        "src/DocumentIDE.Web/src/features/source-control/WorktreeCreateDialog.tsx",
+        "tests/DocumentIDE.IntegrationTests/SourceControl/GitWorktreeMutationTests.cs"
+      ],
+      "failures": [
+        "Git is not installed or is not discoverable.",
+        "Repository/worktree disappears during an operation.",
+        "File path contains spaces, Unicode, or special characters.",
+        "Git operation is already running elsewhere and index lock is unavailable.",
+        "Word has changed a DOCX between status/diff/stage operations.",
+        "Repository reports a hook, permission, authentication, conflict, or remote rejection failure."
+      ],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/source-control/SCM-16-safe-git-worktree-create-remove.md",
+      "tasks": [
+        "Validate target path.",
+        "Implement create from existing ref.",
+        "Implement dirty-state preflight.",
+        "Implement clean removal.",
+        "Add safe refresh/prune metadata action."
+      ],
+      "depth": 9
+    },
+    {
+      "id": "SCM-05",
+      "title": "DOCX Document-Aware Git Diff",
+      "goal": "Use existing DOCX parsing capabilities to explain changes between Git versions of a DOCX while keeping Git staging file-level.",
+      "deps": [
+        "SCM-02",
+        "IDX-02",
+        "DOCX-01"
+      ],
+      "specs": [
+        "06-docx-openxml-word-integration.md",
+        "05-search-indexing-spec.md",
+        "13-source-control-git-worktree-spec.md"
+      ],
+      "tests": [
+        "Git versions of a DOCX can be compared without mutation.",
+        "Text/table/formatting fixtures produce stable document-aware output.",
+        "Split-run text changes remain understandable."
+      ],
+      "acceptance": [
+        "Git status remains authoritative for file state.",
+        "DOCX staging remains file-level.",
+        "Diff failures fall back to safe binary-change reporting."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Infrastructure/SourceControl/DocxGitDiffProvider.cs",
+        "src/DocumentIDE.Web/src/features/source-control/DocxDiffPanel.tsx",
+        "tests/DocumentIDE.IntegrationTests/SourceControl/DocxGitDiffTests.cs"
+      ],
+      "failures": [
+        "Git is not installed or is not discoverable.",
+        "Repository/worktree disappears during an operation.",
+        "File path contains spaces, Unicode, or special characters.",
+        "Git operation is already running elsewhere and index lock is unavailable.",
+        "Word has changed a DOCX between status/diff/stage operations.",
+        "Repository reports a hook, permission, authentication, conflict, or remote rejection failure."
+      ],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/source-control/SCM-05-docx-document-aware-git-diff.md",
+      "tasks": [
+        "Materialize Git blob to read-only temporary artifact.",
+        "Compare parsed document structures.",
+        "Classify text/table/formatting changes.",
+        "Add regression corpus fixtures."
+      ],
+      "depth": 10
+    },
+    {
+      "id": "SCM-06",
+      "title": "Git Stage & Unstage",
+      "goal": "Implement explicit file-level Stage, Unstage, Stage All, and Unstage All actions against the real Git index.",
+      "deps": [
+        "SCM-02",
+        "SCM-03"
+      ],
+      "specs": [
+        "13-source-control-git-worktree-spec.md",
+        "01-system-architecture.md"
+      ],
+      "tests": [
+        "Stage updates index state only.",
+        "Unstage preserves working-tree edits.",
+        "Stage All and Unstage All match expected Git state.",
+        "Path names with spaces and Unicode remain correct."
+      ],
+      "acceptance": [
+        "Document IDE does not maintain a proprietary staging area.",
+        "Every stage action re-reads status.",
+        "Staging never widens scope beyond selected repository paths."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Infrastructure/SourceControl/GitStageService.cs",
+        "src/DocumentIDE.Api/Controllers/SourceControlController.cs",
+        "src/DocumentIDE.Web/src/features/source-control/ChangeActions.tsx",
+        "tests/DocumentIDE.IntegrationTests/SourceControl/GitStageTests.cs"
+      ],
+      "failures": [
+        "Git is not installed or is not discoverable.",
+        "Repository/worktree disappears during an operation.",
+        "File path contains spaces, Unicode, or special characters.",
+        "Git operation is already running elsewhere and index lock is unavailable.",
+        "Word has changed a DOCX between status/diff/stage operations.",
+        "Repository reports a hook, permission, authentication, conflict, or remote rejection failure."
+      ],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/source-control/SCM-06-git-stage-unstage.md",
+      "tasks": [
+        "Add stage single file.",
+        "Add unstage single file.",
+        "Add stage/unstage all.",
+        "Refresh status after every mutation.",
+        "Add path containment tests."
+      ],
+      "depth": 10
+    },
+    {
+      "id": "SCM-07",
+      "title": "Git Commit & Commit All",
+      "goal": "Implement commit using Git staged semantics plus an explicit Commit All convenience path.",
+      "deps": [
+        "SCM-06",
+        "SCM-05"
+      ],
+      "specs": [
+        "13-source-control-git-worktree-spec.md",
+        "11-testing-strategy.md"
+      ],
+      "tests": [
+        "Commit contains staged changes only.",
+        "Unstaged changes remain untouched after Commit.",
+        "Commit All intentionally stages and commits eligible changes.",
+        "Hook failure is surfaced as a typed commit failure."
+      ],
+      "acceptance": [
+        "Commit never silently includes unstaged-only changes.",
+        "Commit All is visibly distinct from Commit.",
+        "Successful commit returns the created commit identifier.",
+        "No automatic push occurs."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Infrastructure/SourceControl/GitCommitService.cs",
+        "src/DocumentIDE.Web/src/features/source-control/CommitBox.tsx",
+        "tests/DocumentIDE.IntegrationTests/SourceControl/GitCommitTests.cs"
+      ],
+      "failures": [
+        "Git is not installed or is not discoverable.",
+        "Repository/worktree disappears during an operation.",
+        "File path contains spaces, Unicode, or special characters.",
+        "Git operation is already running elsewhere and index lock is unavailable.",
+        "Word has changed a DOCX between status/diff/stage operations.",
+        "Repository reports a hook, permission, authentication, conflict, or remote rejection failure."
+      ],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/source-control/SCM-07-git-commit-commit-all.md",
+      "tasks": [
+        "Add commit message validation.",
+        "Implement staged-only commit.",
+        "Implement Commit All flow with status re-read.",
+        "Surface hook/authentication failures.",
+        "Return commit metadata."
+      ],
+      "depth": 11
+    },
+    {
+      "id": "SCM-08",
+      "title": "Git Commit History & File History",
+      "goal": "Expose real Git commit and file history for repository documents.",
+      "deps": [
+        "SCM-02",
+        "SCM-07"
+      ],
+      "specs": [
+        "13-source-control-git-worktree-spec.md",
+        "02-domain-data-model.md"
+      ],
+      "tests": [
+        "Known fixture history renders correctly.",
+        "File history filters to commits affecting the file.",
+        "Large histories load incrementally."
+      ],
+      "acceptance": [
+        "Git History is visually separate from Document IDE History.",
+        "User can inspect commit metadata.",
+        "File history can target a selected document."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Infrastructure/SourceControl/GitHistoryService.cs",
+        "src/DocumentIDE.Web/src/features/source-control/GitHistoryPanel.tsx",
+        "tests/DocumentIDE.IntegrationTests/SourceControl/GitHistoryTests.cs"
+      ],
+      "failures": [
+        "Git is not installed or is not discoverable.",
+        "Repository/worktree disappears during an operation.",
+        "File path contains spaces, Unicode, or special characters.",
+        "Git operation is already running elsewhere and index lock is unavailable.",
+        "Word has changed a DOCX between status/diff/stage operations.",
+        "Repository reports a hook, permission, authentication, conflict, or remote rejection failure."
+      ],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/source-control/SCM-08-git-commit-history-file-history.md",
+      "tasks": [
+        "Implement commit list query.",
+        "Implement file history query.",
+        "Add pagination/lazy loading.",
+        "Wire commit selection into document version inspection."
+      ],
+      "depth": 12
+    },
+    {
+      "id": "SCM-09",
+      "title": "Document IDE History \u2194 Git Correlation",
+      "goal": "Optionally correlate Document IDE work sessions and operations with successful Git commits without merging the two histories.",
+      "deps": [
+        "SCM-07",
+        "HIST-01"
+      ],
+      "specs": [
+        "02-domain-data-model.md",
+        "13-source-control-git-worktree-spec.md",
+        "00-master-product-technical-spec.md"
+      ],
+      "tests": [
+        "Successful commit can be linked to a WorkSession.",
+        "Git commit remains valid if IDE correlation data is deleted.",
+        "Batch operation history remains usable without Git."
+      ],
+      "acceptance": [
+        "Git commit IDs are stored only as derived correlation metadata.",
+        "Document IDE History remains independent.",
+        "No application operation creates an automatic commit."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/History/WorkSession.cs",
+        "src/DocumentIDE.Infrastructure/Persistence/WorkSessionRepository.cs",
+        "src/DocumentIDE.Web/src/features/source-control/CommitCorrelationPanel.tsx",
+        "tests/DocumentIDE.IntegrationTests/SourceControl/WorkSessionCorrelationTests.cs"
+      ],
+      "failures": [
+        "Git is not installed or is not discoverable.",
+        "Repository/worktree disappears during an operation.",
+        "File path contains spaces, Unicode, or special characters.",
+        "Git operation is already running elsewhere and index lock is unavailable.",
+        "Word has changed a DOCX between status/diff/stage operations.",
+        "Repository reports a hook, permission, authentication, conflict, or remote rejection failure."
+      ],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/source-control/SCM-09-document-ide-history-git-correlation.md",
+      "tasks": [
+        "Add optional WorkSession entity.",
+        "Record changed-document association.",
+        "Attach successful commit IDs.",
+        "Render correlation in history views."
+      ],
+      "depth": 12
+    },
+    {
+      "id": "SCM-11",
+      "title": "Git Remote State & Fetch",
+      "goal": "Expose upstream information, ahead/behind state, and explicit Fetch.",
+      "deps": [
+        "SCM-02",
+        "SCM-07"
+      ],
+      "specs": [
+        "13-source-control-git-worktree-spec.md",
+        "11-testing-strategy.md"
+      ],
+      "tests": [
+        "Configured upstream is parsed correctly.",
+        "Ahead/behind counts match fixture remote.",
+        "Fetch updates tracking state without changing working-tree content."
+      ],
+      "acceptance": [
+        "No-upstream state is explicit.",
+        "Fetch never changes document contents.",
+        "Remote errors are typed."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Core/SourceControl/GitRemoteState.cs",
+        "src/DocumentIDE.Infrastructure/SourceControl/GitRemoteService.cs",
+        "src/DocumentIDE.Web/src/features/source-control/RemoteStatus.tsx",
+        "tests/DocumentIDE.IntegrationTests/SourceControl/GitFetchTests.cs"
+      ],
+      "failures": [
+        "Git is not installed or is not discoverable.",
+        "Repository/worktree disappears during an operation.",
+        "File path contains spaces, Unicode, or special characters.",
+        "Git operation is already running elsewhere and index lock is unavailable.",
+        "Word has changed a DOCX between status/diff/stage operations.",
+        "Repository reports a hook, permission, authentication, conflict, or remote rejection failure."
+      ],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/source-control/SCM-11-git-remote-state-fetch.md",
+      "tasks": [
+        "Read upstream/tracking info.",
+        "Render ahead/behind.",
+        "Implement fetch.",
+        "Add local bare-remote fixtures."
+      ],
+      "depth": 12
+    },
+    {
+      "id": "SCM-10",
+      "title": "Safe Git Discard & Restore",
+      "goal": "Provide a guarded flow for discarding working-tree changes or restoring a selected document from a Git version.",
+      "deps": [
+        "SCM-08",
+        "HIST-01",
+        "FS-07"
+      ],
+      "specs": [
+        "07-batch-operation-engine.md",
+        "13-source-control-git-worktree-spec.md",
+        "00-master-product-technical-spec.md"
+      ],
+      "tests": [
+        "Dirty file discard requires explicit review.",
+        "Restore creates recovery coverage when available.",
+        "Restore reindexes and refreshes Git status.",
+        "A single-file restore cannot replace unrelated files."
+      ],
+      "acceptance": [
+        "Destructive restore/discard is never hidden behind a generic refresh action.",
+        "Conflicted files are protected from unsafe restore.",
+        "Document IDE History records the operation."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Infrastructure/SourceControl/GitRestoreService.cs",
+        "src/DocumentIDE.Web/src/features/source-control/DiscardRestoreDialog.tsx",
+        "tests/DocumentIDE.IntegrationTests/SourceControl/GitRestoreSafetyTests.cs"
+      ],
+      "failures": [
+        "Git is not installed or is not discoverable.",
+        "Repository/worktree disappears during an operation.",
+        "File path contains spaces, Unicode, or special characters.",
+        "Git operation is already running elsewhere and index lock is unavailable.",
+        "Word has changed a DOCX between status/diff/stage operations.",
+        "Repository reports a hook, permission, authentication, conflict, or remote rejection failure."
+      ],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/source-control/SCM-10-safe-git-discard-restore.md",
+      "tasks": [
+        "Add diff/review confirmation.",
+        "Integrate recovery snapshot creation where practical.",
+        "Implement file-scoped restore.",
+        "Reindex and refresh status."
+      ],
+      "depth": 13
+    },
+    {
+      "id": "SCM-13",
+      "title": "Explicit Git Push",
+      "goal": "Add explicit Push with authentication/error handling and no automatic push after commit.",
+      "deps": [
+        "SCM-11",
+        "SCM-07"
+      ],
+      "specs": [
+        "13-source-control-git-worktree-spec.md",
+        "11-testing-strategy.md"
+      ],
+      "tests": [
+        "Local bare-remote push succeeds.",
+        "Rejected push is surfaced.",
+        "Authentication-required state does not hang waiting for terminal input.",
+        "Commit does not auto-push."
+      ],
+      "acceptance": [
+        "Push is always user initiated.",
+        "Remote rejection preserves local commits.",
+        "No secret or credential prompt is shown in normal UI logs."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Infrastructure/SourceControl/GitPushService.cs",
+        "src/DocumentIDE.Web/src/features/source-control/PushButton.tsx",
+        "tests/DocumentIDE.IntegrationTests/SourceControl/GitPushTests.cs"
+      ],
+      "failures": [
+        "Git is not installed or is not discoverable.",
+        "Repository/worktree disappears during an operation.",
+        "File path contains spaces, Unicode, or special characters.",
+        "Git operation is already running elsewhere and index lock is unavailable.",
+        "Word has changed a DOCX between status/diff/stage operations.",
+        "Repository reports a hook, permission, authentication, conflict, or remote rejection failure."
+      ],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/source-control/SCM-13-explicit-git-push.md",
+      "tasks": [
+        "Implement push operation.",
+        "Integrate configured credential helpers.",
+        "Capture remote diagnostics safely.",
+        "Add no-auto-push regression test."
+      ],
+      "depth": 13
+    },
+    {
+      "id": "SCM-12",
+      "title": "Safe Fast-Forward Pull",
+      "goal": "Implement explicit Pull using a conservative fast-forward-only policy and stop cleanly on divergence/conflict.",
+      "deps": [
+        "SCM-11",
+        "SCM-10"
+      ],
+      "specs": [
+        "13-source-control-git-worktree-spec.md",
+        "11-testing-strategy.md"
+      ],
+      "tests": [
+        "Clean fast-forward pull succeeds.",
+        "Diverged history is rejected without merge/rebase.",
+        "Dirty/conflicted worktree is not silently overwritten.",
+        "Status/search/index refresh after successful pull."
+      ],
+      "acceptance": [
+        "Pull never silently creates a merge commit.",
+        "Pull never silently rebases.",
+        "Divergence is shown as a blocking state."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Infrastructure/SourceControl/GitPullService.cs",
+        "src/DocumentIDE.Web/src/features/source-control/PullDialog.tsx",
+        "tests/DocumentIDE.IntegrationTests/SourceControl/GitPullSafetyTests.cs"
+      ],
+      "failures": [
+        "Git is not installed or is not discoverable.",
+        "Repository/worktree disappears during an operation.",
+        "File path contains spaces, Unicode, or special characters.",
+        "Git operation is already running elsewhere and index lock is unavailable.",
+        "Word has changed a DOCX between status/diff/stage operations.",
+        "Repository reports a hook, permission, authentication, conflict, or remote rejection failure."
+      ],
+      "kind": "feature",
+      "priority": "P0",
+      "path": "docs/sprints/source-control/SCM-12-safe-fast-forward-pull.md",
+      "tasks": [
+        "Add dirty/conflict preflight.",
+        "Implement ff-only pull.",
+        "Handle divergence and conflict output.",
+        "Refresh downstream document/index/source-control state."
+      ],
+      "depth": 14
+    },
+    {
+      "id": "SCM-14",
+      "title": "Git Conflict State & Resolution Shell",
+      "goal": "Recognize unmerged repository state and provide a safe resolution shell without automatic DOCX merging.",
+      "deps": [
+        "SCM-12",
+        "SCM-05"
+      ],
+      "specs": [
+        "13-source-control-git-worktree-spec.md",
+        "06-docx-openxml-word-integration.md",
+        "11-testing-strategy.md"
+      ],
+      "tests": [
+        "Conflict fixture is detected.",
+        "Unsafe commit/restore actions are blocked while unmerged.",
+        "Affected files can be opened for manual resolution."
+      ],
+      "acceptance": [
+        "Conflict state is visible and actionable.",
+        "DOCX conflicts are not auto-merged.",
+        "Resolution does not bypass existing file-safety rules."
+      ],
+      "artifacts": [
+        "src/DocumentIDE.Infrastructure/SourceControl/GitConflictService.cs",
+        "src/DocumentIDE.Web/src/features/source-control/ConflictPanel.tsx",
+        "tests/DocumentIDE.IntegrationTests/SourceControl/GitConflictTests.cs"
+      ],
+      "failures": [
+        "Git is not installed or is not discoverable.",
+        "Repository/worktree disappears during an operation.",
+        "File path contains spaces, Unicode, or special characters.",
+        "Git operation is already running elsewhere and index lock is unavailable.",
+        "Word has changed a DOCX between status/diff/stage operations.",
+        "Repository reports a hook, permission, authentication, conflict, or remote rejection failure."
+      ],
+      "kind": "feature",
+      "priority": "P1",
+      "path": "docs/sprints/source-control/SCM-14-git-conflict-state-resolution-shell.md",
+      "tasks": [
+        "Parse unmerged state.",
+        "Block unsafe actions.",
+        "Render conflict summary.",
+        "Add manual-open actions for affected documents."
+      ],
+      "depth": 15
+    },
+    {
+      "id": "SCM-17",
+      "title": "Source Control Regression & Release Hardening",
+      "goal": "Make the Source Control feature release-safe with fixture repositories, concurrency tests, Windows path/security tests, remote/worktree coverage, and release-gate evidence.",
+      "deps": [
+        "SCM-04",
+        "SCM-05",
+        "SCM-09",
+        "SCM-12",
+        "SCM-13",
+        "SCM-14",
+        "SCM-16",
+        "QA-02"
+      ],
+      "specs": [
+        "11-testing-strategy.md",
+        "13-source-control-git-worktree-spec.md",
+        "12-implementation-plan.md"
+      ],
+      "tests": [
+        "Full SCM fixture suite passes on Windows.",
+        "No shell injection or repository escape regression exists.",
+        "Stage/commit mutation queue shows no index corruption.",
+        "Remote/worktree fixture suite passes."
+      ],
+      "acceptance": [
+        "All SCM release-gate tests are automated or explicitly justified manual Windows tests.",
+        "No branch-management scope has leaked into V1.",
+        "Source Control can be disabled without breaking non-Git Document IDE workflows."
+      ],
+      "artifacts": [
+        "tests/DocumentIDE.IntegrationTests/SourceControl/SourceControlRegressionSuite.cs",
+        "tests/DocumentIDE.SecurityTests/SourceControl/GitProcessSecurityTests.cs",
+        "docs/quality/source-control-release-checklist.md"
+      ],
+      "failures": [
+        "Git is not installed or is not discoverable.",
+        "Repository/worktree disappears during an operation.",
+        "File path contains spaces, Unicode, or special characters.",
+        "Git operation is already running elsewhere and index lock is unavailable.",
+        "Word has changed a DOCX between status/diff/stage operations.",
+        "Repository reports a hook, permission, authentication, conflict, or remote rejection failure."
+      ],
+      "kind": "quality",
+      "priority": "P0",
+      "path": "docs/sprints/source-control/SCM-17-source-control-regression-release-hardening.md",
+      "tasks": [
+        "Build fixture repository matrix.",
+        "Run Windows path/Unicode and injection tests.",
+        "Run concurrency tests.",
+        "Run remote/worktree integration suite.",
+        "Write release evidence and residual-risk notes."
+      ],
+      "depth": 16
     }
   ]
 }
