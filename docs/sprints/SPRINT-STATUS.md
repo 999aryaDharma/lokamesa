@@ -120,7 +120,7 @@ Rules:
 | SCM-01 | Git Capability & Controlled Process Runner | DONE | FND-03, FND-07, FS-02 | feat/git-capability-controlled-process-runner | docs/sprints/handoffs/SCM-01-HANDOFF.md |
 | SCM-02 | Git Repository, Worktree & Status Domain | DONE | SCM-01, FS-03 | feat/git-repository-worktree-status-domain | docs/sprints/handoffs/SCM-02-HANDOFF.md |
 | SCM-03 | Source Control Changes Pane | BLOCKED | SCM-02, FND-07 |  |  |
-| SCM-04 | Markdown Git Diff | BLOCKED | SCM-02, MD-01 |  |  |
+| SCM-04 | Markdown Git Diff | DONE | SCM-02, MD-01 | feat/markdown-git-diff | docs/sprints/handoffs/SCM-04-HANDOFF.md |
 | SCM-05 | DOCX Document-Aware Git Diff | BLOCKED | SCM-02, IDX-02, DOCX-01 |  |  |
 | SCM-06 | Git Stage & Unstage | BLOCKED | SCM-02, SCM-03 |  |  |
 | SCM-07 | Git Commit & Commit All | BLOCKED | SCM-06, SCM-05 |  |  |
