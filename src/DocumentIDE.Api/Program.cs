@@ -54,6 +54,17 @@ builder.Services.AddSingleton(GitProcessRunnerOptions.Default);
 builder.Services.AddSingleton<GitWorktreeMutationQueue>();
 builder.Services.AddSingleton<IGitProcessRunner, GitProcessRunner>();
 
+// SCM-03: repository/worktree/status service consumed by the Source Control
+// changes pane. Singleton so a watched-worktree context can outlive a request
+// (SCM-02 debounce seam). The FS-03 FileChangeCoordinator is the optional
+// debounce input and is not registered in this host yet (its dependencies are
+// scoped), so the pane currently re-derives status on every explicit call; a
+// host that registers the coordinator must keep this factory's requirement
+// (singleton-safe coordinator) in mind.
+builder.Services.AddSingleton(sp => new GitRepositoryService(
+    sp.GetRequiredService<IGitProcessRunner>(),
+    sp.GetService<DocumentIDE.Core.Filesystem.FileChangeCoordinator>()));
+
 builder.Services.AddScoped<PdfExportService>();
 builder.Services.AddScoped<BatchPdfExportService>();
 builder.Services.AddScoped<PdfMergeService>();
