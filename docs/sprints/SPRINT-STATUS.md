@@ -118,7 +118,7 @@ Rules:
 | REL-02 | Release Verification Pipeline | DONE | REL-01, QA-01, QA-02, QA-04, QA-05, QA-06, QA-07 | chore/rel-02-release-verification-pipeline | docs/sprints/handoffs/REL-02-HANDOFF.md |
 | REL-03 | V1 Readiness Gate | REVIEW | REL-02, SHR-11, CTX-04, AI-04, PDF-04 | chore/rel-03-v1-readiness-gate | docs/sprints/handoffs/REL-03-HANDOFF.md |
 | SCM-01 | Git Capability & Controlled Process Runner | DONE | FND-03, FND-07, FS-02 | feat/git-capability-controlled-process-runner | docs/sprints/handoffs/SCM-01-HANDOFF.md |
-| SCM-02 | Git Repository, Worktree & Status Domain | BLOCKED | SCM-01, FS-03 |  |  |
+| SCM-02 | Git Repository, Worktree & Status Domain | READY | SCM-01, FS-03 |  |  |
 | SCM-03 | Source Control Changes Pane | BLOCKED | SCM-02, FND-07 |  |  |
 | SCM-04 | Markdown Git Diff | BLOCKED | SCM-02, MD-01 |  |  |
 | SCM-05 | DOCX Document-Aware Git Diff | BLOCKED | SCM-02, IDX-02, DOCX-01 |  |  |
@@ -131,7 +131,7 @@ Rules:
 | SCM-12 | Safe Fast-Forward Pull | BLOCKED | SCM-11, SCM-10 |  |  |
 | SCM-13 | Explicit Git Push | BLOCKED | SCM-11, SCM-07 |  |  |
 | SCM-14 | Git Conflict State & Resolution Shell | BLOCKED | SCM-12, SCM-05 |  |  |
-| SCM-15 | Git Worktree Discovery & Open Existing | BLOCKED | SCM-01, FS-03, FND-07 |  |  |
+| SCM-15 | Git Worktree Discovery & Open Existing | READY | SCM-01, FS-03, FND-07 |  |  |
 | SCM-16 | Safe Git Worktree Create & Remove | BLOCKED | SCM-15, FS-07 |  |  |
 | SCM-17 | Source Control Regression & Release Hardening | BLOCKED | SCM-04, SCM-05, SCM-09, SCM-12, SCM-13, SCM-14, SCM-16, QA-02 |  |  |
 
