@@ -131,7 +131,7 @@ Rules:
 | SCM-12 | Safe Fast-Forward Pull | BLOCKED | SCM-11, SCM-10 |  |  |
 | SCM-13 | Explicit Git Push | BLOCKED | SCM-11, SCM-07 |  |  |
 | SCM-14 | Git Conflict State & Resolution Shell | BLOCKED | SCM-12, SCM-05 |  |  |
-| SCM-15 | Git Worktree Discovery & Open Existing | READY | SCM-01, FS-03, FND-07 |  |  |
+| SCM-15 | Git Worktree Discovery & Open Existing | DONE | SCM-01, FS-03, FND-07 | feat/git-worktree-discovery-open-existing | docs/sprints/handoffs/SCM-15-HANDOFF.md |
 | SCM-16 | Safe Git Worktree Create & Remove | BLOCKED | SCM-15, FS-07 |  |  |
 | SCM-17 | Source Control Regression & Release Hardening | BLOCKED | SCM-04, SCM-05, SCM-09, SCM-12, SCM-13, SCM-14, SCM-16, QA-02 |  |  |
 
