@@ -291,6 +291,149 @@ public sealed class GitCommitTests
         Assert.Equal(new[] { "docs/treaty.docx" }, UnstagedNames(repo).ToArray());
     }
 
+    // ---------------------------------------------------------------------
+    // Step 3 — Commit All intentionally stages eligible changes and commits
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Required test 3: "Commit All intentionally stages and commits eligible
+    /// changes." The flow re-reads status, stages the eligible working-tree
+    /// changes through the SCM-06 stage service, re-reads status, commits, and
+    /// reports both the flow it ran and the paths it staged (spec 13 §11.2).
+    /// Ignored files are never silently included.
+    /// </summary>
+    [Fact]
+    public async Task CommitAllStagesEligibleChangesThenCommitsAndReportsItsFlow()
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/modified.md", "docs/deleted.md" });
+        repo.WriteFile(".gitignore", "docs/ignored.md\n");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "--", ".gitignore"));
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "commit", "-qm", "ignore"));
+
+        repo.WriteFile("docs/modified.md", "modified v2");
+        File.Delete(Path.Combine(repo.RootPath, "docs", "deleted.md"));
+        repo.WriteFile("docs/untracked \u00e9.md", "untracked");
+        repo.WriteFile("docs/ignored.md", "ignored");
+
+        var recording = new RecordingGitProcessRunner(
+            new GitProcessRunner(GitProcessRunnerOptions.Default, new GitWorktreeMutationQueue()));
+        (GitCommitService service, _, _, _) = CreateService(recording);
+
+        GitCommitResult result = await service.CommitAllAsync(repo.RootPath, "commit all eligible");
+
+        Assert.Equal(GitCommitOutcome.Succeeded, result.Outcome);
+        Assert.Equal(GitCommitFlow.CommitAll, result.Flow);
+        Assert.True(result.IsSuccess);
+
+        string[] eligible =
+        {
+            "docs/deleted.md", "docs/modified.md", "docs/untracked \u00e9.md",
+        };
+        Assert.Equal(
+            eligible.OrderBy(name => name, StringComparer.Ordinal).ToArray(),
+            CommitFiles(repo, result.Commit!.CommitId).OrderBy(name => name, StringComparer.Ordinal).ToArray());
+
+        // The response reports exactly which paths the Commit All flow staged.
+        Assert.NotNull(result.StagedPaths);
+        Assert.Equal(
+            eligible.OrderBy(name => name, StringComparer.Ordinal).ToArray(),
+            result.StagedPaths!.OrderBy(name => name, StringComparer.Ordinal).ToArray());
+
+        // The flow reused the SCM-06 stage-all pipeline before committing.
+        Assert.Contains(
+            recording.Invocations,
+            arguments => arguments.SequenceEqual(new[] { "add", "--all", "--", "." }));
+
+        // Ignored files were never silently included.
+        Assert.Equal(
+            string.Empty,
+            TestGitRepository.RunGitCaptureUtf8(repo.RootPath, "ls-files", "--cached", "--", "docs/ignored.md").Trim());
+        Assert.Equal("ignored", File.ReadAllText(Path.Combine(repo.RootPath, "docs", "ignored.md")));
+
+        // Everything eligible was committed: the tree is clean afterwards.
+        Assert.Empty(StagedNames(repo.RootPath));
+        Assert.Empty(UnstagedNames(repo));
+        Assert.Empty(UntrackedNames(repo));
+    }
+
+    /// <summary>
+    /// Commit and Commit All stay visibly distinct flows: the plain Commit
+    /// never stages anything, Commit All does (spec 13 §9.4/§11.2).
+    /// </summary>
+    [Fact]
+    public async Task CommitAndCommitAllRunDistinctFlows()
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md" });
+        repo.WriteFile("docs/a.md", "a v2");
+
+        var recording = new RecordingGitProcessRunner(
+            new GitProcessRunner(GitProcessRunnerOptions.Default, new GitWorktreeMutationQueue()));
+        (GitCommitService service, _, _, _) = CreateService(recording);
+
+        GitCommitResult plain = await service.CommitAsync(repo.RootPath, "plain commit");
+        Assert.Equal(GitCommitFlow.Commit, plain.Flow);
+        Assert.Equal(GitCommitOutcome.NothingStaged, plain.Outcome);
+        Assert.Null(plain.StagedPaths);
+        Assert.DoesNotContain(
+            recording.Invocations,
+            arguments => arguments.SequenceEqual(new[] { "add", "--all", "--", "." }));
+
+        GitCommitResult all = await service.CommitAllAsync(repo.RootPath, "commit all");
+        Assert.Equal(GitCommitFlow.CommitAll, all.Flow);
+        Assert.Equal(GitCommitOutcome.Succeeded, all.Outcome);
+        Assert.NotNull(all.StagedPaths);
+    }
+
+    // ---------------------------------------------------------------------
+    // Step 2/5 — First commit on an unborn HEAD is legitimate
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// SCM-06 documented that <c>git restore --staged</c> fails before the
+    /// first commit; a first commit itself is legitimate. Commit works on an
+    /// unborn HEAD and returns the new commit identifier (spec 13 §11.1).
+    /// </summary>
+    [Fact]
+    public async Task CommitOnUnbornHeadCreatesTheFirstCommit()
+    {
+        using var repo = CreateRepositoryOnMainWithoutCommit();
+        repo.WriteFile("docs/first.md", "first");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "--", "docs/first.md"));
+
+        (GitCommitService service, _, _, _) = CreateService();
+        GitCommitResult result = await service.CommitAsync(repo.RootPath, "first commit");
+
+        Assert.Equal(GitCommitOutcome.Succeeded, result.Outcome);
+        Assert.Equal(1, CommitCount(repo));
+        Assert.Equal(Head(repo), result.Commit!.CommitId);
+        Assert.Equal("first commit", result.Commit.Summary);
+        Assert.Equal("main", result.Commit.BranchName);
+        Assert.Equal(new[] { "docs/first.md" }, CommitFiles(repo, result.Commit.CommitId));
+    }
+
+    /// <summary>
+    /// Commit All also works on an unborn HEAD: it stages the eligible changes
+    /// and creates the repository's first commit (spec 13 §11.2).
+    /// </summary>
+    [Fact]
+    public async Task CommitAllOnUnbornHeadCreatesTheFirstCommit()
+    {
+        using var repo = CreateRepositoryOnMainWithoutCommit();
+        repo.WriteFile("docs/one.md", "one");
+        repo.WriteFile("docs/two \u00e9.md", "two");
+
+        (GitCommitService service, _, _, _) = CreateService();
+        GitCommitResult result = await service.CommitAllAsync(repo.RootPath, "first commit via commit all");
+
+        Assert.Equal(GitCommitOutcome.Succeeded, result.Outcome);
+        Assert.Equal(GitCommitFlow.CommitAll, result.Flow);
+        Assert.Equal(1, CommitCount(repo));
+        Assert.Equal(
+            new[] { "docs/one.md", "docs/two \u00e9.md" },
+            CommitFiles(repo, result.Commit!.CommitId).OrderBy(name => name, StringComparer.Ordinal).ToArray());
+        Assert.Equal("main", result.Commit.BranchName);
+    }
+
     // -----------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------
@@ -336,6 +479,18 @@ public sealed class GitCommitTests
     private static TestGitRepository CreateRepositoryWithoutCommit() =>
         TestGitRepository.Create($"scm07-unborn-{Guid.NewGuid():N}");
 
+    /// <summary>
+    /// Creates an initialized repository whose unborn branch is named
+    /// <c>main</c>, so first-commit assertions stay deterministic regardless of
+    /// the host's default branch name.
+    /// </summary>
+    private static TestGitRepository CreateRepositoryOnMainWithoutCommit()
+    {
+        var repo = CreateRepositoryWithoutCommit();
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "checkout", "-b", "main"));
+        return repo;
+    }
+
     private static string Head(TestGitRepository repo) => Head(repo.RootPath);
 
     private static string Head(string rootPath) =>
@@ -344,9 +499,14 @@ public sealed class GitCommitTests
     private static int CommitCount(TestGitRepository repo) =>
         int.Parse(TestGitRepository.RunGitCaptureUtf8(repo.RootPath, "rev-list", "--count", "HEAD").Trim());
 
+    /// <summary>
+    /// The paths recorded in one commit. <c>core.quotepath=false</c> keeps Git
+    /// from C-quoting non-ASCII paths, so the names match the worktree-relative
+    /// paths the service reports verbatim.
+    /// </summary>
     private static string[] CommitFiles(TestGitRepository repo, string commitId) =>
         TestGitRepository
-            .RunGitCaptureUtf8(repo.RootPath, "show", "--name-only", "--format=", commitId)
+            .RunGitCaptureUtf8(repo.RootPath, "-c", "core.quotepath=false", "show", "--name-only", "--format=", commitId)
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(line => line.Trim())
             .ToArray();

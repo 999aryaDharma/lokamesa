@@ -69,6 +69,22 @@ public sealed class GitCommitService
         CancellationToken cancellationToken = default) =>
         RunFlowAsync(repositoryPath, message, GitCommitFlow.Commit, cancellationToken);
 
+    /// <summary>
+    /// Commits all eligible changes (<c>git add --all -- .</c> then
+    /// <c>git commit -m &lt;message&gt;</c>, spec 13 §11.2). This is an
+    /// explicitly distinct flow from <see cref="CommitAsync"/>: it is the only
+    /// path that stages anything itself, it reuses the SCM-06 stage service,
+    /// and it reports which paths it staged.
+    /// </summary>
+    /// <param name="repositoryPath">Workspace folder or active-document path used to discover the repository.</param>
+    /// <param name="message">The commit message; required and passed as a structured argument.</param>
+    /// <param name="cancellationToken">Cancels the Git invocation (typed, never thrown).</param>
+    public Task<GitCommitResult> CommitAllAsync(
+        string repositoryPath,
+        string? message,
+        CancellationToken cancellationToken = default) =>
+        RunFlowAsync(repositoryPath, message, GitCommitFlow.CommitAll, cancellationToken);
+
     private async Task<GitCommitResult> RunFlowAsync(
         string repositoryPath,
         string? message,
@@ -77,10 +93,9 @@ public sealed class GitCommitService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repositoryPath);
 
-        // Message validation happens before any Git invocation: a blank
-        // message must never become a Git-level "empty commit message"
-        // failure, and a NUL cannot travel as a process argument at all
-        // (spec 13 §11.1).
+        // Message validation happens before any Git invocation — and before
+        // Commit All stages anything: a rejected message must never leave the
+        // index mutated by a flow that then reports no commit (spec 13 §11.1).
         GitCommitResult? rejection = ValidateMessage(flow, message);
         if (rejection is not null)
         {
@@ -93,9 +108,48 @@ public sealed class GitCommitService
             return DiscoveryFailure(flow, context);
         }
 
+        string worktreeRoot = context.WorktreeRoot!;
+
+        // Commit All is the only flow that stages: it stages every eligible
+        // change through the SCM-06 pipeline, keeps the paths Git reported as
+        // staged for the response, and only then commits (spec 13 §11.2).
+        IReadOnlyList<string>? stagedPaths = null;
+        if (flow == GitCommitFlow.CommitAll)
+        {
+            GitStageResult staged = await _stages.StageAllAsync(worktreeRoot, cancellationToken);
+            if (!staged.IsSuccess)
+            {
+                return StageFailure(flow, staged);
+            }
+
+            stagedPaths = staged.Status?.Snapshot?.Entries
+                .Where(entry => entry.HasStagedChange)
+                .Select(entry => entry.Path)
+                .ToArray();
+        }
+
         // ValidateMessage guarantees a non-blank message from here on.
-        return await CommitCoreAsync(context.WorktreeRoot!, flow, message!, cancellationToken);
+        return await CommitCoreAsync(worktreeRoot, flow, message!, stagedPaths, cancellationToken);
     }
+
+    /// <summary>
+    /// Maps a failed SCM-06 stage-all to a typed commit result: the commit
+    /// never runs when staging failed, so a partial staging can never be
+    /// reported as a commit (spec 13 §11.2/§20).
+    /// </summary>
+    private static GitCommitResult StageFailure(GitCommitFlow flow, GitStageResult staged) => new(
+        staged.Outcome switch
+        {
+            GitStageOutcome.NoRepository => GitCommitOutcome.NoRepository,
+            GitStageOutcome.GitUnavailable => GitCommitOutcome.GitUnavailable,
+            _ => GitCommitOutcome.Failed,
+        },
+        flow,
+        null,
+        staged.Status,
+        staged.Failure,
+        staged.Message ?? "The Commit All staging step failed; no commit was created.",
+        staged.ErrorCode);
 
     /// <summary>
     /// Validates the client-supplied commit message. Rejection is typed and
@@ -139,6 +193,7 @@ public sealed class GitCommitService
         string worktreeRoot,
         GitCommitFlow flow,
         string message,
+        IReadOnlyList<string>? stagedPaths,
         CancellationToken cancellationToken)
     {
         // Nothing staged is never an empty commit (spec 13 §11.3): the index is
@@ -159,7 +214,8 @@ public sealed class GitCommitService
                     preStatus,
                     null,
                     "There is nothing staged to commit; no empty commit was created.",
-                    "NothingStaged");
+                    "NothingStaged",
+                    stagedPaths);
             }
         }
 
@@ -175,12 +231,30 @@ public sealed class GitCommitService
                 null,
                 null,
                 commit,
-                commit.ErrorMessage ?? "The Git commit failed.");
+                commit.ErrorMessage ?? "The Git commit failed.",
+                null,
+                stagedPaths);
         }
 
         GitCommitInfo? info = await ReadCommitInfoAsync(worktreeRoot, cancellationToken);
         GitStatusResult refreshed = await _repositories.GetStatusAsync(worktreeRoot, cancellationToken);
-        return new GitCommitResult(GitCommitOutcome.Succeeded, flow, info, refreshed, null, null);
+
+        // The commit exists; report the branch it landed on from the same
+        // status re-read the response carries (spec 13 §11.1 step 6).
+        if (info is not null)
+        {
+            info = info with { BranchName = refreshed.Snapshot?.BranchName };
+        }
+
+        return new GitCommitResult(
+            GitCommitOutcome.Succeeded,
+            flow,
+            info,
+            refreshed,
+            null,
+            null,
+            null,
+            stagedPaths);
     }
 
     /// <summary>
