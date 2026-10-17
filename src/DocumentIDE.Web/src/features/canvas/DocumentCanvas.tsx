@@ -26,8 +26,10 @@ import { useSearchStore } from '../search/searchStore';
 import { canvasStoreInstance, useCanvasStore } from './canvasStore';
 import FolderPicker, { isSupportedFolderFile, type FolderPickerFile } from './FolderPicker';
 import DocumentNode from './nodes/DocumentNode';
+import { applyClick, groupDrag } from './selection/SelectionController';
 import type { CanvasObject } from './types';
 import { ZOOM_MAX, ZOOM_MIN } from './types';
+import { recordDrag } from './usePersistedPosition';
 
 // ---------------------------------------------------------------------------
 // useCanvasState — subscribe to store using React 18 useSyncExternalStore
@@ -61,6 +63,8 @@ interface CanvasCardProps {
   /** CAN-04: single-click handler for folder objects (opens the picker). */
   onSingleClick?: (id: string) => void;
   onDoubleClick?: (object: CanvasObject) => void;
+  /** CAN-07: begin a group drag from this card. */
+  onDragStart?: (id: string, event: React.MouseEvent) => void;
 }
 
 const CanvasCard = memo(function CanvasCard({
@@ -71,6 +75,7 @@ const CanvasCard = memo(function CanvasCard({
   onSelect,
   onSingleClick,
   onDoubleClick,
+  onDragStart,
 }: CanvasCardProps) {
   const handleDoubleClick = useCallback(
     (e?: React.MouseEvent) => {
@@ -102,6 +107,7 @@ const CanvasCard = memo(function CanvasCard({
         statusText={object.statusText}
         onSelect={onSelect}
         onDoubleClick={() => handleDoubleClick()}
+        onMouseDown={(e) => onDragStart?.(object.id, e)}
       />
     );
   }
@@ -235,6 +241,17 @@ const WHEEL_SENSITIVITY = 0.001;
  */
 const FOLDER_CLICK_OPEN_DELAY_MS = 250;
 
+/**
+ * MD-01 (gap G7): a document object is Markdown when its explicit docType is
+ * `md`, or (when the type is unknown) when its title ends in a Markdown
+ * extension. An explicit `docx` is never treated as Markdown.
+ */
+function isMarkdownObject(obj: CanvasObject): boolean {
+  if (obj.docType === 'md') return true;
+  if (obj.docType === 'docx') return false;
+  return /\.(md|markdown)$/i.test(obj.title);
+}
+
 export interface DocumentCanvasProps {
   /**
    * CAN-04: supported files per folder object id, supplied by the host.
@@ -247,12 +264,36 @@ export interface DocumentCanvasProps {
    * this never physically moves files.
    */
   onReleaseDocuments?: (folderId: string, documentIds: string[]) => void;
+  /**
+   * CAN-06: workspace id used to persist manually dragged positions to
+   * localStorage (keyed by stable DocumentId). Drag here is metadata only.
+   */
+  workspaceId?: string;
+  /**
+   * MD-01 (gap G7): double-click on a Markdown document opens the internal
+   * source editor instead of launching Word. Omitted ⇒ Word open (legacy).
+   */
+  onOpenMarkdownDocument?: (documentId: string) => void;
 }
 
-export default function DocumentCanvas({ folderFiles, onReleaseDocuments }: DocumentCanvasProps = {}) {
+export default function DocumentCanvas({
+  folderFiles,
+  onReleaseDocuments,
+  workspaceId,
+  onOpenMarkdownDocument,
+}: DocumentCanvasProps = {}) {
   const state = useCanvasState();
   const searchState = useSearchState();
-  const { viewport, objects, selectedIds, setViewport, toggleSelect, loadPersistedViewport } = state;
+  const {
+    viewport,
+    objects,
+    selectedIds,
+    setViewport,
+    toggleSelect,
+    setSelection,
+    upsertObject,
+    loadPersistedViewport,
+  } = state;
   const [pickerFolderId, setPickerFolderId] = useState<string | null>(null);
 
   /**
@@ -397,10 +438,89 @@ export default function DocumentCanvas({ folderFiles, onReleaseDocuments }: Docu
 
   const handleObjectSelect = useCallback(
     (id: string) => {
-      toggleSelect(id);
+      // CAN-07 SelectionController: a plain click replaces the selection.
+      setSelection(applyClick(Array.from(selectedIds), id, false));
     },
-    [toggleSelect],
+    [selectedIds, setSelection],
   );
+
+  // ---------------------------------------------------------------------------
+  // CAN-06 / CAN-07: object drag — multi-select group drag + position persistence
+  // ---------------------------------------------------------------------------
+  const objectsRef = useRef(objects);
+  useEffect(() => {
+    objectsRef.current = objects;
+  }, [objects]);
+
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    startPositions: Map<string, { x: number; y: number }>;
+  } | null>(null);
+  const lastMovesRef = useRef<Array<{ id: string; toX: number; toY: number }>>([]);
+
+  const beginObjectDrag = useCallback(
+    (id: string, e: React.MouseEvent) => {
+      if (e.button !== 0) return;
+      e.stopPropagation();
+      const currentSelected = Array.from(selectedIds);
+      const nextSelection = selectedIds.has(id)
+        ? currentSelected
+        : applyClick(currentSelected, id, false);
+      if (!selectedIds.has(id)) setSelection(nextSelection);
+
+      const startPositions = new Map<string, { x: number; y: number }>();
+      for (const object of objectsRef.current) {
+        if (nextSelection.includes(object.id)) {
+          startPositions.set(object.id, { x: object.x, y: object.y });
+        }
+      }
+      dragRef.current = { startX: e.clientX, startY: e.clientY, startPositions };
+      lastMovesRef.current = [];
+    },
+    [selectedIds, setSelection],
+  );
+
+  useEffect(() => {
+    const onWindowMove = (e: MouseEvent) => {
+      const drag = dragRef.current;
+      if (!drag) return;
+      const delta = { dx: e.clientX - drag.startX, dy: e.clientY - drag.startY };
+      const base = objectsRef.current
+        .filter((o) => drag.startPositions.has(o.id))
+        .map((o) => ({
+          ...o,
+          x: drag.startPositions.get(o.id)!.x,
+          y: drag.startPositions.get(o.id)!.y,
+        }));
+      const result = groupDrag(base, Array.from(drag.startPositions.keys()), delta);
+      lastMovesRef.current = result.moves.map((move) => ({
+        id: move.id,
+        toX: move.toX,
+        toY: move.toY,
+      }));
+      for (const move of result.moves) {
+        const object = base.find((o) => o.id === move.id);
+        if (object) upsertObject({ ...object, x: move.toX, y: move.toY });
+      }
+    };
+    const onWindowUp = () => {
+      if (dragRef.current && workspaceId) {
+        // CAN-06: manual positions persist across restart, keyed by DocumentId.
+        for (const move of lastMovesRef.current) {
+          recordDrag(workspaceId, move.id, move.toX, move.toY);
+        }
+      }
+      dragRef.current = null;
+      lastMovesRef.current = [];
+    };
+    window.addEventListener('mousemove', onWindowMove);
+    window.addEventListener('mouseup', onWindowUp);
+    return () => {
+      window.removeEventListener('mousemove', onWindowMove);
+      window.removeEventListener('mouseup', onWindowUp);
+    };
+  }, [upsertObject, workspaceId]);
 
   // CAN-04: cancel a pending deferred folder single-click action (if any).
   // Called when the second click of a double click arrives, on dblclick, and
@@ -481,6 +601,14 @@ export default function DocumentCanvas({ folderFiles, onReleaseDocuments }: Docu
         onReleaseDocuments?.(obj.id, supportedFolderDocumentIds(obj.id));
         return;
       }
+      // MD-01 (gap G7): Markdown opens the internal source editor. DOCX (and
+      // legacy .doc) still launch Word.
+      if (isMarkdownObject(obj)) {
+        if (onOpenMarkdownDocument) {
+          onOpenMarkdownDocument(obj.id);
+          return;
+        }
+      }
       if (obj.type === 'document' || obj.title.endsWith('.docx') || obj.title.endsWith('.doc')) {
         const res = await openInWord(obj.id);
         if (!res.success) {
@@ -488,7 +616,7 @@ export default function DocumentCanvas({ folderFiles, onReleaseDocuments }: Docu
         }
       }
     },
-    [cancelPendingFolderClick, onReleaseDocuments, supportedFolderDocumentIds],
+    [cancelPendingFolderClick, onOpenMarkdownDocument, onReleaseDocuments, supportedFolderDocumentIds],
   );
 
   // ---------------------------------------------------------------------------
@@ -544,6 +672,7 @@ export default function DocumentCanvas({ folderFiles, onReleaseDocuments }: Docu
                 onSelect={handleObjectSelect}
                 onSingleClick={obj.type === 'folder' ? handleFolderSingleClick : undefined}
                 onDoubleClick={handleCardDoubleClick}
+                onDragStart={obj.type === 'document' ? beginObjectDrag : undefined}
               />
             );
           })}
