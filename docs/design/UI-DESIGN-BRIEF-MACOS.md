@@ -1,6 +1,6 @@
 # Document IDE — macOS-oriented design series (design of record)
 
-Status: **in progress** (5 of 12 screens rendered) · Source file: `D:\document-ide\ui.pen` (git-ignored, opened in the Pen app)
+Status: **complete** (12 of 12 screens rendered, 2026-10-17) · Source file: `D:\document-ide\ui.pen` (git-ignored, opened in the Pen app)
 Exports: `docs/design/screens-mac/*.png` (full resolution, 1440×900 per screen)
 
 ## Direction (decided 2026-10-17)
@@ -66,12 +66,16 @@ existing `text-xs` feel.
 | 04 | Batch operations | `screens-mac/04-batch-operations.png` | modal sheet: preview status, expiry warning, progress bar, review tree with per-occurrence before/after, missing-file exclusion, `Apply 34 changes` primary |
 | 05 | Source control | `screens-mac/05-source-control.png` | sidebar change groups (Staged/Changes/Untracked/Conflicts), unified diff with typed add/del rows, commit bar with message field + `Commit all` / `Commit staged` |
 
-## Screens still to build
+| 06 | DOCX document-aware diff | `screens-mac/06-docx-diff.png` | read-only document report: change-class chips (`Changed`/`Moved`/`Inserted`/`Deleted`), paragraph-level before → after blocks, tables/formatting summaries, inspector document metadata (`Open in Word` primary) |
+| 07 | Worktrees | `screens-mac/07-worktrees.png` | `PATH/BRANCH/STATE` table with per-row actions, `+ New worktree`, create sheet whose ref input accepts an **existing** branch/tag/commit only, inspector repository summary |
+| 08 | Search | `screens-mac/08-search.png` | active toolbar search, result list with highlighted match snippets beside a preview pane, inspector filters with `exact/fuzzy/semantic` segmented control + metadata chips |
+| 09 | Markdown editor | `screens-mac/09-markdown-editor.png` | editor with line gutter + live preview, sidebar document outline, inspector frontmatter/metadata + backlinks |
+| 10 | History & undo | `screens-mac/10-history-undo.png` | operation list with per-operation outcome chips (`Applied`/`Undone`/`Failed`), inspector operation detail + `History storage: x of y (pct%)` meter |
+| 11 | Share manager | `screens-mac/11-share-manager.png` | share list + selected share detail (link, expiry, rate limit), statuses limited to `Active`/`Stopped`/`Tunnel error`, actions `Copy link`/`Stop`/`Revoke`/`Regenerate link`/`Add member`, members table **with no roles**, permissions inspector |
+| 12 | Dialogs & overlays | `screens-mac/12-dialogs.png` | dimmed window with six reviewed-plan overlays: Quick Look, Build context pack, Missing resource, Undo N operations?, Merge order, PDF collision (`Overwrite`/`Rename`/`Skip`) |
 
-06 DOCX document-aware diff · 07 Worktrees (+ create sheet) · 08 Search & inspector filters ·
-09 Markdown editor (outline + metadata) · 10 History & undo (outcome list + storage meter) ·
-11 Share manager (members + permissions) · 12 Dialogs & overlays (Quick Look, context pack,
-missing resource, undo review, merge order, PDF collision).
+Frames in `ui.pen` for this series are named `App — <Screen> (macOS)` (plus `Dialogs & overlays
+(macOS)`) and sit in one row at `y = -160`, `x = 4670 … 21510`; the v1 series is untouched.
 
 ## Known gaps / caveats in this series
 
@@ -82,6 +86,10 @@ missing resource, undo review, merge order, PDF collision).
   decision this design does not settle.
 - Screens 01–05 use the **post-V1-fix** surface set (submit-on-enter search field, graph envelope,
   owner share lifecycle, commit box) — i.e. they assume the V1 gap-fix work landed.
+- Screen 12 shows the six overlays together on one dimmed window (2×3 grid) rather than six separate
+  windows; the sheet behind the scrim is the base frame's dimmed canvas, used for depth only. The
+  sidebar therefore has no highlighted nav row — overlays are global, and a global overlay must not
+  claim ownership of one section.
 - Nothing here is wired to the sprint board; a UI overhaul sprint must be authored before any code
   change follows this design.
 
