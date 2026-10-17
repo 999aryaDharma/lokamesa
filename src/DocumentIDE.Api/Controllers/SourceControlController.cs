@@ -157,12 +157,59 @@ public sealed record SourceControlCommitResponse(
     SourceControlFailureResponse? Failure);
 
 /// <summary>
-/// SCM-03/SCM-06/SCM-07 — privileged Source Control API consumed by the changes
-/// pane (spec 13 §18): read-only repository/status queries, explicit file-level
-/// stage/unstage actions, and the explicit Commit / Commit All actions. Every
-/// route inherits the localhost session-token guard from
-/// <c>PrivilegedRequestGuard</c>; there is no unauthenticated path and there is
-/// still no branch-management surface.
+/// SCM-11 — upstream/tracking state of one worktree (spec 13 §14.1/§14.2):
+/// the configured upstream reference and remote name plus ahead/behind counts.
+///
+/// When the current branch has <b>no configured upstream</b> the response
+/// reports the explicit typed status <c>NoUpstream</c> with <c>Ahead</c>/
+/// <c>Behind</c> <c>null</c> — never a fake <c>0/0</c> (spec 13 §14.2). Remote
+/// actions stay out of this surface.
+/// </summary>
+public sealed record SourceControlRemoteResponse(
+    string Status,
+    bool HasRepository,
+    string? WorktreeRoot,
+    string? BranchName,
+    bool IsDetached,
+    string? HeadCommit,
+    string? RemoteName,
+    string? UpstreamReference,
+    bool HasUpstream,
+    int? Ahead,
+    int? Behind,
+    SourceControlFailureResponse? Failure);
+
+/// <summary>
+/// SCM-11 — request body for the explicit Fetch action. <c>Path</c> is the
+/// workspace folder or active-document path used to discover the repository;
+/// the fetch runs against exactly that resolved worktree root (spec 13 §19).
+/// </summary>
+public sealed record SourceControlFetchRequest(string? Path);
+
+/// <summary>
+/// SCM-11 — typed Fetch outcome (spec 13 §14.1/§14.2/§20). On success
+/// <c>Remote</c> carries the tracking state re-read from Git after the fetch
+/// (so the pane renders the updated ahead/behind); a branch with no configured
+/// upstream is the first-class <c>NoUpstream</c> outcome and remote failures
+/// stay typed and inspectable. A fetch never changes document contents or the
+/// index and never pulls/pushes/merges.
+/// </summary>
+public sealed record SourceControlFetchResponse(
+    string Outcome,
+    bool IsSuccess,
+    string? ErrorCode,
+    string? Message,
+    SourceControlRemoteResponse? Remote,
+    SourceControlFailureResponse? Failure);
+
+/// <summary>
+/// SCM-03/SCM-06/SCM-07/SCM-11 — privileged Source Control API consumed by the
+/// changes pane (spec 13 §18): read-only repository/status queries, explicit
+/// file-level stage/unstage actions, the explicit Commit / Commit All actions,
+/// and read-only remote-state plus the explicit Fetch action. Every route
+/// inherits the localhost session-token guard from <c>PrivilegedRequestGuard</c>;
+/// there is no unauthenticated path and there is still no branch-management
+/// surface.
 /// </summary>
 [ApiController]
 [Route("api/source-control")]
@@ -177,17 +224,20 @@ public sealed class SourceControlController : ControllerBase
     private readonly GitRepositoryService _repositories;
     private readonly GitStageService _stages;
     private readonly GitCommitService _commits;
+    private readonly GitRemoteService _remotes;
     private readonly IDocumentRepository _documents;
 
     public SourceControlController(
         GitRepositoryService repositories,
         GitStageService stages,
         GitCommitService commits,
+        GitRemoteService remotes,
         IDocumentRepository documents)
     {
         _repositories = repositories ?? throw new ArgumentNullException(nameof(repositories));
         _stages = stages ?? throw new ArgumentNullException(nameof(stages));
         _commits = commits ?? throw new ArgumentNullException(nameof(commits));
+        _remotes = remotes ?? throw new ArgumentNullException(nameof(remotes));
         _documents = documents ?? throw new ArgumentNullException(nameof(documents));
     }
 
@@ -410,6 +460,133 @@ public sealed class SourceControlController : ControllerBase
                 info.ShortId,
                 info.Summary,
                 info.BranchName);
+
+    // ---------------------------------------------------------------------
+    // SCM-11 — remote state & fetch (spec 13 §14.1/§14.2/§19/§20)
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Reads the worktree's upstream/tracking state (spec 13 §14.1/§14.2): the
+    /// configured upstream reference and remote name plus ahead/behind counts.
+    /// A branch with no configured upstream is the explicit typed
+    /// <c>NoUpstream</c> status with null counters, never a fake <c>0/0</c>; a
+    /// path outside Git stays a valid source and yields the typed
+    /// <c>NoRepository</c> status with HTTP 200. A missing path is a typed 400
+    /// and nothing runs.
+    /// </summary>
+    [HttpGet("remote")]
+    public async Task<IActionResult> GetRemote(
+        [FromQuery] string? path,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return PathRequiredBadRequest("query parameter");
+        }
+
+        GitRemoteStateResult result = await _remotes.GetRemoteStateAsync(path, cancellationToken);
+        return Ok(ToRemoteResponse(result));
+    }
+
+    /// <summary>
+    /// Runs one explicit Fetch (<c>git fetch</c>, spec 13 §14.1) against the
+    /// resolved worktree root and returns the tracking state re-read from Git.
+    /// Fetch updates only remote-tracking state — document contents and the
+    /// index are never touched (spec 13 §14.1). A branch with no configured
+    /// upstream is the typed <c>NoUpstream</c> outcome and runs no fetch; remote
+    /// failures (unreachable host, authentication required, rejected, permission
+    /// denied, Git missing) stay HTTP 200 with the typed outcome so the pane can
+    /// render them. A missing request path is a typed 400 and Git never runs.
+    /// </summary>
+    [HttpPost("fetch")]
+    public async Task<IActionResult> Fetch(
+        [FromBody] SourceControlFetchRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.Path))
+        {
+            return PathRequiredBadRequest("request field");
+        }
+
+        GitFetchResult result = await _remotes.FetchAsync(request.Path!, cancellationToken);
+        return Ok(ToFetchResponse(result));
+    }
+
+    /// <summary>
+    /// Maps a typed remote-state result onto the API contract (spec 13
+    /// §14.1/§14.2): the state is present for both resolved states (upstream
+    /// present or absent) and <c>NoUpstream</c> stays a non-error status with
+    /// null counters; failures keep their typed status and failure payload.
+    /// </summary>
+    private static SourceControlRemoteResponse ToRemoteResponse(GitRemoteStateResult result)
+    {
+        if (result.State is not GitRemoteState state)
+        {
+            return new SourceControlRemoteResponse(
+                result.Outcome.ToString(),
+                false,
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                false,
+                null,
+                null,
+                ToFailure(result.Failure));
+        }
+
+        return new SourceControlRemoteResponse(
+            result.Outcome.ToString(),
+            true,
+            state.WorktreeRoot,
+            state.BranchName,
+            state.IsDetached,
+            state.HeadCommit,
+            state.RemoteName,
+            state.UpstreamReference,
+            state.HasUpstream,
+            state.Ahead,
+            state.Behind,
+            null);
+    }
+
+    /// <summary>
+    /// Maps the tracking state carried by a fetch result; the status is
+    /// <c>Available</c> with an upstream and the explicit <c>NoUpstream</c>
+    /// without one (spec 13 §14.2).
+    /// </summary>
+    private static SourceControlRemoteResponse? ToRemoteResponse(GitRemoteState? state) =>
+        state is null
+            ? null
+            : new SourceControlRemoteResponse(
+                state.HasUpstream ? "Available" : "NoUpstream",
+                true,
+                state.WorktreeRoot,
+                state.BranchName,
+                state.IsDetached,
+                state.HeadCommit,
+                state.RemoteName,
+                state.UpstreamReference,
+                state.HasUpstream,
+                state.Ahead,
+                state.Behind,
+                null);
+
+    /// <summary>
+    /// Maps a typed fetch result onto the API contract (spec 13 §14.1/§20):
+    /// success carries the refreshed tracking state; every failure keeps its
+    /// typed outcome, code and originating failure and stays HTTP 200.
+    /// </summary>
+    private static SourceControlFetchResponse ToFetchResponse(GitFetchResult result) =>
+        new(
+            result.Outcome.ToString(),
+            result.IsSuccess,
+            result.ErrorCode,
+            result.Message,
+            ToRemoteResponse(result.Remote),
+            ToFailure(result.Failure));
 
     private async Task<IActionResult> RunFileActionAsync(
         SourceControlStageRequest? request,

@@ -81,6 +81,17 @@ builder.Services.AddSingleton(sp => new GitCommitService(
     sp.GetRequiredService<GitRepositoryService>(),
     sp.GetRequiredService<GitStageService>()));
 
+// SCM-11: remote-state read and explicit Fetch. Reads upstream/tracking state
+// (a branch with no configured upstream is a first-class typed state, never a
+// bogus 0/0) and runs `git fetch` through the same controlled runner/mutation
+// queue against the resolved worktree root, so concurrent fetch/stage/commit on
+// one worktree serialize (spec 13 §14.1/§14.2/§19). Fetch never changes document
+// contents or the index; the runner keeps GIT_TERMINAL_PROMPT=0 so an auth
+// prompt fails fast typed instead of hanging (spec 13 §18/§20).
+builder.Services.AddSingleton(sp => new GitRemoteService(
+    sp.GetRequiredService<IGitProcessRunner>(),
+    sp.GetRequiredService<GitRepositoryService>()));
+
 builder.Services.AddScoped<PdfExportService>();
 builder.Services.AddScoped<BatchPdfExportService>();
 builder.Services.AddScoped<PdfMergeService>();

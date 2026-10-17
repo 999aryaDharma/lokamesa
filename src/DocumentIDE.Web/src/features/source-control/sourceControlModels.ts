@@ -167,3 +167,62 @@ export interface SourceControlCommitResult {
   status: SourceControlStatusModel | null;
   failure: SourceControlFailure | null;
 }
+
+/** SCM-11 — typed status of a worktree's remote/tracking state (spec 13 §14.2).
+ * `NoUpstream` is a first-class, non-error state: the counters are unknown, not
+ * zero. */
+export type GitRemoteStatus =
+  | 'Available'
+  | 'NoUpstream'
+  | 'NoRepository'
+  | 'GitUnavailable'
+  | 'Failed';
+
+/** SCM-11 — typed outcome of one explicit fetch (spec 13 §14.1/§20). */
+export type GitFetchOutcome =
+  | 'Succeeded'
+  | 'NoUpstream'
+  | 'NoRepository'
+  | 'GitUnavailable'
+  | 'AuthenticationRequired'
+  | 'HostUnreachable'
+  | 'Rejected'
+  | 'PermissionDenied'
+  | 'Failed';
+
+/**
+ * SCM-11 — remote/tracking state of one worktree (spec 13 §14.1/§14.2). When
+ * `hasUpstream` is false the status is `NoUpstream` and `ahead`/`behind` are
+ * null — the pane renders the explicit "no upstream" state instead of a fake
+ * 0/0.
+ */
+export interface SourceControlRemoteModel {
+  status: GitRemoteStatus;
+  hasRepository: boolean;
+  worktreeRoot: string | null;
+  branchName: string | null;
+  isDetached: boolean;
+  headCommit: string | null;
+  /** Remote of the configured upstream (e.g. `origin`); null without one. */
+  remoteName: string | null;
+  /** Configured upstream reference (e.g. `origin/main`); null without one. */
+  upstreamReference: string | null;
+  hasUpstream: boolean;
+  ahead: number | null;
+  behind: number | null;
+  failure: SourceControlFailure | null;
+}
+
+/**
+ * SCM-11 — typed fetch result. On success `remote` carries the tracking state
+ * the API re-read from Git after the fetch; remote failures stay typed in
+ * `outcome`/`failure` (spec 13 §14.1/§20).
+ */
+export interface SourceControlFetchResult {
+  outcome: GitFetchOutcome;
+  isSuccess: boolean;
+  errorCode: string | null;
+  message: string | null;
+  remote: SourceControlRemoteModel | null;
+  failure: SourceControlFailure | null;
+}
