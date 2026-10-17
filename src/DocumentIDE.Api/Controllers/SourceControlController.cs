@@ -118,11 +118,51 @@ public sealed record SourceControlStageResponse(
     SourceControlFailureResponse? Failure);
 
 /// <summary>
-/// SCM-03/SCM-06 — privileged Source Control API consumed by the changes pane
-/// (spec 13 §18): read-only repository/status queries plus explicit
-/// file-level stage/unstage actions. Every route inherits the localhost
-/// session-token guard from <c>PrivilegedRequestGuard</c>; there is no
-/// unauthenticated path and there is still no branch-management surface.
+/// SCM-07 — request body for the Commit / Commit All actions. <c>Path</c> is
+/// the workspace folder or active-document path used to discover the
+/// repository; <c>Message</c> is the required commit message, passed to Git as
+/// a structured argument and never concatenated into a shell string
+/// (spec 13 §11.1/§18).
+/// </summary>
+public sealed record SourceControlCommitRequest(string? Path, string? Message);
+
+/// <summary>
+/// SCM-07 — identity and subject of the commit that was created
+/// (spec 13 §11.1 step 6). <c>BranchName</c> is <c>null</c> on a detached HEAD.
+/// </summary>
+public sealed record SourceControlCommitInfoResponse(
+    string CommitId,
+    string ShortId,
+    string Summary,
+    string? BranchName);
+
+/// <summary>
+/// SCM-07 — typed Commit / Commit All outcome (spec 13 §11/§20).
+///
+/// On success <c>Commit</c> carries the new commit identifier and <c>Status</c>
+/// the status re-read from Git after the commit (the real Git index is the only
+/// staging authority). <c>Flow</c> reports which flow ran; for Commit All
+/// <c>StagedPaths</c> lists the paths that flow staged. Failures stay typed and
+/// inspectable; the commit path never pushes anywhere (spec 13 §14.4/§23).
+/// </summary>
+public sealed record SourceControlCommitResponse(
+    string Outcome,
+    string Flow,
+    bool IsSuccess,
+    string? ErrorCode,
+    string? Message,
+    SourceControlCommitInfoResponse? Commit,
+    IReadOnlyList<string>? StagedPaths,
+    SourceControlStatusResponse? Status,
+    SourceControlFailureResponse? Failure);
+
+/// <summary>
+/// SCM-03/SCM-06/SCM-07 — privileged Source Control API consumed by the changes
+/// pane (spec 13 §18): read-only repository/status queries, explicit file-level
+/// stage/unstage actions, and the explicit Commit / Commit All actions. Every
+/// route inherits the localhost session-token guard from
+/// <c>PrivilegedRequestGuard</c>; there is no unauthenticated path and there is
+/// still no branch-management surface.
 /// </summary>
 [ApiController]
 [Route("api/source-control")]
@@ -136,15 +176,18 @@ public sealed class SourceControlController : ControllerBase
 
     private readonly GitRepositoryService _repositories;
     private readonly GitStageService _stages;
+    private readonly GitCommitService _commits;
     private readonly IDocumentRepository _documents;
 
     public SourceControlController(
         GitRepositoryService repositories,
         GitStageService stages,
+        GitCommitService commits,
         IDocumentRepository documents)
     {
         _repositories = repositories ?? throw new ArgumentNullException(nameof(repositories));
         _stages = stages ?? throw new ArgumentNullException(nameof(stages));
+        _commits = commits ?? throw new ArgumentNullException(nameof(commits));
         _documents = documents ?? throw new ArgumentNullException(nameof(documents));
     }
 
@@ -261,6 +304,112 @@ public sealed class SourceControlController : ControllerBase
         [FromBody] SourceControlStageAllRequest? request,
         CancellationToken cancellationToken) =>
         RunAllActionAsync(request, stage: false, cancellationToken);
+
+    // ---------------------------------------------------------------------
+    // SCM-07 — commit actions (spec 13 §11/§19/§20)
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Commits the current staged state (<c>git commit -m &lt;message&gt;</c>,
+    /// spec 13 §11.1). Unstaged-only changes are never silently included and
+    /// there is no automatic push. A blank message is a typed 400 and Git never
+    /// runs; other failures stay HTTP 200 with the typed outcome.
+    /// </summary>
+    [HttpPost("commit")]
+    public Task<IActionResult> Commit(
+        [FromBody] SourceControlCommitRequest? request,
+        CancellationToken cancellationToken) =>
+        RunCommitActionAsync(request, GitCommitFlow.Commit, cancellationToken);
+
+    /// <summary>
+    /// Stages every eligible change and commits it (<c>git add --all</c> then
+    /// <c>git commit -m &lt;message&gt;</c>, spec 13 §11.2) — an explicitly
+    /// distinct flow from <see cref="Commit"/>. The response reports the flow it
+    /// ran and the paths it staged.
+    /// </summary>
+    [HttpPost("commit-all")]
+    public Task<IActionResult> CommitAll(
+        [FromBody] SourceControlCommitRequest? request,
+        CancellationToken cancellationToken) =>
+        RunCommitActionAsync(request, GitCommitFlow.CommitAll, cancellationToken);
+
+    private async Task<IActionResult> RunCommitActionAsync(
+        SourceControlCommitRequest? request,
+        GitCommitFlow flow,
+        CancellationToken cancellationToken)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.Path))
+        {
+            return PathRequiredBadRequest("request field");
+        }
+
+        GitCommitResult result = flow == GitCommitFlow.CommitAll
+            ? await _commits.CommitAllAsync(request.Path!, request.Message, cancellationToken)
+            : await _commits.CommitAsync(request.Path!, request.Message, cancellationToken);
+        return await ToCommitResponseAsync(result, cancellationToken);
+    }
+
+    /// <summary>
+    /// Maps a typed commit result onto the privileged API contract
+    /// (spec 13 §11/§20): a rejected message is a typed 400 (nothing ran),
+    /// every other outcome stays HTTP 200 so the pane can render it, and a
+    /// success carries the new commit identity plus the refreshed status.
+    /// </summary>
+    private async Task<IActionResult> ToCommitResponseAsync(
+        GitCommitResult result,
+        CancellationToken cancellationToken)
+    {
+        switch (result.Outcome)
+        {
+            case GitCommitOutcome.MessageRequired:
+            case GitCommitOutcome.MessageInvalid:
+                return BadRequest(new
+                {
+                    errorCode = result.ErrorCode ?? "MessageRequired",
+                    error = result.Message,
+                });
+
+            case GitCommitOutcome.Succeeded:
+                GitStatusResult refreshed = result.Status!;
+                SourceControlStatusResponse? status = refreshed.IsAvailable && refreshed.Snapshot is not null
+                    ? await MapSnapshotAsync(refreshed.Snapshot, cancellationToken)
+                    : null;
+
+                return Ok(new SourceControlCommitResponse(
+                    result.Outcome.ToString(),
+                    result.Flow.ToString(),
+                    true,
+                    null,
+                    null,
+                    ToCommitInfo(result.Commit),
+                    result.StagedPaths,
+                    status,
+                    // A status read-back that failed is surfaced typed rather
+                    // than pretending a clean state.
+                    ToFailure(refreshed.IsAvailable ? null : refreshed.Failure)));
+
+            default:
+                return Ok(new SourceControlCommitResponse(
+                    result.Outcome.ToString(),
+                    result.Flow.ToString(),
+                    false,
+                    result.ErrorCode,
+                    result.Message,
+                    null,
+                    result.StagedPaths,
+                    null,
+                    ToFailure(result.Failure)));
+        }
+    }
+
+    private static SourceControlCommitInfoResponse? ToCommitInfo(GitCommitInfo? info) =>
+        info is null
+            ? null
+            : new SourceControlCommitInfoResponse(
+                info.CommitId,
+                info.ShortId,
+                info.Summary,
+                info.BranchName);
 
     private async Task<IActionResult> RunFileActionAsync(
         SourceControlStageRequest? request,

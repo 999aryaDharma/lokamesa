@@ -72,6 +72,15 @@ builder.Services.AddSingleton(sp => new GitStageService(
     sp.GetRequiredService<IGitProcessRunner>(),
     sp.GetRequiredService<GitRepositoryService>()));
 
+// SCM-07: commit application service. Commit and Commit All run through the
+// same controlled runner/mutation queue; hooks stay enabled, the plain commit
+// never stages anything itself, and there is no automatic push
+// (spec 13 §11/§19/§23).
+builder.Services.AddSingleton(sp => new GitCommitService(
+    sp.GetRequiredService<IGitProcessRunner>(),
+    sp.GetRequiredService<GitRepositoryService>(),
+    sp.GetRequiredService<GitStageService>()));
+
 builder.Services.AddScoped<PdfExportService>();
 builder.Services.AddScoped<BatchPdfExportService>();
 builder.Services.AddScoped<PdfMergeService>();

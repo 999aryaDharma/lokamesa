@@ -1213,3 +1213,296 @@ public sealed class GitCommitTests
             "System Git executable was not found.");
     }
 }
+
+/// <summary>
+/// SCM-07 — privileged API half of the Git Commit &amp; Commit All suite
+/// (spec 13 §11/§18/§20). The two commit routes sit behind the localhost
+/// session-token guard; a blank commit message is a typed 400 and nothing runs;
+/// typed Git states (nothing staged, no repository, failures) stay HTTP 200 so
+/// the pane can render them; success carries the new commit identifier and the
+/// status re-read from Git.
+/// </summary>
+public sealed class GitCommitApiTests : IClassFixture<WebApplicationFactory<Program>>
+{
+    private readonly WebApplicationFactory<Program> _factory;
+
+    public GitCommitApiTests(WebApplicationFactory<Program> factory)
+    {
+        _factory = factory;
+    }
+
+    /// <summary>
+    /// The Commit route creates the commit and returns its identifier, subject,
+    /// branch and the refreshed status; the plain flow stages nothing, so it
+    /// reports no staged paths and leaves the unstaged edit alone
+    /// (spec 13 §11.1).
+    /// </summary>
+    [Fact]
+    public async Task CommitEndpointCreatesCommitAndReturnsIdentifierAndRefreshedStatus()
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md", "docs/b.md" });
+        repo.WriteFile("docs/a.md", "a v2");
+        repo.WriteFile("docs/b.md", "b v2");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "--", "docs/a.md"));
+        string headBefore = Head(repo);
+
+        using var client = await CreateAuthorizedClientAsync();
+        using var response = await client.PostAsJsonAsync(
+            "/api/source-control/commit",
+            new SourceControlCommitRequest(repo.RootPath, "api commit"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        SourceControlCommitResponse? body =
+            await response.Content.ReadFromJsonAsync<SourceControlCommitResponse>();
+
+        Assert.NotNull(body);
+        Assert.Equal("Succeeded", body!.Outcome);
+        Assert.Equal("Commit", body.Flow);
+        Assert.True(body.IsSuccess);
+        Assert.Null(body.ErrorCode);
+        Assert.Null(body.Failure);
+        Assert.Null(body.StagedPaths);
+
+        Assert.NotNull(body.Commit);
+        Assert.NotEqual(headBefore, body.Commit!.CommitId);
+        Assert.Equal(Head(repo), body.Commit.CommitId);
+        Assert.StartsWith(body.Commit.ShortId, body.Commit.CommitId, StringComparison.Ordinal);
+        Assert.Equal("api commit", body.Commit.Summary);
+        Assert.Equal("main", body.Commit.BranchName);
+
+        // The response carries the status re-read from Git after the commit.
+        Assert.NotNull(body.Status);
+        Assert.Equal("Available", body.Status!.Status);
+        Assert.Equal(Path.GetFullPath(repo.RootPath), body.Status.WorktreeRoot, StringComparer.OrdinalIgnoreCase);
+        Assert.Empty(body.Status.Sections.Staged);
+        Assert.Equal(new[] { "docs/b.md" }, body.Status.Sections.Unstaged.Select(entry => entry.Path).ToArray());
+    }
+
+    /// <summary>
+    /// The Commit All route is an explicitly distinct flow: it stages the
+    /// eligible changes, reports that it ran Commit All, lists the staged paths
+    /// and commits them (spec 13 §11.2).
+    /// </summary>
+    [Fact]
+    public async Task CommitAllEndpointStagesCommitsAndReportsFlowAndStagedPaths()
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/modified.md", "docs/deleted.md" });
+        repo.WriteFile("docs/modified.md", "modified v2");
+        File.Delete(Path.Combine(repo.RootPath, "docs", "deleted.md"));
+        repo.WriteFile("docs/untracked.md", "untracked");
+
+        using var client = await CreateAuthorizedClientAsync();
+        using var response = await client.PostAsJsonAsync(
+            "/api/source-control/commit-all",
+            new SourceControlCommitRequest(repo.RootPath, "api commit all"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        SourceControlCommitResponse? body =
+            await response.Content.ReadFromJsonAsync<SourceControlCommitResponse>();
+
+        Assert.NotNull(body);
+        Assert.Equal("Succeeded", body!.Outcome);
+        Assert.Equal("CommitAll", body.Flow);
+        Assert.True(body.IsSuccess);
+        Assert.NotNull(body.Commit);
+
+        string[] eligible = { "docs/deleted.md", "docs/modified.md", "docs/untracked.md" };
+        Assert.Equal(
+            eligible.OrderBy(name => name, StringComparer.Ordinal).ToArray(),
+            body.StagedPaths!.OrderBy(name => name, StringComparer.Ordinal).ToArray());
+
+        Assert.NotNull(body.Status);
+        Assert.Empty(body.Status!.Sections.Staged);
+        Assert.Empty(body.Status.Sections.Unstaged);
+        Assert.Empty(body.Status.Sections.Untracked);
+    }
+
+    /// <summary>
+    /// A blank/whitespace-only commit message is a typed 400 and no Git commit
+    /// runs, so the staged state is untouched (spec 13 §11.1/§18).
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   \t ")]
+    public async Task CommitEndpointRejectsBlankMessageWith400AndCreatesNoCommit(string? message)
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md" });
+        repo.WriteFile("docs/a.md", "a v2");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "--", "docs/a.md"));
+        string headBefore = Head(repo);
+
+        using var client = await CreateAuthorizedClientAsync();
+        using var response = await client.PostAsJsonAsync(
+            "/api/source-control/commit",
+            new SourceControlCommitRequest(repo.RootPath, message));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using JsonDocument payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("MessageRequired", payload.RootElement.GetProperty("errorCode").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(payload.RootElement.GetProperty("error").GetString()));
+
+        Assert.Equal(headBefore, Head(repo));
+        Assert.Equal(new[] { "docs/a.md" }, StagedNames(repo.RootPath).ToArray());
+    }
+
+    /// <summary>
+    /// Nothing staged is a typed outcome with HTTP 200 (the pane renders it),
+    /// and it never creates an empty commit (spec 13 §11.3).
+    /// </summary>
+    [Fact]
+    public async Task CommitEndpointReportsNothingStagedTypedly()
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md" });
+        string headBefore = Head(repo);
+
+        using var client = await CreateAuthorizedClientAsync();
+        using var response = await client.PostAsJsonAsync(
+            "/api/source-control/commit",
+            new SourceControlCommitRequest(repo.RootPath, "nothing staged"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        SourceControlCommitResponse? body =
+            await response.Content.ReadFromJsonAsync<SourceControlCommitResponse>();
+
+        Assert.NotNull(body);
+        Assert.Equal("NothingStaged", body!.Outcome);
+        Assert.False(body.IsSuccess);
+        Assert.Equal("NothingStaged", body.ErrorCode);
+        Assert.Null(body.Commit);
+        Assert.False(string.IsNullOrWhiteSpace(body.Message));
+
+        Assert.Equal(headBefore, Head(repo));
+    }
+
+    /// <summary>
+    /// A workspace outside any Git worktree reports the typed
+    /// <c>NoRepository</c> outcome with HTTP 200 (spec 13 §5).
+    /// </summary>
+    [Fact]
+    public async Task CommitEndpointReportsNoRepositoryTypedly()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), $"scm07-api-norepo-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(folder);
+        try
+        {
+            using var client = await CreateAuthorizedClientAsync();
+            using var response = await client.PostAsJsonAsync(
+                "/api/source-control/commit",
+                new SourceControlCommitRequest(folder, "no repository"));
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            SourceControlCommitResponse? body =
+                await response.Content.ReadFromJsonAsync<SourceControlCommitResponse>();
+
+            Assert.NotNull(body);
+            Assert.Equal("NoRepository", body!.Outcome);
+            Assert.False(body.IsSuccess);
+            Assert.Null(body.Commit);
+        }
+        finally
+        {
+            DeleteDirectoryBestEffort(folder);
+        }
+    }
+
+    /// <summary>
+    /// Both commit routes are guarded exactly like the other privileged Source
+    /// Control routes: a missing token is 401, a hostile origin is 403 and a
+    /// wrong token is 401, and no unauthenticated request reaches Git
+    /// (spec 13 §18).
+    /// </summary>
+    [Fact]
+    public async Task CommitRoutesRejectMissingInvalidTokenAndHostileOrigin()
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md" });
+        repo.WriteFile("docs/a.md", "a v2");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "--", "docs/a.md"));
+        string headBefore = Head(repo);
+
+        using (var anonymous = _factory.CreateClient())
+        {
+            using var content = JsonContent.Create(new SourceControlCommitRequest(repo.RootPath, "anonymous"));
+            using var response = await anonymous.PostAsync("/api/source-control/commit", content);
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var tokenProvider = scope.ServiceProvider.GetRequiredService<ISessionTokenProvider>();
+
+            using var hostileOrigin = _factory.CreateClient();
+            hostileOrigin.DefaultRequestHeaders.Add("Origin", "https://attacker.example");
+            hostileOrigin.DefaultRequestHeaders.Add("X-DocumentIDE-Session-Token", tokenProvider.SessionToken);
+            using var hostileContent = JsonContent.Create(
+                new SourceControlCommitRequest(repo.RootPath, "hostile"));
+            using var hostileResponse = await hostileOrigin.PostAsync(
+                "/api/source-control/commit-all",
+                hostileContent);
+            Assert.Equal(HttpStatusCode.Forbidden, hostileResponse.StatusCode);
+
+            using var wrongToken = _factory.CreateClient();
+            wrongToken.DefaultRequestHeaders.Add("Origin", "http://localhost:5173");
+            wrongToken.DefaultRequestHeaders.Add("X-DocumentIDE-Session-Token", "invalid-token");
+            using var wrongContent = JsonContent.Create(
+                new SourceControlCommitRequest(repo.RootPath, "wrong token"));
+            using var wrongResponse = await wrongToken.PostAsync("/api/source-control/commit", wrongContent);
+            Assert.Equal(HttpStatusCode.Unauthorized, wrongResponse.StatusCode);
+        }
+
+        // No unauthenticated request reached Git: HEAD and the index are unchanged.
+        Assert.Equal(headBefore, Head(repo));
+        Assert.Equal(new[] { "docs/a.md" }, StagedNames(repo.RootPath).ToArray());
+    }
+
+    // -----------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------
+
+    private Task<HttpClient> CreateAuthorizedClientAsync()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var tokenProvider = scope.ServiceProvider.GetRequiredService<ISessionTokenProvider>();
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("Origin", "http://localhost:5173");
+        client.DefaultRequestHeaders.Add("X-DocumentIDE-Session-Token", tokenProvider.SessionToken);
+        return Task.FromResult(client);
+    }
+
+    private static TestGitRepository CreateRepositoryWithBaselineCommit(string[] baselineFiles)
+    {
+        var repo = TestGitRepository.Create($"scm07-api-{Guid.NewGuid():N}");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "checkout", "-b", "main"));
+        foreach (string file in baselineFiles)
+        {
+            repo.WriteFile(file, "v1");
+        }
+
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "-A"));
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "commit", "-qm", "baseline"));
+        return repo;
+    }
+
+    private static string Head(TestGitRepository repo) =>
+        TestGitRepository.RunGitCaptureUtf8(repo.RootPath, "rev-parse", "HEAD").Trim();
+
+    private static string[] StagedNames(string rootPath) =>
+        TestGitRepository
+            .RunGitCaptureUtf8(rootPath, "diff", "--cached", "--name-only", "-z")
+            .Split('\0', StringSplitOptions.RemoveEmptyEntries);
+
+    private static void DeleteDirectoryBestEffort(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+        }
+        catch (Exception)
+        {
+            // Best effort cleanup; a locked temp directory must not fail the test.
+        }
+    }
+}
