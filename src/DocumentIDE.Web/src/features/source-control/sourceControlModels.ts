@@ -167,3 +167,63 @@ export interface SourceControlCommitResult {
   status: SourceControlStatusModel | null;
   failure: SourceControlFailure | null;
 }
+
+/**
+ * SCM-09 — typed outcome of one work-session/correlation request
+ * (spec 13 §13/§20/§24). `SessionRequired`/`DocumentRequired`/`CommitRequired`
+ * are input rejections where nothing ran; `SessionNotFound` and
+ * `StoreUnavailable` are execution outcomes the pane renders instead of
+ * treating a correlation problem as a broken commit.
+ */
+export type WorkSessionOutcome =
+  | 'Succeeded'
+  | 'SessionRequired'
+  | 'DocumentRequired'
+  | 'CommitRequired'
+  | 'SessionNotFound'
+  | 'StoreUnavailable';
+
+/** SCM-09 — one document changed by a work session (Document IDE History). */
+export interface WorkSessionDocumentModel {
+  documentId: string;
+  path: string | null;
+}
+
+/**
+ * SCM-09 — one Git commit correlated with a work session. Derived correlation
+ * metadata only: the id is exactly what Git reported at commit time and is
+ * never required for the commit to remain valid (spec 13 §24).
+ */
+export interface WorkSessionCommitModel {
+  commitId: string;
+  shortId: string | null;
+  summary: string | null;
+}
+
+/**
+ * SCM-09 — the Document IDE History side of the correlation payload: the
+ * session plus the documents it changed. It is deliberately separate from any
+ * Git history so the pane renders a correlation, not a unified timeline.
+ */
+export interface WorkSessionModel {
+  id: string;
+  workspaceId: string | null;
+  /** Repository root recorded read-only at session start; null when Git is absent. */
+  repositoryRoot: string | null;
+  /** Worktree root recorded read-only at session start; null when Git is absent. */
+  worktreeRoot: string | null;
+  startedAt: string;
+  endedAt: string | null;
+  label: string | null;
+  changedDocuments: WorkSessionDocumentModel[];
+  commitCorrelations: WorkSessionCommitModel[];
+}
+
+/** SCM-09 — typed work-session/correlation response (spec 13 §20/§24). */
+export interface SourceControlCorrelationResult {
+  outcome: WorkSessionOutcome;
+  isSuccess: boolean;
+  errorCode: string | null;
+  message: string | null;
+  session: WorkSessionModel | null;
+}
