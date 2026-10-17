@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -40,6 +42,50 @@ public sealed class GitCommitService
     private static readonly string[] CommitMetadataArguments =
     {
         "log", "-1", "--format=%H%x00%h%x00%s",
+    };
+
+    /// <summary>
+    /// Commit hooks Git may run for a plain <c>git commit -m</c> (spec 13
+    /// §11.1/§23). Their presence is what lets a bare exit code 1 (a silent
+    /// failing hook) be reported as a hook rejection rather than an anonymous
+    /// failure.
+    /// </summary>
+    private static readonly string[] CommitHookNames =
+    {
+        "pre-commit", "prepare-commit-msg", "commit-msg",
+    };
+
+    /// <summary>
+    /// Git's identity failures (spec 13 §11.1): no author/committer identity is
+    /// configured, so Git refuses to record the commit.
+    /// </summary>
+    private static readonly string[] IdentityFailureMarkers =
+    {
+        "empty ident name",
+        "author identity unknown",
+        "committer identity unknown",
+        "unable to auto-detect email address",
+        "please tell me who you are",
+    };
+
+    /// <summary>
+    /// Git's "nothing staged" signatures. The pre-check normally catches this
+    /// before Git runs; this is the race safety net when the index changed
+    /// between the status read and the commit.
+    /// </summary>
+    private static readonly string[] NothingToCommitMarkers =
+    {
+        "nothing to commit", "nothing added to commit",
+    };
+
+    /// <summary>
+    /// Git's unmerged-index signatures. <c>GitFailureClassifier</c> only maps
+    /// the merge-conflict wording, so the commit wording is matched here and
+    /// the reported failure is amended to <see cref="GitProcessErrorKind.GitConflict"/>.
+    /// </summary>
+    private static readonly string[] UnmergedFailureMarkers =
+    {
+        "unmerged files", "unresolved conflict",
     };
 
     private readonly IGitProcessRunner _runner;
@@ -225,15 +271,7 @@ public sealed class GitCommitService
 
         if (!commit.IsSuccess)
         {
-            return new GitCommitResult(
-                GitCommitOutcome.Failed,
-                flow,
-                null,
-                null,
-                commit,
-                commit.ErrorMessage ?? "The Git commit failed.",
-                null,
-                stagedPaths);
+            return await ClassifyCommitFailureAsync(worktreeRoot, flow, commit, stagedPaths, cancellationToken);
         }
 
         GitCommitInfo? info = await ReadCommitInfoAsync(worktreeRoot, cancellationToken);
@@ -288,6 +326,137 @@ public sealed class GitCommitService
         }
 
         return new GitCommitInfo(fields[0], fields[1], fields[2], null);
+    }
+
+    /// <summary>
+    /// Classifies a failed <c>git commit</c> into a typed outcome
+    /// (spec 13 §11/§20/§23). Classification is conservative and ordered from
+    /// the most unambiguous signature to the most heuristic: an index lock, a
+    /// missing Git identity and a "nothing staged" race are matched from Git's
+    /// own output, while a bare exit code 1 is only called a hook rejection
+    /// when the worktree actually has a commit hook, because Git gives a silent
+    /// failing hook no other signature.
+    /// </summary>
+    private async Task<GitCommitResult> ClassifyCommitFailureAsync(
+        string worktreeRoot,
+        GitCommitFlow flow,
+        GitProcessResult failure,
+        IReadOnlyList<string>? stagedPaths,
+        CancellationToken cancellationToken)
+    {
+        if (failure.ErrorKind == GitProcessErrorKind.GitLockContention)
+        {
+            return Failure(
+                GitCommitOutcome.IndexLocked,
+                flow,
+                failure,
+                "The Git index is locked by another process; nothing was committed.",
+                "IndexLocked",
+                stagedPaths);
+        }
+
+        if (MatchesAny(failure, IdentityFailureMarkers))
+        {
+            return Failure(
+                GitCommitOutcome.MissingIdentity,
+                flow,
+                failure,
+                "Git has no author/committer identity configured; no commit was created.",
+                "MissingIdentity",
+                stagedPaths);
+        }
+
+        if (MatchesAny(failure, NothingToCommitMarkers))
+        {
+            return Failure(
+                GitCommitOutcome.NothingStaged,
+                flow,
+                failure,
+                "There is nothing staged to commit; no empty commit was created.",
+                "NothingStaged",
+                stagedPaths);
+        }
+
+        if (failure.ErrorKind == GitProcessErrorKind.GitCommitHookFailed
+            || (failure.ExitCode == 1 && await HasCommitHookAsync(worktreeRoot, cancellationToken)))
+        {
+            // The commit invocation never carries --no-verify, so a rejected
+            // commit can only be Git refusing to run the hook or the hook
+            // itself rejecting it (spec 13 §11.1/§23).
+            return Failure(
+                GitCommitOutcome.HookRejected,
+                flow,
+                failure,
+                "A repository hook rejected the commit; no commit was created.",
+                "HookRejected",
+                stagedPaths);
+        }
+
+        if (MatchesAny(failure, UnmergedFailureMarkers))
+        {
+            return Failure(
+                GitCommitOutcome.Failed,
+                flow,
+                failure with { ErrorKind = GitProcessErrorKind.GitConflict },
+                "The commit is blocked by unresolved merge conflicts.",
+                null,
+                stagedPaths);
+        }
+
+        return Failure(
+            GitCommitOutcome.Failed,
+            flow,
+            failure,
+            failure.ErrorMessage ?? "The Git commit failed.",
+            null,
+            stagedPaths);
+    }
+
+    private static GitCommitResult Failure(
+        GitCommitOutcome outcome,
+        GitCommitFlow flow,
+        GitProcessResult failure,
+        string message,
+        string? errorCode,
+        IReadOnlyList<string>? stagedPaths) =>
+        new(outcome, flow, null, null, failure, message, errorCode, stagedPaths);
+
+    /// <summary>
+    /// True when any marker appears in the failure's streams. Git's commit
+    /// diagnostics are pinned to <c>LC_ALL=C</c> by the runner's environment
+    /// policy, so the signatures are locale-stable.
+    /// </summary>
+    private static bool MatchesAny(GitProcessResult failure, string[] markers) =>
+        markers.Any(marker =>
+            failure.StandardError.Contains(marker, StringComparison.OrdinalIgnoreCase)
+            || failure.StandardOutput.Contains(marker, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// True when the worktree has a commit hook Git could have run
+    /// (<c>pre-commit</c>, <c>prepare-commit-msg</c>, <c>commit-msg</c>). The
+    /// hook directory is resolved by Git itself
+    /// (<c>git rev-parse --git-path hooks</c>), so <c>core.hooksPath</c> and
+    /// linked worktrees resolve to where Git actually looks.
+    /// </summary>
+    private async Task<bool> HasCommitHookAsync(string worktreeRoot, CancellationToken cancellationToken)
+    {
+        GitProcessResult hooksPath = await _runner.RunAsync(
+            new GitProcessRequest(new[] { "rev-parse", "--git-path", "hooks" }, worktreeRoot),
+            cancellationToken);
+
+        if (!hooksPath.IsSuccess)
+        {
+            return false;
+        }
+
+        string value = hooksPath.StandardOutput.Trim();
+        if (value.Length == 0)
+        {
+            return false;
+        }
+
+        string directory = Path.IsPathRooted(value) ? value : Path.Combine(worktreeRoot, value);
+        return CommitHookNames.Any(name => File.Exists(Path.Combine(directory, name)));
     }
 
     private static GitCommitResult DiscoveryFailure(GitCommitFlow flow, GitRepositoryContext context) => new(

@@ -434,6 +434,136 @@ public sealed class GitCommitTests
         Assert.Equal("main", result.Commit.BranchName);
     }
 
+    // ---------------------------------------------------------------------
+    // Step 4 — Repository hooks stay enabled and are never bypassed
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Required test 4 (part 1): "a failing pre-commit hook produces a typed
+    /// failure and no commit." Hooks are part of normal Git semantics and are
+    /// never bypassed (spec 13 §11.1/§23): Git runs the hook, the hook fails,
+    /// and the application reports a typed <see cref="GitCommitOutcome.HookRejected"/>
+    /// with HEAD, the commit count and the index all unchanged.
+    /// </summary>
+    [Fact]
+    public async Task FailingPreCommitHookIsATypedFailureAndCreatesNoCommit()
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md" });
+        repo.WriteFile("docs/a.md", "a v2");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "--", "docs/a.md"));
+        WriteCommitHook(repo, "pre-commit", "echo 'blocked by hook' >&2\nexit 1\n");
+        string headBefore = Head(repo);
+        int countBefore = CommitCount(repo);
+
+        (GitCommitService service, _, _, _) = CreateService();
+        GitCommitResult result = await service.CommitAsync(repo.RootPath, "must be rejected by hook");
+
+        Assert.Equal(GitCommitOutcome.HookRejected, result.Outcome);
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Commit);
+
+        // The originating Git failure stays inspectable.
+        GitProcessResult failure = Assert.IsType<GitProcessResult>(result.Failure);
+        Assert.Equal(1, failure.ExitCode);
+
+        // No commit was created and the staged state is untouched.
+        Assert.Equal(headBefore, Head(repo));
+        Assert.Equal(countBefore, CommitCount(repo));
+        Assert.Equal(new[] { "docs/a.md" }, StagedNames(repo.RootPath).ToArray());
+        Assert.Equal("a v2", File.ReadAllText(Path.Combine(repo.RootPath, "docs", "a.md")));
+    }
+
+    /// <summary>
+    /// The hook's own output is surfaced on the typed failure instead of being
+    /// swallowed, so the user can see why the commit was rejected.
+    /// </summary>
+    [Fact]
+    public async Task FailingHookOutputIsSurfacedOnTheTypedFailure()
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md" });
+        repo.WriteFile("docs/a.md", "a v2");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "--", "docs/a.md"));
+        WriteCommitHook(repo, "pre-commit", "echo 'policy violation: ticket id missing' >&2\nexit 1\n");
+
+        (GitCommitService service, _, _, _) = CreateService();
+        GitCommitResult result = await service.CommitAsync(repo.RootPath, "no ticket id");
+
+        Assert.Equal(GitCommitOutcome.HookRejected, result.Outcome);
+        GitProcessResult failure = Assert.IsType<GitProcessResult>(result.Failure);
+        Assert.Contains("policy violation", failure.StandardError, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A rejecting <c>commit-msg</c> hook is a typed hook failure too: the
+    /// message a repository hook rewrote/refused is never committed silently.
+    /// </summary>
+    [Fact]
+    public async Task FailingCommitMsgHookIsATypedFailureAndCreatesNoCommit()
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md" });
+        repo.WriteFile("docs/a.md", "a v2");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "--", "docs/a.md"));
+        WriteCommitHook(repo, "commit-msg", "echo 'commit message rejected' >&2\nexit 1\n");
+        string headBefore = Head(repo);
+        int countBefore = CommitCount(repo);
+
+        (GitCommitService service, _, _, _) = CreateService();
+        GitCommitResult result = await service.CommitAsync(repo.RootPath, "message the hook will reject");
+
+        Assert.Equal(GitCommitOutcome.HookRejected, result.Outcome);
+        Assert.Equal(headBefore, Head(repo));
+        Assert.Equal(countBefore, CommitCount(repo));
+        Assert.Equal(new[] { "docs/a.md" }, StagedNames(repo.RootPath).ToArray());
+    }
+
+    /// <summary>
+    /// Required test 4 (part 2): "a successful hook runs and the commit
+    /// succeeds." The hook writes a marker file, so the commit can only exist
+    /// if Git actually executed the hook — proving the hook was not skipped
+    /// (spec 13 §11.1).
+    /// </summary>
+    [Fact]
+    public async Task SuccessfulPreCommitHookRunsAndTheCommitSucceeds()
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md" });
+        repo.WriteFile("docs/a.md", "a v2");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "--", "docs/a.md"));
+        WriteCommitHook(repo, "pre-commit", "echo ran > .git/hook-ran.marker\nexit 0\n");
+
+        (GitCommitService service, _, _, _) = CreateService();
+        GitCommitResult result = await service.CommitAsync(repo.RootPath, "hook allows this");
+
+        Assert.Equal(GitCommitOutcome.Succeeded, result.Outcome);
+        Assert.Equal(Head(repo), result.Commit!.CommitId);
+        Assert.True(
+            File.Exists(Path.Combine(repo.RootPath, ".git", "hook-ran.marker")),
+            "the pre-commit hook must have run: its marker file was not created.");
+    }
+
+    /// <summary>
+    /// The commit path never bypasses repository hooks: no invocation carries
+    /// <c>--no-verify</c>/<c>-n</c> (spec 13 §11.1/§23). Verified on the plain
+    /// Commit and on Commit All.
+    /// </summary>
+    [Fact]
+    public async Task CommitNeverBypassesHooksWithNoVerify()
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md" });
+        repo.WriteFile("docs/a.md", "a v2");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "--", "docs/a.md"));
+
+        var recording = new RecordingGitProcessRunner(
+            new GitProcessRunner(GitProcessRunnerOptions.Default, new GitWorktreeMutationQueue()));
+        (GitCommitService service, _, _, _) = CreateService(recording);
+
+        Assert.Equal(GitCommitOutcome.Succeeded, (await service.CommitAsync(repo.RootPath, "plain")).Outcome);
+        repo.WriteFile("docs/a.md", "a v3");
+        Assert.Equal(GitCommitOutcome.Succeeded, (await service.CommitAllAsync(repo.RootPath, "all")).Outcome);
+
+        Assert.DoesNotContain(recording.Invocations, args => args.Contains("--no-verify"));
+        Assert.DoesNotContain(recording.Invocations, args => args.Contains("-n"));
+    }
+
     // -----------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------
