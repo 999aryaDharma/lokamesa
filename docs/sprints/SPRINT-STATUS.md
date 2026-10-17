@@ -123,11 +123,11 @@ Rules:
 | SCM-04 | Markdown Git Diff | DONE | SCM-02, MD-01 | feat/markdown-git-diff | docs/sprints/handoffs/SCM-04-HANDOFF.md |
 | SCM-05 | DOCX Document-Aware Git Diff | DONE | SCM-02, IDX-02, DOCX-01 | feat/docx-document-aware-git-diff | docs/sprints/handoffs/SCM-05-HANDOFF.md |
 | SCM-06 | Git Stage & Unstage | DONE | SCM-02, SCM-03 | feat/git-stage-unstage | docs/sprints/handoffs/SCM-06-HANDOFF.md |
-| SCM-07 | Git Commit & Commit All | READY | SCM-06, SCM-05 |  |  |
-| SCM-08 | Git Commit History & File History | BLOCKED | SCM-02, SCM-07 |  |  |
-| SCM-09 | Document IDE History ↔ Git Correlation | BLOCKED | SCM-07, HIST-01 |  |  |
+| SCM-07 | Git Commit & Commit All | DONE | SCM-06, SCM-05 | feat/git-commit-commit-all | docs/sprints/handoffs/SCM-07-HANDOFF.md |
+| SCM-08 | Git Commit History & File History | READY | SCM-02, SCM-07 |  |  |
+| SCM-09 | Document IDE History ↔ Git Correlation | READY | SCM-07, HIST-01 |  |  |
 | SCM-10 | Safe Git Discard & Restore | BLOCKED | SCM-08, HIST-01, FS-07 |  |  |
-| SCM-11 | Git Remote State & Fetch | BLOCKED | SCM-02, SCM-07 |  |  |
+| SCM-11 | Git Remote State & Fetch | READY | SCM-02, SCM-07 |  |  |
 | SCM-12 | Safe Fast-Forward Pull | BLOCKED | SCM-11, SCM-10 |  |  |
 | SCM-13 | Explicit Git Push | BLOCKED | SCM-11, SCM-07 |  |  |
 | SCM-14 | Git Conflict State & Resolution Shell | BLOCKED | SCM-12, SCM-05 |  |  |

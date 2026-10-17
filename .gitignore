@@ -33,5 +33,9 @@ $RECYCLE.BIN/
 
 .agents/
 
+# Local-only artifacts (never committed)
+/ui.pen
+/opencode.json
+
 # Git worktrees for parallel sprint execution
 .worktrees/
