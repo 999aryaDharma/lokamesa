@@ -88,8 +88,16 @@ public sealed class BatchPreviewHostTests
             Assert.Equal("Completed", preview.GetProperty("status").GetString());
             Assert.Equal(2, preview.GetProperty("occurrenceCount").GetInt32());
             Assert.Equal(before, await File.ReadAllBytesAsync(path));
-            Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync("/api/word/open", new { documentId = "doc" })).StatusCode);
-            Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync($"/api/batch-operations/{planId}/apply", new { })).StatusCode);
+            // G2/G4: the reviewed plan's apply route is now served by the desktop
+            // host (it was a deliberate 404 before the wiring fix). The empty body
+            // is fine — the reviewed plan itself supplies operation type and
+            // parameters, exactly as the security model requires.
+            Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/word/open", new { })).StatusCode);
+            using (var apply = await client.PostAsJsonAsync($"/api/batch-operations/{planId}/apply", new { }))
+            {
+                Assert.Equal(HttpStatusCode.OK, apply.StatusCode);
+            }
+            Assert.Equal("new TARGET new", await File.ReadAllTextAsync(path));
             Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/health")).StatusCode);
             Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/status")).StatusCode);
         }
