@@ -153,6 +153,17 @@ it('maps SHR-09 transport states to owner-visible status', () => {
   expect(mapTransportStateToShareStatus('Failed')).toBe('tunnel-error');
 });
 
+it('stopping a share requires an explicit stop action', () => {
+  const onStop = vi.fn();
+  render(<ShareManager share={{ ...activeShare() }} onStop={onStop} />);
+
+  expect(onStop).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByRole('button', { name: /^stop$/i }));
+
+  expect(onStop).toHaveBeenCalledTimes(1);
+});
+
 it('copy link, revoke, and regenerate require explicit button actions', () => {
   const onCopyLink = vi.fn();
   const onRevoke = vi.fn();
