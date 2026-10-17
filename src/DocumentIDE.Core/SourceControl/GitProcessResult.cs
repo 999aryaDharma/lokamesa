@@ -61,4 +61,12 @@ public sealed record GitProcessResult(
 {
     /// <summary>True only when Git ran and exited successfully.</summary>
     public bool IsSuccess => Status == GitProcessStatus.Succeeded;
+
+    /// <summary>
+    /// SCM-05 — raw stdout bytes when the request asked for
+    /// <see cref="GitProcessRequest.CaptureBinaryOutput"/>; null otherwise.
+    /// When present, <see cref="StandardOutput"/> is a lenient UTF-8 decode
+    /// kept for diagnostics only — binary content must be read from here.
+    /// </summary>
+    public byte[]? StandardOutputBytes { get; init; }
 }

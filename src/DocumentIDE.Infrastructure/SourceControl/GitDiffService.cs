@@ -82,21 +82,14 @@ public sealed class GitDiffService
         }
 
         string canonicalRoot;
-        try
-        {
-            canonicalRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(worktreeRoot));
-        }
-        catch (Exception exception) when (
-            exception is ArgumentException
-                or NotSupportedException
-                or PathTooLongException
-                or System.Security.SecurityException)
+        string? rootError;
+        if (!GitDocumentPath.TryCanonicalizeRoot(worktreeRoot, out canonicalRoot, out rootError))
         {
             return Failure(
                 GitDiffStatus.Failed,
                 LocalFailure(
                     GitProcessErrorKind.GitWorktreeInvalid,
-                    $"Path '{worktreeRoot}' is not a usable filesystem path: {exception.Message}"));
+                    $"Path '{worktreeRoot}' is not a usable filesystem path: {rootError}"));
         }
 
         if (!Directory.Exists(canonicalRoot))
@@ -110,8 +103,8 @@ public sealed class GitDiffService
                     $"The worktree directory '{canonicalRoot}' does not exist any more."));
         }
 
-        if (!TryNormalizeRelativePath(relativePath, out string gitPath)
-            || !TryResolveContainedPath(canonicalRoot, gitPath, out string fullPath))
+        if (!GitDocumentPath.TryNormalizeRelativePath(relativePath, out string gitPath)
+            || !GitDocumentPath.TryResolveContainedPath(canonicalRoot, gitPath, out string fullPath))
         {
             return Failure(
                 GitDiffStatus.PathRejected,
@@ -124,8 +117,8 @@ public sealed class GitDiffService
         string? originalGitPath = null;
         if (!string.IsNullOrWhiteSpace(originalPath))
         {
-            if (!TryNormalizeRelativePath(originalPath, out originalGitPath)
-                || !TryResolveContainedPath(canonicalRoot, originalGitPath, out _))
+            if (!GitDocumentPath.TryNormalizeRelativePath(originalPath, out originalGitPath)
+                || !GitDocumentPath.TryResolveContainedPath(canonicalRoot, originalGitPath, out _))
             {
                 return Failure(
                     GitDiffStatus.PathRejected,
@@ -303,7 +296,7 @@ public sealed class GitDiffService
             return SideRead.Present(result.StandardOutput);
         }
 
-        if (result.Status == GitProcessStatus.Failed && IsHeadPathMissing(result))
+        if (result.Status == GitProcessStatus.Failed && GitErrorSignatures.IsHeadPathMissing(result))
         {
             return SideRead.Absent;
         }
@@ -329,14 +322,14 @@ public sealed class GitDiffService
             return SideRead.Present(result.StandardOutput);
         }
 
-        if (result.Status == GitProcessStatus.Failed && IsIndexPathMissing(result))
+        if (result.Status == GitProcessStatus.Failed && GitErrorSignatures.IsIndexPathMissing(result))
         {
             // Not in the index: an untracked file (no index version to compare
             // against) or a file staged for deletion.
             return SideRead.Absent;
         }
 
-        if (result.Status == GitProcessStatus.Failed && IsUnmergedIndexPath(result))
+        if (result.Status == GitProcessStatus.Failed && GitErrorSignatures.IsUnmergedIndexPath(result))
         {
             // Spec 13 §21: unmerged paths have no stage-0 version. Report the
             // conflict state explicitly instead of an empty or misleading diff.
@@ -422,87 +415,6 @@ public sealed class GitDiffService
 
         return (lines, endsWithNewline);
     }
-
-    /// <summary>
-    /// Validates a path as a worktree-relative document path: no rooted/
-    /// drive-qualified form, no <c>.</c>/<c>..</c> segments, no empty segments,
-    /// no <c>:</c> (which would corrupt the <c>rev:path</c> object syntax).
-    /// </summary>
-    private static bool TryNormalizeRelativePath(string path, out string normalized)
-    {
-        normalized = string.Empty;
-
-        string candidate = path.Replace('\\', '/').Trim();
-        if (candidate.Length == 0 || candidate.Length > 4096)
-        {
-            return false;
-        }
-
-        if (candidate.StartsWith('/')
-            || Path.IsPathRooted(candidate)
-            || candidate.Contains(':'))
-        {
-            return false;
-        }
-
-        foreach (string segment in candidate.Split('/'))
-        {
-            if (segment.Length == 0 || segment == "." || segment == "..")
-            {
-                return false;
-            }
-        }
-
-        normalized = candidate;
-        return true;
-    }
-
-    /// <summary>
-    /// Combines the validated relative path with the worktree root and
-    /// re-checks containment, so no code path can read outside the worktree
-    /// (spec 13 §23). The relative-path form also covers worktrees rooted at a
-    /// drive root (e.g. <c>D:\</c>), where naive prefix comparison would
-    /// false-reject every document.
-    /// </summary>
-    private static bool TryResolveContainedPath(string canonicalRoot, string gitPath, out string fullPath)
-    {
-        fullPath = string.Empty;
-
-        try
-        {
-            string native = gitPath.Replace('/', Path.DirectorySeparatorChar);
-            string combined = Path.GetFullPath(Path.Combine(canonicalRoot, native));
-            string relative = Path.GetRelativePath(canonicalRoot, combined);
-            if (relative == ".."
-                || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
-                || Path.IsPathRooted(relative))
-            {
-                return false;
-            }
-
-            fullPath = combined;
-            return true;
-        }
-        catch (Exception exception) when (
-            exception is ArgumentException
-                or NotSupportedException
-                or PathTooLongException
-                or System.Security.SecurityException)
-        {
-            return false;
-        }
-    }
-
-    private static bool IsHeadPathMissing(GitProcessResult result) =>
-        result.StandardError.Contains("does not exist in '", StringComparison.OrdinalIgnoreCase)
-        || result.StandardError.Contains("exists on disk, but not in '", StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsIndexPathMissing(GitProcessResult result) =>
-        result.StandardError.Contains("does not exist (neither on disk nor in the index)", StringComparison.OrdinalIgnoreCase)
-        || result.StandardError.Contains("exists on disk, but not in the index", StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsUnmergedIndexPath(GitProcessResult result) =>
-        result.StandardError.Contains("is in the index, but not at stage 0", StringComparison.OrdinalIgnoreCase);
 
     private static GitDiffStatus MapFailure(GitProcessResult failure) =>
         failure.Status == GitProcessStatus.Unavailable

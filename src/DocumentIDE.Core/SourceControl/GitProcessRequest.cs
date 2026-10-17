@@ -32,4 +32,15 @@ public sealed record GitProcessRequest(
     IReadOnlyList<string> Arguments,
     string WorkingDirectory,
     TimeSpan? Timeout = null,
-    IReadOnlyDictionary<string, string>? EnvironmentOverrides = null);
+    IReadOnlyDictionary<string, string>? EnvironmentOverrides = null)
+{
+    /// <summary>
+    /// SCM-05 — capture stdout as raw bytes (<see cref="GitProcessResult.StandardOutputBytes"/>)
+    /// instead of a text-only read. Required when the requested Git object is
+    /// binary content (e.g. a DOCX blob read for a document-aware diff):
+    /// UTF-8 text decoding is lossy for binary bytes, so the bytes are captured
+    /// verbatim and <see cref="GitProcessResult.StandardOutput"/> additionally
+    /// carries a lenient UTF-8 decode for diagnostics only.
+    /// </summary>
+    public bool CaptureBinaryOutput { get; init; }
+}
