@@ -20,6 +20,12 @@ export interface SourceControlPanelProps {
    * interacting with it never changes the selection or opens the document.
    */
   renderChangeActions?: (entry: SourceControlChangeEntry) => ReactNode;
+  /**
+   * Optional SCM-07 commit surface. The panel places the caller-provided
+   * control above the change list; the commit logic (and its API calls) stays
+   * with the caller, so the pane owns no commit state and never pushes.
+   */
+  renderCommitBox?: () => ReactNode;
 }
 
 interface SectionDefinition {
@@ -56,8 +62,9 @@ function aheadBehindLabel(status: SourceControlStatusModel): string {
  * branch context and ahead/behind counters. Single click selects a change,
  * double click opens an already-registered document. The pane owns no
  * mutation logic; callers may host their SCM-06 Stage/Unstage controls per
- * entry through `renderChangeActions`. There is still no branch-management
- * surface here.
+ * entry through `renderChangeActions`. SCM-07 adds an optional commit surface
+ * the caller hosts through `renderCommitBox`; the pane still owns no mutation
+ * logic and there is no branch-management surface here.
  */
 export default function SourceControlPanel({
   status,
@@ -66,6 +73,7 @@ export default function SourceControlPanel({
   onSelectionChange,
   onOpenDocument,
   renderChangeActions,
+  renderCommitBox,
 }: SourceControlPanelProps) {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
@@ -145,6 +153,8 @@ export default function SourceControlPanel({
           {aheadBehindLabel(status)}
         </span>
       </div>
+
+      {renderCommitBox && <div data-testid="source-control-commit-host">{renderCommitBox()}</div>}
 
       {entries.length === 0 ? (
         <div data-testid="source-control-clean" className="text-sm text-slate-500">

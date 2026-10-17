@@ -1,12 +1,12 @@
 /**
- * SCM-03/SCM-06 — mirror of the privileged Source Control API contract
- * (`SourceControlController` records in DocumentIDE.Api; spec 13 §7/§10/§18).
+ * SCM-03/SCM-06/SCM-07 — mirror of the privileged Source Control API contract
+ * (`SourceControlController` records in DocumentIDE.Api; spec 13 §7/§10/§11/§18).
  *
  * SCM-03 types carry Git state only; nothing here mutates the repository.
- * SCM-06 adds the typed stage/unstage result: the mutation response carries
- * the status the API re-read from Git, and Document IDE keeps no proprietary
- * staging area of its own. String unions match the enum names the API
- * serializes via `ToString()`.
+ * SCM-06 adds the typed stage/unstage result and SCM-07 the typed
+ * Commit/Commit All result: a mutation response carries the status the API
+ * re-read from Git, and Document IDE keeps no proprietary staging area of its
+ * own. String unions match the enum names the API serializes via `ToString()`.
  */
 
 export type SourceControlStatus = 'Available' | 'NoRepository' | 'GitUnavailable' | 'Failed';
@@ -114,6 +114,56 @@ export interface SourceControlStageResult {
   /** Machine-readable rejection code, or null outside `RejectedPath` outcomes. */
   errorCode: string | null;
   message: string | null;
+  status: SourceControlStatusModel | null;
+  failure: SourceControlFailure | null;
+}
+
+/** SCM-07 — which commit flow ran (spec 13 §11). Commit and Commit All are
+ * deliberately separate flows: the plain action commits the current staged
+ * state, the convenience action stages eligible changes first. */
+export type GitCommitFlow = 'Commit' | 'CommitAll';
+
+/** SCM-07 — typed outcome of one commit request (spec 13 §11/§20). */
+export type GitCommitOutcome =
+  | 'Succeeded'
+  | 'MessageRequired'
+  | 'MessageInvalid'
+  | 'NothingStaged'
+  | 'NoRepository'
+  | 'GitUnavailable'
+  | 'MissingIdentity'
+  | 'HookRejected'
+  | 'IndexLocked'
+  | 'Failed';
+
+/** SCM-07 — summary metadata of the commit that was created (spec 13 §11.1). */
+export interface SourceControlCommitInfo {
+  /** Full commit object id. */
+  commitId: string;
+  /** Git's abbreviated commit id. */
+  shortId: string;
+  /** Commit subject as Git recorded it. */
+  summary: string;
+  /** Branch the commit landed on; null on a detached HEAD. */
+  branchName: string | null;
+}
+
+/**
+ * SCM-07 — typed Commit / Commit All result. On success `commit` carries the new
+ * commit identity and `status` the status re-read from Git; for Commit All
+ * `stagedPaths` lists the paths that flow staged. The commit path never pushes
+ * anywhere, so no remote state appears here (spec 13 §11/§14.4).
+ */
+export interface SourceControlCommitResult {
+  outcome: GitCommitOutcome;
+  flow: GitCommitFlow;
+  isSuccess: boolean;
+  /** Machine-readable rejection code for message rejections. */
+  errorCode: string | null;
+  message: string | null;
+  commit: SourceControlCommitInfo | null;
+  /** Paths the Commit All flow staged; null for the plain Commit flow. */
+  stagedPaths: string[] | null;
   status: SourceControlStatusModel | null;
   failure: SourceControlFailure | null;
 }
