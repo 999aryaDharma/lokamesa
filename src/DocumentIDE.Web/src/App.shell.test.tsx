@@ -1,17 +1,20 @@
 /**
- * App shell reachability tests (gaps G1, G3, G5, G6, G7).
+ * App shell reachability tests (gaps G1, G3, G4, G5, G6, G7, G8).
  *
  * These render the shipped `App` shell and assert that the previously
  * unreachable surfaces are actually mounted and driven by the app:
  *   - G6: workspace bootstrap populates the canvas store from the API;
  *   - G3: the search panel mounts from the tool bar;
  *   - G5: the owner share panel mounts and reaches the share API;
- *   - G1/G7: a graph node double-click opens the Markdown editor.
+ *   - G1/G7: a graph node double-click opens the Markdown editor;
+ *   - G8: the PDF export panel mounts and reaches the privileged PDF route;
+ *   - G4: the deliberate QuickLook-equivalent product path for a DOCX is
+ *     open-in-Word, proven by a real POST /api/word/open from the canvas.
  *
  * No test-only props are used — `App` owns the wiring, so a pass here is
  * evidence of product reachability.
  */
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { useCanvasStore } from './features/canvas/canvasStore';
@@ -28,10 +31,78 @@ interface GraphFixture {
   edges: Array<Record<string, unknown>>;
 }
 
+const markdownDocument = {
+  id: 'doc-1',
+  filename: 'notes.md',
+  currentPath: 'C:/Docs/notes.md',
+  availabilityStatus: 'available',
+};
+
+const docxDocument = {
+  id: 'docx-1',
+  filename: 'Report.docx',
+  extension: '.docx',
+  currentPath: 'C:/Docs/Report.docx',
+  documentType: 'docx',
+  availabilityStatus: 'available',
+};
+
+const annexDocument = {
+  id: 'docx-2',
+  filename: 'Annex.docx',
+  extension: '.docx',
+  currentPath: 'C:/Docs/Annex.docx',
+  documentType: 'docx',
+  availabilityStatus: 'available',
+};
+
 /** Route-based fetch mock covering every endpoint the shell touches. */
-function installFetch(graph: GraphFixture = { nodes: [], edges: [] }) {
+function installFetch(
+  graph: GraphFixture = { nodes: [], edges: [] },
+  documents: Array<Record<string, unknown>> = [markdownDocument],
+) {
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = typeof input === 'string' ? input : String(input);
+    // Exact paths only: the single-export body must never be served to the
+    // sibling `/api/pdf/export-batch` route.
+    if (url.endsWith('/api/pdf/export-batch')) {
+      return jsonResponse({
+        totalCount: 2,
+        succeededCount: 2,
+        skippedCount: 0,
+        failedCount: 0,
+        cancelledCount: 0,
+        isSuccess: true,
+        summary: '2 PDFs generated / 0 skipped / 0 failed',
+        files: [
+          {
+            sourceDocxPath: 'C:/Docs/Report.docx',
+            status: 'Succeeded',
+            outputPath: 'C:/Docs/Report.pdf',
+            errorMessage: null,
+          },
+          {
+            sourceDocxPath: 'C:/Docs/Annex.docx',
+            status: 'Succeeded',
+            outputPath: 'C:/Docs/Annex.pdf',
+            errorMessage: null,
+          },
+        ],
+      });
+    }
+    if (url.endsWith('/api/pdf/export')) {
+      return jsonResponse({
+        status: 'Succeeded',
+        outputPath: 'C:/Docs/Report.pdf',
+        sourceFingerprintBefore: 'A',
+        sourceFingerprintAfter: 'A',
+        errorMessage: null,
+        isSuccess: true,
+      });
+    }
+    if (url.includes('/api/word/open')) {
+      return jsonResponse({ success: true, status: 'Success', errorMessage: '' });
+    }
     if (url.includes('/markdown')) {
       return jsonResponse({ documentId: 'doc-1', source: '# Notes' });
     }
@@ -53,14 +124,7 @@ function installFetch(graph: GraphFixture = { nodes: [], edges: [] }) {
       return jsonResponse([]);
     }
     if (url.includes('/documents')) {
-      return jsonResponse([
-        {
-          id: 'doc-1',
-          filename: 'notes.md',
-          currentPath: 'C:/Docs/notes.md',
-          availabilityStatus: 'available',
-        },
-      ]);
+      return jsonResponse(documents);
     }
     return jsonResponse({}, false, 404);
   });
@@ -124,5 +188,101 @@ describe('App shell reachability', () => {
 
     expect(await screen.findByLabelText('Markdown editor')).toBeInTheDocument();
     expect(await screen.findByDisplayValue('# Notes')).toBeInTheDocument();
+  });
+
+  it('G8: mounts the PDF export surface and reaches the privileged PDF route', async () => {
+    const fetchMock = installFetch(undefined, [docxDocument]);
+    render(<App />);
+
+    await waitFor(() =>
+      expect(useCanvasStore.getState().objects.some((o) => o.id === 'docx-1')).toBe(true),
+    );
+    // The panel is a real, toggleable product surface — not always-on chrome.
+    expect(screen.queryByTestId('pdf-export-panel')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+    expect(screen.getByTestId('pdf-export-panel')).toBeInTheDocument();
+
+    // Selecting the DOCX on the canvas gives the export surface a live selection.
+    // Driven by a real card click (no store seeding) so "canvas selection → PDF
+    // export" is proven at the gesture level, mirroring the G4 double-click path.
+    const card = await screen.findByLabelText('Document: Report.docx');
+    fireEvent.click(card);
+    await waitFor(() =>
+      expect(useCanvasStore.getState().selectedIds.has('docx-1')).toBe(true),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Export PDF' }));
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([input]) => String(input).endsWith('/api/pdf/export')),
+      ).toBe(true),
+    );
+    const exportCall = fetchMock.mock.calls.find(([input]) =>
+      String(input).endsWith('/api/pdf/export'),
+    )!;
+    expect(JSON.parse(String(exportCall[1]?.body))).toMatchObject({
+      sourceDocxPath: 'C:/Docs/Report.docx',
+    });
+    expect(await screen.findByText('C:/Docs/Report.pdf')).toBeInTheDocument();
+  });
+
+  it('G8: separate export reaches the batch route (the mock does not shadow it)', async () => {
+    const fetchMock = installFetch(undefined, [docxDocument, annexDocument]);
+    render(<App />);
+
+    await waitFor(() =>
+      expect(useCanvasStore.getState().objects.some((o) => o.id === 'docx-2')).toBe(true),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+
+    // Canvas cards use plain-click replace selection (no additive modifier path
+    // is exposed by DocumentNode), so a two-document selection is seeded at
+    // store level here; the export gesture itself is a real button click. The
+    // assertion below fails if the single-export body is served to the batch
+    // route.
+    act(() => {
+      useCanvasStore.getState().setSelection(['docx-1', 'docx-2']);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Export as separate PDFs' }));
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([input]) =>
+          String(input).endsWith('/api/pdf/export-batch'),
+        ),
+      ).toBe(true),
+    );
+    const batchCall = fetchMock.mock.calls.find(([input]) =>
+      String(input).endsWith('/api/pdf/export-batch'),
+    )!;
+    const batchBody = JSON.parse(String(batchCall[1]?.body)) as {
+      sourceDocxPaths: string[];
+      outputDirectory: string;
+    };
+    expect(batchBody.outputDirectory).toBe('C:/Docs');
+    expect(batchBody.sourceDocxPaths).toHaveLength(2);
+    // The batch response (not the single-export body) drove the results.
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      '2 PDFs generated / 0 skipped / 0 failed',
+    );
+  });
+
+  it('G4: double-clicking a DOCX canvas card opens it in Word (the deliberate QuickLook product path)', async () => {
+    const fetchMock = installFetch(undefined, [docxDocument]);
+    render(<App />);
+
+    const card = await screen.findByLabelText('Document: Report.docx');
+    fireEvent.doubleClick(card);
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([input]) => String(input).endsWith('/api/word/open')),
+      ).toBe(true),
+    );
+    const openCall = fetchMock.mock.calls.find(([input]) =>
+      String(input).endsWith('/api/word/open'),
+    )!;
+    expect(JSON.parse(String(openCall[1]?.body))).toEqual({ documentId: 'docx-1' });
   });
 });
