@@ -9,7 +9,7 @@
 
 This lane is frontend-only. It changed **no** host allow-list, no controller and no security
 middleware: `PdfController` and `WordController` were already registered in the shipped host
-(`src/DocumentIDE.Desktop/WebView/WebAppHost.cs:160-171`), so the FND-02/QA-03 guard is
+(`src/DocumentIDE.Desktop/WebView/WebAppHost.cs:157-172`), so the FND-02/QA-03 guard is
 untouched and `PrivilegedSurfaceHostTests` / `BatchPreviewHostTests` / `AppShellSurfaceHostTests`
 needed no edits.
 
@@ -189,3 +189,44 @@ New tests added by this lane: **11** (4 `pdfApi` + 5 `PdfExportPanel` + 2 `App.s
 5. **Share `allowPdfDownload` still returns `PdfArtifactUnavailable`** (`ShareLifecycleService`).
    The share UI is out of this lane's scope and already mounted; this lane does not claim PDF share
    artifacts work. Left as recorded in `docs/quality/v1-gap-fixes-backend.md`.
+
+---
+
+## 5. Review follow-up
+
+Independent re-review returned **APPROVED WITH NOTES** (no blockers) with eight findings. All eight
+were resolved; the fixes are confined to the same files this lane already touched and add no
+features. Items 1–7 were driven Red → Green (the new assertion was run failing first).
+
+| # | Severity | Finding | Resolution |
+|---|---|---|---|
+| 1 | minor | `PdfActions` passes `(decision, applyToRemaining)` but the container handler accepted only `decision`, so the visible *Apply choice to remaining collisions* checkbox had no effect. | **Honoured the flag.** `handleCollisionResolve` now takes `applyToRemaining`; when it is set, the decision is retained as the run's standing policy and `runSingleExport` reuses it to resolve the remaining collision of the run without re-prompting (a retained `Overwrite`/`Rename` survives into the follow-up engine call). New test: *"honours \"apply choice to remaining collisions\"…"*. |
+| 2 | minor | The merge missing-source refusal interpolated the raw document id (`No source path available for ${id}.`) while single/separate used the display name. | `runMerge` resolves `id → selection.name` exactly like the other two paths. New test: *"names the offending document, not its raw id…"*. |
+| 3 | minor | `progress`/`summary` were never reset when a single export started, so a stale 100% bar/summary from a previous separate/merge run lingered. | Added `beginRun()`, called at the start of **every** run (single/separate/merge button handlers); it clears error, summary, results, collisions, pending collision and progress. New test: *"clears the previous run's progress when a new export starts"*. |
+| 4 | nit | A merge `OutputCollision` rendered `skipped` in the results but `failed = 1` in the progress bar. | Both now derive from one `outcomeForStatus(...)` value via `countsForOutcome(outcome)`. New test: *"reports a merge collision as skipped in both the results and progress"*. |
+| 5 | nit | HTTP rejections surfaced the raw controller code (e.g. `SourceRequired`) with no human-readable text. | `pdfApi.PdfRequestError` now builds its message from `ownerMessageFor(code)`, which maps the known controller codes (`SourceRequired`, `OutputDirectoryAndSourcesRequired`, `OutputPathAndOrderedSourcesRequired`) to owner-readable text **and keeps the raw code** on `errorCode` and as a `(Code)` suffix. `PdfExportPanel.describeError` surfaces that message. New tests in `pdfApi.test.ts` (mapped + unmapped fallback) and `PdfExportPanel.test.tsx` (owner-readable alert). |
+| 6 | nit | The `App.shell.test.tsx` mock matched `/api/pdf/export` by prefix, so it also shadowed `/api/pdf/export-batch`. | The mock now matches exact paths (`endsWith`) and the batch route has its own response branch. New shell test: *"G8: separate export reaches the batch route (the mock does not shadow it)"*, proven failing against the old prefix before the fix. |
+| 7 | nit | The G8 selection was driven through `useCanvasStore.setSelection`, proving the flow only at store level. | The G8 test now performs a **real click** on the `Document: Report.docx` canvas card (the same card the G4 double-click test uses) and asserts the store reflects it before exporting. |
+| 8 | nit | The shipped allow-list was cited as `WebAppHost.cs:160-171`; it is actually `157-172`. | Citation corrected to `WebAppHost.cs:157-172` in §Scope above. |
+
+**Deliberate limitation (documented, not a hidden regression):** the new batch shell test still seeds
+a two-document selection at store level, because `DocumentNode` exposes only plain-click selection
+(`applyClick(..., additive = false)`) — there is no additive click/keyboard multi-select gesture to
+drive two cards from the shell. The export gesture itself is a real button click; the mock-fidelity
+assertion is what the test pins. A future canvas additive-selection gesture would let this become a
+pure-gesture test.
+
+**Review-follow-up verification (this branch):**
+
+| Command | Result |
+|---|---|
+| `npx vitest run` (in `src/DocumentIDE.Web`) | **392 passed / 55 files** (pre-fix baseline on this branch: 385 / 55) |
+| `npx tsc -b` | exit 0 |
+| `npx oxlint` | exit 0 |
+| `dotnet build DocumentIDE.sln` | 0 errors / 158 warnings |
+
+New tests added by the review follow-up: **7 net** (1 remaining-collisions + 1 merge-name +
+1 progress-reset + 1 merge-collision-consistency + 1 panel error-message in
+`PdfExportPanel.test.tsx`; 1 net in `pdfApi.test.ts` — the raw-code assertion became a
+human-message + raw-detail pair; 1 batch-route shell test in `App.shell.test.tsx`). The G8 shell test
+was also strengthened in place (real card click replacing the store-seeded selection).

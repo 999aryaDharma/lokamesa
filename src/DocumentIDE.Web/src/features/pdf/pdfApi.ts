@@ -102,11 +102,27 @@ export class PdfRequestError extends Error {
   readonly errorCode: string;
 
   constructor(status: number, errorCode: string) {
-    super(errorCode);
+    super(ownerMessageFor(errorCode));
     this.name = 'PdfRequestError';
     this.status = status;
     this.errorCode = errorCode;
   }
+}
+
+/**
+ * Owner-readable text for the controller's typed rejections. The raw code is
+ * kept on `PdfRequestError.errorCode` and appended to the message, so a typed
+ * consumer can still branch on it while the owner never sees a bare code.
+ */
+const OWNER_MESSAGES: Record<string, string> = {
+  SourceRequired: 'Select a DOCX document to export.',
+  OutputDirectoryAndSourcesRequired: 'Choose an output folder and at least one source document.',
+  OutputPathAndOrderedSourcesRequired: 'Choose an output path and at least one source document.',
+};
+
+export function ownerMessageFor(errorCode: string): string {
+  const message = OWNER_MESSAGES[errorCode];
+  return message ? `${message} (${errorCode})` : errorCode;
 }
 
 async function post<T>(

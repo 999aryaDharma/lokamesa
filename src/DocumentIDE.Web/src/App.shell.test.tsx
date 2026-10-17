@@ -47,6 +47,15 @@ const docxDocument = {
   availabilityStatus: 'available',
 };
 
+const annexDocument = {
+  id: 'docx-2',
+  filename: 'Annex.docx',
+  extension: '.docx',
+  currentPath: 'C:/Docs/Annex.docx',
+  documentType: 'docx',
+  availabilityStatus: 'available',
+};
+
 /** Route-based fetch mock covering every endpoint the shell touches. */
 function installFetch(
   graph: GraphFixture = { nodes: [], edges: [] },
@@ -54,7 +63,34 @@ function installFetch(
 ) {
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = typeof input === 'string' ? input : String(input);
-    if (url.includes('/api/pdf/export')) {
+    // Exact paths only: the single-export body must never be served to the
+    // sibling `/api/pdf/export-batch` route.
+    if (url.endsWith('/api/pdf/export-batch')) {
+      return jsonResponse({
+        totalCount: 2,
+        succeededCount: 2,
+        skippedCount: 0,
+        failedCount: 0,
+        cancelledCount: 0,
+        isSuccess: true,
+        summary: '2 PDFs generated / 0 skipped / 0 failed',
+        files: [
+          {
+            sourceDocxPath: 'C:/Docs/Report.docx',
+            status: 'Succeeded',
+            outputPath: 'C:/Docs/Report.pdf',
+            errorMessage: null,
+          },
+          {
+            sourceDocxPath: 'C:/Docs/Annex.docx',
+            status: 'Succeeded',
+            outputPath: 'C:/Docs/Annex.pdf',
+            errorMessage: null,
+          },
+        ],
+      });
+    }
+    if (url.endsWith('/api/pdf/export')) {
       return jsonResponse({
         status: 'Succeeded',
         outputPath: 'C:/Docs/Report.pdf',
@@ -168,9 +204,13 @@ describe('App shell reachability', () => {
     expect(screen.getByTestId('pdf-export-panel')).toBeInTheDocument();
 
     // Selecting the DOCX on the canvas gives the export surface a live selection.
-    act(() => {
-      useCanvasStore.getState().setSelection(['docx-1']);
-    });
+    // Driven by a real card click (no store seeding) so "canvas selection → PDF
+    // export" is proven at the gesture level, mirroring the G4 double-click path.
+    const card = await screen.findByLabelText('Document: Report.docx');
+    fireEvent.click(card);
+    await waitFor(() =>
+      expect(useCanvasStore.getState().selectedIds.has('docx-1')).toBe(true),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Export PDF' }));
 
     await waitFor(() =>
@@ -185,6 +225,47 @@ describe('App shell reachability', () => {
       sourceDocxPath: 'C:/Docs/Report.docx',
     });
     expect(await screen.findByText('C:/Docs/Report.pdf')).toBeInTheDocument();
+  });
+
+  it('G8: separate export reaches the batch route (the mock does not shadow it)', async () => {
+    const fetchMock = installFetch(undefined, [docxDocument, annexDocument]);
+    render(<App />);
+
+    await waitFor(() =>
+      expect(useCanvasStore.getState().objects.some((o) => o.id === 'docx-2')).toBe(true),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'PDF' }));
+
+    // Canvas cards use plain-click replace selection (no additive modifier path
+    // is exposed by DocumentNode), so a two-document selection is seeded at
+    // store level here; the export gesture itself is a real button click. The
+    // assertion below fails if the single-export body is served to the batch
+    // route.
+    act(() => {
+      useCanvasStore.getState().setSelection(['docx-1', 'docx-2']);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Export as separate PDFs' }));
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([input]) =>
+          String(input).endsWith('/api/pdf/export-batch'),
+        ),
+      ).toBe(true),
+    );
+    const batchCall = fetchMock.mock.calls.find(([input]) =>
+      String(input).endsWith('/api/pdf/export-batch'),
+    )!;
+    const batchBody = JSON.parse(String(batchCall[1]?.body)) as {
+      sourceDocxPaths: string[];
+      outputDirectory: string;
+    };
+    expect(batchBody.outputDirectory).toBe('C:/Docs');
+    expect(batchBody.sourceDocxPaths).toHaveLength(2);
+    // The batch response (not the single-export body) drove the results.
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      '2 PDFs generated / 0 skipped / 0 failed',
+    );
   });
 
   it('G4: double-clicking a DOCX canvas card opens it in Word (the deliberate QuickLook product path)', async () => {

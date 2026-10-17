@@ -32,7 +32,6 @@ import {
   exportSeparatePdfs,
   exportSinglePdf,
   mergeDocumentsToPdf,
-  PdfRequestError,
   type BatchPdfExportFileResponse,
   type BatchPdfExportRequestDto,
   type BatchPdfExportResponse,
@@ -106,8 +105,31 @@ function messageFor(status: PdfStatus, errorMessage: string | null, outputPath: 
   return undefined;
 }
 
+/**
+ * Single source of truth for how a typed engine status maps to a result row.
+ * Both the results list and the progress counts derive from this so they can
+ * never disagree about the same outcome.
+ */
+function countsForOutcome(
+  status: PdfExportFileOutcome['status'],
+): Pick<PdfExportProgressState, 'succeeded' | 'skipped' | 'failed'> {
+  return {
+    succeeded: status === 'succeeded' ? 1 : 0,
+    skipped: status === 'skipped' ? 1 : 0,
+    failed: status === 'failed' ? 1 : 0,
+  };
+}
+
+/** Collision policy sent to the engine for a resolved owner decision. */
+function behaviorForDecision(decision: CollisionDecision): PdfCollisionBehaviorValue | undefined {
+  if (decision === 'Overwrite') return 'overwrite';
+  if (decision === 'Rename') return 'rename';
+  return undefined;
+}
+
 function describeError(error: unknown): string {
-  if (error instanceof PdfRequestError) return error.errorCode;
+  // `PdfRequestError` carries an owner-readable message plus the raw controller
+  // code as its typed `errorCode` detail (see `pdfApi.ownerMessageFor`).
   return error instanceof Error ? error.message : 'PDF request failed.';
 }
 
@@ -163,8 +185,24 @@ export function PdfExportPanel({
   const behaviorForPolicy = (policy: CollisionPolicy): PdfCollisionBehaviorValue | undefined =>
     policy === 'fail' ? undefined : policy;
 
+  /**
+   * Finding 3: every new run starts from a clean slate. Without this a previous
+   * separate/merge run's progress bar and summary linger over the new export.
+   */
+  const beginRun = useCallback(() => {
+    setError(null);
+    setSummary(null);
+    setResults([]);
+    setCollisions([]);
+    setPendingCollision(null);
+    setProgress(undefined);
+  }, []);
+
   const runSingleExport = useCallback(
-    async (documentId: string, collisionBehavior?: PdfCollisionBehaviorValue) => {
+    async (
+      documentId: string,
+      options: { collisionBehavior?: PdfCollisionBehaviorValue; standing?: CollisionDecision } = {},
+    ) => {
       const doc = selection.find((candidate) => candidate.id === documentId);
       const sourcePath = resolveSourcePath(documentId);
       const name = doc?.name ?? documentId;
@@ -173,20 +211,36 @@ export function PdfExportPanel({
         return;
       }
 
+      const singleRow = (response: SinglePdfExportResponse): PdfExportFileOutcome => ({
+        documentId,
+        sourceName: name,
+        status: outcomeForStatus(response.status),
+        errorCode: response.status,
+        message: messageFor(response.status, response.errorMessage, response.outputPath),
+      });
+      // A retained decision ("apply choice to remaining collisions") supplies
+      // the policy for this run; an explicit behavior always wins.
+      const effectiveBehavior =
+        options.collisionBehavior ??
+        (options.standing ? behaviorForDecision(options.standing) : undefined);
+
       setBusy(true);
       setError(null);
-      setSummary(null);
       try {
-        const response = await deps.exportSingle({ sourceDocxPath: sourcePath, collisionBehavior });
-        setResults([
-          {
-            documentId,
-            sourceName: name,
-            status: outcomeForStatus(response.status),
-            errorCode: response.status,
-            message: messageFor(response.status, response.errorMessage, response.outputPath),
-          },
-        ]);
+        let response = await deps.exportSingle({
+          sourceDocxPath: sourcePath,
+          collisionBehavior: effectiveBehavior,
+        });
+        setResults([singleRow(response)]);
+        if (response.status === 'OutputCollision' && options.standing) {
+          // The owner already chose a standing policy for this run: resolve the
+          // remaining collision with it instead of re-prompting.
+          response = await deps.exportSingle({
+            sourceDocxPath: sourcePath,
+            collisionBehavior: behaviorForDecision(options.standing),
+          });
+          setResults([singleRow(response)]);
+        }
         if (response.status === 'OutputCollision') {
           // Typed refusal: surface the collision and wait for an explicit
           // decision. Never reported as success, never auto-overwritten.
@@ -270,7 +324,8 @@ export function PdfExportPanel({
       for (const id of orderedIds) {
         const path = resolveSourcePath(id);
         if (!path) {
-          setError(`No source path available for ${id}.`);
+          const name = selection.find((doc) => doc.id === id)?.name ?? id;
+          setError(`No source path available for ${name}.`);
           return;
         }
         orderedPaths.push(path);
@@ -283,18 +338,20 @@ export function PdfExportPanel({
 
       setBusy(true);
       setError(null);
-      setSummary(null);
       try {
         const response = await deps.merge({
           orderedSourcePaths: orderedPaths,
           outputPath,
           collisionBehavior: behaviorForPolicy(collisionPolicy),
         });
+        // One status → outcome mapping drives both the result row and the
+        // progress counts, so a collision reads `skipped` in both places.
+        const outcome = outcomeForStatus(response.status);
         setResults([
           {
             documentId: 'merged-pdf',
             sourceName: fileNameOf(response.outputPath ?? outputPath),
-            status: outcomeForStatus(response.status),
+            status: outcome,
             errorCode: response.status,
             message: messageFor(response.status, response.errorMessage, response.outputPath),
           },
@@ -302,9 +359,7 @@ export function PdfExportPanel({
         setProgress({
           completed: 1,
           total: 1,
-          succeeded: response.isSuccess ? 1 : 0,
-          skipped: 0,
-          failed: response.isSuccess ? 0 : 1,
+          ...countsForOutcome(outcome),
         });
         setSummary(
           response.isSuccess
@@ -317,19 +372,25 @@ export function PdfExportPanel({
         setBusy(false);
       }
     },
-    [collisionPolicy, deps, effectiveMergeOutputPath, resolveSourcePath],
+    [collisionPolicy, deps, effectiveMergeOutputPath, resolveSourcePath, selection],
   );
 
   const handleCollisionResolve = useCallback(
-    (decision: CollisionDecision) => {
+    (decision: CollisionDecision, applyToRemaining: boolean) => {
       setCollisions([]);
       const pending = pendingCollision;
       setPendingCollision(null);
       if (!pending) return;
-      if (decision === 'Overwrite') {
-        void runSingleExport(pending.documentId, 'overwrite');
-      } else if (decision === 'Rename') {
-        void runSingleExport(pending.documentId, 'rename');
+      if (decision === 'Overwrite' || decision === 'Rename') {
+        // `applyToRemaining` retains the decision as the standing policy for the
+        // remaining collisions of this run (honoured in `runSingleExport`);
+        // otherwise it applies to this collision only.
+        void runSingleExport(
+          pending.documentId,
+          applyToRemaining
+            ? { standing: decision }
+            : { collisionBehavior: behaviorForDecision(decision) },
+        );
       } else {
         // Skip / Cancel: the engine's fail-closed `OutputCollision` outcome
         // stands; nothing is written.
@@ -411,9 +472,18 @@ export function PdfExportPanel({
 
       <PdfActions
         selection={selection}
-        onExportSingle={(documentId) => void runSingleExport(documentId)}
-        onExportSeparate={(documentIds) => void runSeparateExport(documentIds)}
-        onMerge={(orderedIds) => void runMerge(orderedIds)}
+        onExportSingle={(documentId) => {
+          beginRun();
+          void runSingleExport(documentId);
+        }}
+        onExportSeparate={(documentIds) => {
+          beginRun();
+          void runSeparateExport(documentIds);
+        }}
+        onMerge={(orderedIds) => {
+          beginRun();
+          void runMerge(orderedIds);
+        }}
         progress={progress}
         results={results}
         collisions={collisions}

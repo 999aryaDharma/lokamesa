@@ -8,13 +8,14 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, type Mock } from 'vitest';
 import type { PdfSelectableDocument } from './PdfActions';
-import type {
-  BatchPdfExportRequestDto,
-  BatchPdfExportResponse,
-  PdfMergeRequestDto,
-  PdfMergeResponse,
-  SinglePdfExportRequestDto,
-  SinglePdfExportResponse,
+import {
+  PdfRequestError,
+  type BatchPdfExportRequestDto,
+  type BatchPdfExportResponse,
+  type PdfMergeRequestDto,
+  type PdfMergeResponse,
+  type SinglePdfExportRequestDto,
+  type SinglePdfExportResponse,
 } from './pdfApi';
 import { PdfExportPanel, type PdfExportPanelApi } from './PdfExportPanel';
 
@@ -224,5 +225,177 @@ describe('PdfExportPanel', () => {
     });
     expect(api.merge.mock.calls[0][0].outputPath).toBe('C:/Docs/Cover-merged.pdf');
     expect(await screen.findByText('7 pages written to C:/Docs/Cover-merged.pdf.')).toBeInTheDocument();
+  });
+
+  it('honours "apply choice to remaining collisions" by reusing the decision without re-prompting', async () => {
+    const api = makeApi();
+    api.exportSingle
+      .mockResolvedValueOnce({
+        status: 'OutputCollision',
+        outputPath: 'C:/Docs/Cover.pdf',
+        sourceFingerprintBefore: 'A',
+        sourceFingerprintAfter: 'A',
+        errorMessage: 'Output PDF already exists: C:/Docs/Cover.pdf.',
+        isSuccess: false,
+      })
+      .mockResolvedValueOnce({
+        status: 'OutputCollision',
+        outputPath: 'C:/Docs/Cover.pdf',
+        sourceFingerprintBefore: 'A',
+        sourceFingerprintAfter: 'A',
+        errorMessage: 'Output PDF already exists: C:/Docs/Cover.pdf.',
+        isSuccess: false,
+      })
+      .mockResolvedValueOnce({
+        status: 'Succeeded',
+        outputPath: 'C:/Docs/Cover.pdf',
+        sourceFingerprintBefore: 'A',
+        sourceFingerprintAfter: 'A',
+        errorMessage: null,
+        isSuccess: true,
+      });
+    render(
+      <PdfExportPanel selection={[docxA]} resolveSourcePath={resolveSourcePath} api={api} />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export PDF' }));
+    await screen.findByRole('group', { name: 'Output file already exists' });
+
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Apply choice to remaining collisions' }),
+    );
+    fireEvent.click(screen.getByRole('radio', { name: 'Overwrite' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Apply collision decision' }));
+
+    // The retained decision resolves the remaining collision of the run without
+    // showing the fieldset a second time.
+    await waitFor(() => expect(api.exportSingle).toHaveBeenCalledTimes(3));
+    expect(
+      screen.queryByRole('group', { name: 'Output file already exists' }),
+    ).not.toBeInTheDocument();
+    expect(api.exportSingle.mock.calls[2][0].collisionBehavior).toBe('overwrite');
+    expect(screen.getByRole('list', { name: 'PDF export results' })).toHaveTextContent(
+      'succeeded',
+    );
+  });
+
+  it('names the offending document, not its raw id, when a merge source path is missing', async () => {
+    const api = makeApi();
+    render(
+      <PdfExportPanel
+        selection={[docxA, docxB]}
+        resolveSourcePath={(id) => (id === 'a' ? paths.a : undefined)}
+        api={api}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Merge to PDF' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Merge in this order' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'No source path available for BA Site A.docx.',
+    );
+    expect(api.merge).not.toHaveBeenCalled();
+  });
+
+  it('clears the previous run\'s progress when a new export starts', async () => {
+    const api = makeApi();
+    api.exportSeparate.mockResolvedValue({
+      totalCount: 2,
+      succeededCount: 2,
+      skippedCount: 0,
+      failedCount: 0,
+      cancelledCount: 0,
+      isSuccess: true,
+      summary: '2 PDFs generated / 0 skipped / 0 failed',
+      files: [
+        {
+          sourceDocxPath: 'C:/Docs/Cover.docx',
+          status: 'Succeeded',
+          outputPath: 'C:/Docs/Cover.pdf',
+          errorMessage: null,
+        },
+        {
+          sourceDocxPath: 'C:/Docs/BA Site A.docx',
+          status: 'Succeeded',
+          outputPath: 'C:/Docs/BA Site A.pdf',
+          errorMessage: null,
+        },
+      ],
+    });
+    api.exportSingle.mockResolvedValue({
+      status: 'Succeeded',
+      outputPath: 'C:/Docs/Cover.pdf',
+      sourceFingerprintBefore: 'A',
+      sourceFingerprintAfter: 'A',
+      errorMessage: null,
+      isSuccess: true,
+    });
+    const { rerender } = render(
+      <PdfExportPanel
+        selection={[docxA, docxB]}
+        resolveSourcePath={resolveSourcePath}
+        api={api}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export as separate PDFs' }));
+    await waitFor(() => expect(screen.getByRole('progressbar')).toBeInTheDocument());
+
+    rerender(
+      <PdfExportPanel selection={[docxA]} resolveSourcePath={resolveSourcePath} api={api} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Export PDF' }));
+
+    // The stale bar/summary from the separate run must not survive into the
+    // new run.
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    await waitFor(() => expect(api.exportSingle).toHaveBeenCalledTimes(1));
+  });
+
+  it('reports a merge collision as skipped in both the results and progress', async () => {
+    const api = makeApi();
+    api.merge.mockResolvedValue({
+      status: 'OutputCollision',
+      outputPath: 'C:/Docs/Cover-merged.pdf',
+      pageCount: 0,
+      orderedSources: ['C:/Docs/Cover.docx', 'C:/Docs/BA Site A.docx'],
+      errorMessage: 'Output PDF already exists: C:/Docs/Cover-merged.pdf.',
+      isSuccess: false,
+    });
+    render(
+      <PdfExportPanel
+        selection={[docxA, docxB]}
+        resolveSourcePath={resolveSourcePath}
+        api={api}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Merge to PDF' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Merge in this order' }));
+
+    await waitFor(() => expect(api.merge).toHaveBeenCalledTimes(1));
+    // The row and the progress bar must agree about the same outcome.
+    expect(screen.getByRole('list', { name: 'PDF export results' })).toHaveTextContent(
+      'skipped',
+    );
+    expect(
+      screen.getByRole('region', { name: 'Batch PDF export progress' }),
+    ).toHaveTextContent('0 PDFs generated / 1 skipped / 0 failed');
+  });
+
+  it('surfaces an owner-readable message when the engine rejects the request', async () => {
+    const api = makeApi();
+    api.exportSingle.mockRejectedValue(new PdfRequestError(400, 'SourceRequired'));
+    render(
+      <PdfExportPanel selection={[docxA]} resolveSourcePath={resolveSourcePath} api={api} />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export PDF' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Select a DOCX document to export.');
+    // The raw controller code stays visible as the typed detail.
+    expect(alert).toHaveTextContent('SourceRequired');
   });
 });

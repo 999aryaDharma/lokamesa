@@ -13,6 +13,7 @@ import {
   exportSeparatePdfs,
   exportSinglePdf,
   mergeDocumentsToPdf,
+  PdfRequestError,
 } from './pdfApi';
 
 function jsonResponse(body: unknown, ok = true, status = 200): Response {
@@ -144,13 +145,30 @@ describe('pdfApi', () => {
     expect(result.pageCount).toBe(7);
   });
 
-  it('surfaces the backend typed error code when the request is rejected', async () => {
+  it('surfaces a human-readable message and keeps the raw controller code as the typed detail', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       jsonResponse({ errorCode: 'SourceRequired' }, false, 400),
     );
 
-    await expect(exportSinglePdf({ sourceDocxPath: '  ' })).rejects.toThrow(
-      'SourceRequired',
+    const error = await exportSinglePdf({ sourceDocxPath: '  ' }).catch(
+      (caught: unknown) => caught,
     );
+    expect(error).toBeInstanceOf(PdfRequestError);
+    expect((error as PdfRequestError).message).toBe(
+      'Select a DOCX document to export. (SourceRequired)',
+    );
+    expect((error as PdfRequestError).errorCode).toBe('SourceRequired');
+  });
+
+  it('falls back to the raw code for an unmapped controller rejection', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResponse({ errorCode: 'SomethingNew' }, false, 409),
+    );
+
+    const error = await exportSinglePdf({ sourceDocxPath: 'C:/Docs/A.docx' }).catch(
+      (caught: unknown) => caught,
+    );
+    expect((error as PdfRequestError).message).toBe('SomethingNew');
+    expect((error as PdfRequestError).errorCode).toBe('SomethingNew');
   });
 });
