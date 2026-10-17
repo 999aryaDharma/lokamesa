@@ -125,7 +125,7 @@ Rules:
 | SCM-06 | Git Stage & Unstage | DONE | SCM-02, SCM-03 | feat/git-stage-unstage | docs/sprints/handoffs/SCM-06-HANDOFF.md |
 | SCM-07 | Git Commit & Commit All | DONE | SCM-06, SCM-05 | feat/git-commit-commit-all | docs/sprints/handoffs/SCM-07-HANDOFF.md |
 | SCM-08 | Git Commit History & File History | READY | SCM-02, SCM-07 |  |  |
-| SCM-09 | Document IDE History ↔ Git Correlation | READY | SCM-07, HIST-01 |  |  |
+| SCM-09 | Document IDE History ↔ Git Correlation | DONE | SCM-07, HIST-01 | feat/document-ide-history-git-correlation (e84fd48) | docs/sprints/handoffs/SCM-09-HANDOFF.md |
 | SCM-10 | Safe Git Discard & Restore | BLOCKED | SCM-08, HIST-01, FS-07 |  |  |
 | SCM-11 | Git Remote State & Fetch | READY | SCM-02, SCM-07 |  |  |
 | SCM-12 | Safe Fast-Forward Pull | BLOCKED | SCM-11, SCM-10 |  |  |
