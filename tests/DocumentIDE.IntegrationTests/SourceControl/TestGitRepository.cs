@@ -122,4 +122,35 @@ internal sealed class TestGitRepository : IDisposable
             // Best effort: a locked .git file must not fail the test run.
         }
     }
+
+    /// <summary>
+    /// SCM-06 additive fixture helper (appended at end): runs the system Git and
+    /// returns captured standard output decoded as UTF-8. The console-encoding
+    /// default of <see cref="RunGitCapture"/> mangles non-ASCII paths on
+    /// Windows; suites that assert verbatim Unicode names must use this helper.
+    /// </summary>
+    public static string RunGitCaptureUtf8(string workingDirectory, params string[] arguments)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "git",
+            WorkingDirectory = workingDirectory,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
+        };
+        foreach (string argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        using Process process = Process.Start(startInfo)!;
+        string stdout = process.StandardOutput.ReadToEnd();
+        process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        return stdout;
+    }
 }

@@ -65,6 +65,13 @@ builder.Services.AddSingleton(sp => new GitRepositoryService(
     sp.GetRequiredService<IGitProcessRunner>(),
     sp.GetService<DocumentIDE.Core.Filesystem.FileChangeCoordinator>()));
 
+// SCM-06: stage/unstage application service. Mutations run through the same
+// controlled runner/mutation queue and re-read status from Git afterwards, so
+// the API response always reflects the real index (spec 13 §10/§19).
+builder.Services.AddSingleton(sp => new GitStageService(
+    sp.GetRequiredService<IGitProcessRunner>(),
+    sp.GetRequiredService<GitRepositoryService>()));
+
 builder.Services.AddScoped<PdfExportService>();
 builder.Services.AddScoped<BatchPdfExportService>();
 builder.Services.AddScoped<PdfMergeService>();

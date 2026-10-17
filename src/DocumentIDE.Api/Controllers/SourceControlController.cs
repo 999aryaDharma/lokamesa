@@ -87,11 +87,42 @@ public sealed record SourceControlStatusResponse(
     SourceControlFailureResponse? Failure);
 
 /// <summary>
-/// SCM-03 — privileged Source Control API consumed by the changes pane
-/// (spec 13 §18). Read-only in this sprint: it exposes exactly the current Git
-/// state and contains no stage/commit/remote/branch-management actions.
-/// Every route inherits the localhost session-token guard from
-/// <c>PrivilegedRequestGuard</c>; there is no unauthenticated path.
+/// SCM-06 — request body for the single-file stage/unstage actions.
+/// <c>Path</c> is the workspace folder or active-document path used to
+/// discover the repository; <c>ChangePath</c> is the worktree-relative path
+/// exactly as Git reported it in the status pane (treated as untrusted input
+/// and validated by the stage service before Git runs).
+/// </summary>
+public sealed record SourceControlStageRequest(string? Path, string? ChangePath);
+
+/// <summary>
+/// SCM-06 — request body for the whole-worktree stage-all/unstage-all
+/// actions. <c>Path</c> is the workspace folder or active-document path used
+/// to discover the repository; the mutation is scoped to exactly that
+/// resolved worktree.
+/// </summary>
+public sealed record SourceControlStageAllRequest(string? Path);
+
+/// <summary>
+/// SCM-06 — typed stage/unstage outcome (spec 13 §10/§20). On success
+/// <c>Status</c> carries the status re-read from Git after the mutation, so
+/// the pane renders the new state from the mutation response and never keeps
+/// a proprietary staging area; failures stay typed and inspectable.
+/// </summary>
+public sealed record SourceControlStageResponse(
+    string Outcome,
+    bool IsSuccess,
+    string? ErrorCode,
+    string? Message,
+    SourceControlStatusResponse? Status,
+    SourceControlFailureResponse? Failure);
+
+/// <summary>
+/// SCM-03/SCM-06 — privileged Source Control API consumed by the changes pane
+/// (spec 13 §18): read-only repository/status queries plus explicit
+/// file-level stage/unstage actions. Every route inherits the localhost
+/// session-token guard from <c>PrivilegedRequestGuard</c>; there is no
+/// unauthenticated path and there is still no branch-management surface.
 /// </summary>
 [ApiController]
 [Route("api/source-control")]
@@ -104,11 +135,16 @@ public sealed class SourceControlController : ControllerBase
         Array.Empty<SourceControlChangeResponse>());
 
     private readonly GitRepositoryService _repositories;
+    private readonly GitStageService _stages;
     private readonly IDocumentRepository _documents;
 
-    public SourceControlController(GitRepositoryService repositories, IDocumentRepository documents)
+    public SourceControlController(
+        GitRepositoryService repositories,
+        GitStageService stages,
+        IDocumentRepository documents)
     {
         _repositories = repositories ?? throw new ArgumentNullException(nameof(repositories));
+        _stages = stages ?? throw new ArgumentNullException(nameof(stages));
         _documents = documents ?? throw new ArgumentNullException(nameof(documents));
     }
 
@@ -147,57 +183,208 @@ public sealed class SourceControlController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(path))
         {
-            return BadRequest(new
-            {
-                errorCode = "PathRequired",
-                error = "The 'path' query parameter (workspace folder or active document) is required.",
-            });
+            return PathRequiredBadRequest("query parameter");
         }
 
         GitRepositoryContext context = await _repositories.DiscoverAsync(path, cancellationToken);
         if (!context.HasRepository)
         {
-            return Ok(new SourceControlStatusResponse(
+            return Ok(FailureStatus(
                 context.Status.ToString(),
-                false,
                 null,
                 context.BranchName,
                 context.IsDetached,
                 context.HeadCommit,
                 context.UpstreamReference,
-                context.UpstreamReference is not null,
-                null,
-                null,
-                EmptySections,
-                ToFailure(context.Failure)));
+                context.Failure));
         }
 
         GitStatusResult status = await _repositories.GetStatusAsync(context.WorktreeRoot!, cancellationToken);
         if (!status.IsAvailable || status.Snapshot is null)
         {
-            return Ok(new SourceControlStatusResponse(
+            return Ok(FailureStatus(
                 status.Status.ToString(),
-                false,
                 context.WorktreeRoot,
                 context.BranchName,
                 context.IsDetached,
                 context.HeadCommit,
                 context.UpstreamReference,
-                context.UpstreamReference is not null,
-                null,
-                null,
-                EmptySections,
-                ToFailure(status.Failure)));
+                status.Failure));
         }
 
-        GitStatusSnapshot snapshot = status.Snapshot;
-        SourceControlSectionsResponse sections = new(
-            await MapEntriesAsync(snapshot, entry => entry.HasStagedChange, cancellationToken),
-            await MapEntriesAsync(snapshot, entry => entry.HasWorkingTreeChange, cancellationToken),
-            await MapEntriesAsync(snapshot, entry => entry.IsUntracked, cancellationToken),
-            await MapEntriesAsync(snapshot, entry => entry.IsConflicted, cancellationToken));
+        return Ok(await MapSnapshotAsync(status.Snapshot, cancellationToken));
+    }
 
-        return Ok(new SourceControlStatusResponse(
+    // ---------------------------------------------------------------------
+    // SCM-06 — stage/unstage actions (spec 13 §9.4/§10/§19)
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Stages one worktree-relative file (<c>git add</c>, spec 13 §9.4).
+    /// Success returns the status re-read from Git; a non-contained path is a
+    /// typed 400 and Git never runs.
+    /// </summary>
+    [HttpPost("stage")]
+    public Task<IActionResult> Stage(
+        [FromBody] SourceControlStageRequest? request,
+        CancellationToken cancellationToken) =>
+        RunFileActionAsync(request, stage: true, cancellationToken);
+
+    /// <summary>
+    /// Unstages one worktree-relative file (<c>git restore --staged</c>,
+    /// spec 13 §9.4). Working-tree edits are never touched.
+    /// </summary>
+    [HttpPost("unstage")]
+    public Task<IActionResult> Unstage(
+        [FromBody] SourceControlStageRequest? request,
+        CancellationToken cancellationToken) =>
+        RunFileActionAsync(request, stage: false, cancellationToken);
+
+    /// <summary>
+    /// Stages every eligible change in the resolved worktree
+    /// (<c>git add --all</c>, spec 13 §9.4/§11.2): modified, deleted and
+    /// untracked-not-ignored files only.
+    /// </summary>
+    [HttpPost("stage-all")]
+    public Task<IActionResult> StageAll(
+        [FromBody] SourceControlStageAllRequest? request,
+        CancellationToken cancellationToken) =>
+        RunAllActionAsync(request, stage: true, cancellationToken);
+
+    /// <summary>
+    /// Unstages every staged path in the resolved worktree
+    /// (<c>git restore --staged</c>, spec 13 §9.4); working-tree content is
+    /// never touched.
+    /// </summary>
+    [HttpPost("unstage-all")]
+    public Task<IActionResult> UnstageAll(
+        [FromBody] SourceControlStageAllRequest? request,
+        CancellationToken cancellationToken) =>
+        RunAllActionAsync(request, stage: false, cancellationToken);
+
+    private async Task<IActionResult> RunFileActionAsync(
+        SourceControlStageRequest? request,
+        bool stage,
+        CancellationToken cancellationToken)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.Path))
+        {
+            return PathRequiredBadRequest("request field");
+        }
+
+        GitStageResult result = stage
+            ? await _stages.StageAsync(request.Path!, request.ChangePath, cancellationToken)
+            : await _stages.UnstageAsync(request.Path!, request.ChangePath, cancellationToken);
+        return await ToStageResponseAsync(result, cancellationToken);
+    }
+
+    private async Task<IActionResult> RunAllActionAsync(
+        SourceControlStageAllRequest? request,
+        bool stage,
+        CancellationToken cancellationToken)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.Path))
+        {
+            return PathRequiredBadRequest("request field");
+        }
+
+        GitStageResult result = stage
+            ? await _stages.StageAllAsync(request.Path!, cancellationToken)
+            : await _stages.UnstageAllAsync(request.Path!, cancellationToken);
+        return await ToStageResponseAsync(result, cancellationToken);
+    }
+
+    /// <summary>
+    /// Maps a typed stage/unstage result onto the privileged API contract:
+    /// rejected paths are typed 400s (nothing ran); non-repository and Git
+    /// failures stay HTTP 200 with the typed outcome/failure so the pane can
+    /// render them; success carries the refreshed status payload.
+    /// </summary>
+    private async Task<IActionResult> ToStageResponseAsync(
+        GitStageResult result,
+        CancellationToken cancellationToken)
+    {
+        switch (result.Outcome)
+        {
+            case GitStageOutcome.RejectedPath:
+                return BadRequest(new
+                {
+                    errorCode = result.ErrorCode ?? "PathRejected",
+                    error = result.Message,
+                });
+
+            case GitStageOutcome.Succeeded:
+                GitStatusResult refreshed = result.Status!;
+                if (refreshed.IsAvailable && refreshed.Snapshot is not null)
+                {
+                    return Ok(new SourceControlStageResponse(
+                        result.Outcome.ToString(),
+                        true,
+                        null,
+                        null,
+                        await MapSnapshotAsync(refreshed.Snapshot, cancellationToken),
+                        null));
+                }
+
+                // The index changed but the follow-up status read failed; the
+                // typed failure is surfaced instead of pretending a clean state.
+                return Ok(new SourceControlStageResponse(
+                    result.Outcome.ToString(),
+                    true,
+                    null,
+                    result.Message,
+                    null,
+                    ToFailure(refreshed.Failure)));
+
+            default:
+                return Ok(new SourceControlStageResponse(
+                    result.Outcome.ToString(),
+                    false,
+                    null,
+                    result.Message,
+                    null,
+                    ToFailure(result.Failure)));
+        }
+    }
+
+    private static IActionResult PathRequiredBadRequest(string source) =>
+        new BadRequestObjectResult(new
+        {
+            errorCode = "PathRequired",
+            error = $"The 'path' {source} (workspace folder or active document) is required.",
+        });
+
+    /// <summary>Builds the empty-sections typed-failure status payload.</summary>
+    private static SourceControlStatusResponse FailureStatus(
+        string status,
+        string? worktreeRoot,
+        string? branchName,
+        bool isDetached,
+        string? headCommit,
+        string? upstreamReference,
+        GitProcessResult? failure) =>
+        new(
+            status,
+            false,
+            worktreeRoot,
+            branchName,
+            isDetached,
+            headCommit,
+            upstreamReference,
+            upstreamReference is not null,
+            null,
+            null,
+            EmptySections,
+            ToFailure(failure));
+
+    /// <summary>
+    /// Builds the full status payload from one Git status snapshot, including
+    /// the grouped change sections (spec 13 §7/§8).
+    /// </summary>
+    private async Task<SourceControlStatusResponse> MapSnapshotAsync(
+        GitStatusSnapshot snapshot,
+        CancellationToken cancellationToken) =>
+        new(
             "Available",
             true,
             snapshot.WorktreeRoot,
@@ -208,9 +395,12 @@ public sealed class SourceControlController : ControllerBase
             snapshot.HasUpstream,
             snapshot.Ahead,
             snapshot.Behind,
-            sections,
-            null));
-    }
+            new SourceControlSectionsResponse(
+                await MapEntriesAsync(snapshot, entry => entry.HasStagedChange, cancellationToken),
+                await MapEntriesAsync(snapshot, entry => entry.HasWorkingTreeChange, cancellationToken),
+                await MapEntriesAsync(snapshot, entry => entry.IsUntracked, cancellationToken),
+                await MapEntriesAsync(snapshot, entry => entry.IsConflicted, cancellationToken)),
+            null);
 
     private static SourceControlContextResponse ToContextResponse(GitRepositoryContext context) =>
         new(

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type {
   SourceControlChangeEntry,
   SourceControlStatusModel,
@@ -14,6 +14,12 @@ export interface SourceControlPanelProps {
   onSelectionChange?: (entry: SourceControlChangeEntry | null) => void;
   /** Opens an already-registered document through the existing document flow. */
   onOpenDocument?: (documentId: string) => void;
+  /**
+   * Optional per-entry actions (SCM-06 Stage/Unstage). The panel hosts the
+   * caller-provided control inside the row without owning any mutation logic:
+   * interacting with it never changes the selection or opens the document.
+   */
+  renderChangeActions?: (entry: SourceControlChangeEntry) => ReactNode;
 }
 
 interface SectionDefinition {
@@ -45,11 +51,13 @@ function aheadBehindLabel(status: SourceControlStatusModel): string {
 }
 
 /**
- * SCM-03 — Source Control changes pane (spec 13 §7/§8). Read-only view of the
+ * SCM-03/SCM-06 — Source Control changes pane (spec 13 §7/§8). Shows the
  * current Git state: staged/unstaged/untracked/conflict groups plus read-only
  * branch context and ahead/behind counters. Single click selects a change,
- * double click opens an already-registered document. No stage/commit/remote/
- * branch-management actions exist here.
+ * double click opens an already-registered document. The pane owns no
+ * mutation logic; callers may host their SCM-06 Stage/Unstage controls per
+ * entry through `renderChangeActions`. There is still no branch-management
+ * surface here.
  */
 export default function SourceControlPanel({
   status,
@@ -57,6 +65,7 @@ export default function SourceControlPanel({
   errorMessage = null,
   onSelectionChange,
   onOpenDocument,
+  renderChangeActions,
 }: SourceControlPanelProps) {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
@@ -151,6 +160,7 @@ export default function SourceControlPanel({
               selectedPath={selectedPath}
               onSelect={handleSelect}
               onOpen={handleOpen}
+              renderChangeActions={renderChangeActions}
             />
           ))}
         </div>
@@ -222,12 +232,14 @@ function ChangeSection({
   selectedPath,
   onSelect,
   onOpen,
+  renderChangeActions,
 }: {
   definition: SectionDefinition;
   entries: SourceControlChangeEntry[];
   selectedPath: string | null;
   onSelect: (entry: SourceControlChangeEntry) => void;
   onOpen: (entry: SourceControlChangeEntry) => void;
+  renderChangeActions?: (entry: SourceControlChangeEntry) => ReactNode;
 }) {
   return (
     <section data-testid={`source-control-section-${definition.key}`}>
@@ -254,6 +266,17 @@ function ChangeSection({
                 {entry.statusCharacters}
               </span>
               <span className="text-sm font-mono text-slate-800 truncate">{entry.path}</span>
+              {renderChangeActions && (
+                // Hosted actions are not row interactions: stop both the
+                // selection click and the open double-click from bubbling.
+                <span
+                  className="ml-auto shrink-0"
+                  onClick={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => event.stopPropagation()}
+                >
+                  {renderChangeActions(entry)}
+                </span>
+              )}
             </li>
           );
         })}

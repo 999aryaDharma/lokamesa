@@ -383,4 +383,36 @@ describe('SourceControlPanel', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Could not reach the local API.');
     expect(screen.getByText('contract.docx')).toBeInTheDocument();
   });
+
+  it('hosts provided per-entry change actions without selecting or opening the entry', () => {
+    const onSelectionChange = vi.fn();
+    const onOpenDocument = vi.fn();
+
+    render(
+      <SourceControlPanel
+        status={statusModel({
+          sections: sections({
+            unstaged: [change('contract.docx', { documentId: 'doc-42' })],
+          }),
+        })}
+        onSelectionChange={onSelectionChange}
+        onOpenDocument={onOpenDocument}
+        renderChangeActions={(entry) => (
+          <button type="button">Stage {entry.path}</button>
+        )}
+      />
+    );
+
+    const row = screen.getByTestId('source-control-entry-contract.docx');
+    const action = within(row).getByRole('button', { name: 'Stage contract.docx' });
+
+    fireEvent.click(action);
+    fireEvent.doubleClick(action);
+
+    // The hosted action is not a row click: it never changes the selection or
+    // opens the document.
+    expect(onSelectionChange).not.toHaveBeenCalled();
+    expect(onOpenDocument).not.toHaveBeenCalled();
+    expect(row).toHaveAttribute('aria-selected', 'false');
+  });
 });
