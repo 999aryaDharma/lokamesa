@@ -24,4 +24,13 @@ internal static class GitErrorSignatures
 
     public static bool IsUnmergedIndexPath(GitProcessResult result) =>
         result.StandardError.Contains("is in the index, but not at stage 0", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// SCM-08 — an unborn HEAD (a worktree with no committed history yet) makes
+    /// <c>git log</c> fail with this stable message. It is a normal repository
+    /// state, so callers translate it into "no history yet" instead of a
+    /// failure.
+    /// </summary>
+    public static bool IsUnbornHead(GitProcessResult result) =>
+        result.StandardError.Contains("does not have any commits yet", StringComparison.OrdinalIgnoreCase);
 }
