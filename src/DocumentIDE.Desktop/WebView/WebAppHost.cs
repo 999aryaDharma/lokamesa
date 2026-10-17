@@ -31,14 +31,20 @@ public class WebAppHost : IAsyncDisposable, IDisposable
     public string SessionToken { get; private set; } = string.Empty;
     public bool IsRunning => _host != null;
 
-    public static async Task<WebAppHost> StartAsync(int preferredPort = 0, AppDb? database = null)
+    public static async Task<WebAppHost> StartAsync(
+        int preferredPort = 0,
+        AppDb? database = null,
+        Action<IServiceCollection>? configureServices = null)
     {
         var appHost = new WebAppHost();
-        await appHost.InitializeAndStartAsync(preferredPort, database);
+        await appHost.InitializeAndStartAsync(preferredPort, database, configureServices);
         return appHost;
     }
 
-    public async Task InitializeAndStartAsync(int preferredPort = 0, AppDb? database = null)
+    public async Task InitializeAndStartAsync(
+        int preferredPort = 0,
+        AppDb? database = null,
+        Action<IServiceCollection>? configureServices = null)
     {
         var builder = WebApplication.CreateBuilder();
 
@@ -49,6 +55,10 @@ public class WebAppHost : IAsyncDisposable, IDisposable
 
         builder.Services.AddSingleton<ISessionTokenProvider, SessionTokenProvider>();
         if (database != null) builder.Services.AddSingleton(database);
+        // Test/embedding seam: lets a caller override a single service (e.g. an
+        // isolated ShareTokenService root) before the shared registrations below,
+        // which use TryAdd and therefore keep the caller's choice.
+        configureServices?.Invoke(builder.Services);
         builder.Services.AddBatchPreviewServices();
         // G4: serve the required privileged surfaces (Word open, folder sources,
         // rebind, batch apply/undo, search, PDF) through the same FND-02/QA-03
@@ -152,6 +162,13 @@ public class WebAppHost : IAsyncDisposable, IDisposable
             typeof(MoveCorrelationController),
             typeof(SearchController),
             typeof(PdfController),
+            typeof(ShareController),
+            // App-shell bootstrap + navigation surfaces the shipped web client
+            // mounts: cached workspace documents, folder sources, the workspace
+            // graph envelope, and Markdown source load/save.
+            typeof(ReconciliationController),
+            typeof(GraphController),
+            typeof(MarkdownDocumentController),
         };
 
         protected override bool IsController(TypeInfo typeInfo) => Array.IndexOf(AllowedControllers, typeInfo.AsType()) >= 0;

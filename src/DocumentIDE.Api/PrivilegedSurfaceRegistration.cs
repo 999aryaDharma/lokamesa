@@ -7,13 +7,16 @@ using DocumentIDE.Core.Indexing;
 using DocumentIDE.Core.Markdown;
 using DocumentIDE.Core.Pdf;
 using DocumentIDE.Core.Search;
+using DocumentIDE.Core.Sharing;
 using DocumentIDE.Core.Word;
 using DocumentIDE.Infrastructure.Batch;
 using DocumentIDE.Infrastructure.Docx;
 using DocumentIDE.Infrastructure.Filesystem;
 using DocumentIDE.Infrastructure.History;
+using DocumentIDE.Infrastructure.Markdown;
 using DocumentIDE.Infrastructure.Persistence.Repositories;
 using DocumentIDE.Infrastructure.Search;
+using DocumentIDE.Infrastructure.Sharing;
 using DocumentIDE.Infrastructure.Word;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -41,6 +44,7 @@ public static class PrivilegedSurfaceRegistration
         services.TryAddScoped<IFolderSourceRepository, FolderSourceRepository>();
         services.TryAddScoped<IDocumentRepository, DocumentRepository>();
         services.TryAddScoped<IBatchPlanRepository, BatchPlanRepository>();
+        services.TryAddScoped<IRelationRepository, RelationRepository>();
 
         // Folders / identity / move correlation (rebind).
         services.TryAddScoped<IFolderSourceService, FolderSourceService>();
@@ -83,6 +87,16 @@ public static class PrivilegedSurfaceRegistration
         services.TryAddScoped<BatchApplyEngine>();
         services.TryAddScoped<UndoService>();
         services.TryAddScoped<BatchApplyCoordinator>();
+
+        // Share lifecycle (G5 / SHR-11): owner-side create Snapshot/Live, stop,
+        // revoke, regenerate and explicit membership through the privileged host.
+        // Stops/revokes persist on the Share aggregate; the public ShareHost side
+        // is unchanged and still enforces token/CSP/download policy per request.
+        services.TryAddSingleton<ShareTokenService>();
+        services.TryAddSingleton<MarkdownPreviewService>();
+        services.TryAddSingleton<ISnapshotMarkdownRenderer, SnapshotMarkdownRendererAdapter>();
+        services.TryAddScoped<IShareRepository, ShareRepository>();
+        services.TryAddScoped<ShareLifecycleService>();
 
         return services;
     }
