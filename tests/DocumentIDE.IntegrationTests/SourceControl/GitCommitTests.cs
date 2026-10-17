@@ -564,6 +564,200 @@ public sealed class GitCommitTests
         Assert.DoesNotContain(recording.Invocations, args => args.Contains("-n"));
     }
 
+    // ---------------------------------------------------------------------
+    // Step 4 — Typed failures: index lock, identity, race, unmerged index
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Failure/edge case "Git index locked by another process": the commit is
+    /// reported typed as <see cref="GitCommitOutcome.IndexLocked"/>, no commit is
+    /// created and the staged state is left exactly as it was (spec 13 §19/§20).
+    /// </summary>
+    [Fact]
+    public async Task LockedIndexIsATypedFailureAndCreatesNoCommit()
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md" });
+        repo.WriteFile("docs/a.md", "a v2");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "--", "docs/a.md"));
+        string headBefore = Head(repo);
+        int countBefore = CommitCount(repo);
+
+        string lockPath = Path.Combine(repo.RootPath, ".git", "index.lock");
+        File.WriteAllText(lockPath, string.Empty);
+        try
+        {
+            (GitCommitService service, _, _, _) = CreateService();
+            GitCommitResult result = await service.CommitAsync(repo.RootPath, "blocked by the lock");
+
+            Assert.Equal(GitCommitOutcome.IndexLocked, result.Outcome);
+            Assert.False(result.IsSuccess);
+            Assert.Null(result.Commit);
+            Assert.IsType<GitProcessResult>(result.Failure);
+
+            Assert.Equal(headBefore, Head(repo));
+            Assert.Equal(countBefore, CommitCount(repo));
+            Assert.Equal(new[] { "docs/a.md" }, StagedNames(repo.RootPath).ToArray());
+        }
+        finally
+        {
+            File.Delete(lockPath);
+        }
+    }
+
+    /// <summary>
+    /// Commit All reports the same typed lock outcome: its staging step fails
+    /// against the locked index, so it never proceeds to commit and nothing is
+    /// staged or committed (spec 13 §11.2/§19).
+    /// </summary>
+    [Fact]
+    public async Task LockedIndexDuringCommitAllIsATypedFailureAndCreatesNoCommit()
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md" });
+        repo.WriteFile("docs/a.md", "a v2");
+        string headBefore = Head(repo);
+        int countBefore = CommitCount(repo);
+
+        string lockPath = Path.Combine(repo.RootPath, ".git", "index.lock");
+        File.WriteAllText(lockPath, string.Empty);
+        try
+        {
+            (GitCommitService service, _, _, _) = CreateService();
+            GitCommitResult result = await service.CommitAllAsync(repo.RootPath, "blocked by the lock");
+
+            Assert.Equal(GitCommitOutcome.IndexLocked, result.Outcome);
+            Assert.Equal(GitCommitFlow.CommitAll, result.Flow);
+            Assert.Null(result.Commit);
+
+            Assert.Equal(headBefore, Head(repo));
+            Assert.Equal(countBefore, CommitCount(repo));
+
+            // Staging failed, so the edit is still unstaged and untouched.
+            Assert.Empty(StagedNames(repo.RootPath));
+            Assert.Equal(new[] { "docs/a.md" }, UnstagedNames(repo).ToArray());
+            Assert.Equal("a v2", File.ReadAllText(Path.Combine(repo.RootPath, "docs", "a.md")));
+        }
+        finally
+        {
+            File.Delete(lockPath);
+        }
+    }
+
+    /// <summary>
+    /// Failure/edge case "commit fails because Git identity is not configured":
+    /// Git's identity errors are reported typed as
+    /// <see cref="GitCommitOutcome.MissingIdentity"/> with no commit created
+    /// (spec 13 §11/§20). The canned runner keeps the test independent of the
+    /// host's own global Git identity.
+    /// </summary>
+    [Theory]
+    [InlineData("fatal: empty ident name (for <>) not allowed\n")]
+    [InlineData("fatal: unable to auto-detect email address (got 'user@host.(none)')\n")]
+    [InlineData(
+        "Author identity unknown\n\n*** Please tell me who you are.\n\n" +
+        "Run\n\n  git config --global user.email \"you@example.com\"\n\n" +
+        "fatal: unable to auto-detect email address\n")]
+    public async Task MissingGitIdentityIsATypedFailureAndCreatesNoCommit(string stderr)
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md" });
+        repo.WriteFile("docs/a.md", "a v2");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "--", "docs/a.md"));
+        string headBefore = Head(repo);
+        int countBefore = CommitCount(repo);
+
+        var scripted = new ScriptedGitProcessRunner(
+            new GitProcessRunner(GitProcessRunnerOptions.Default, new GitWorktreeMutationQueue()),
+            ("commit", new GitProcessResult(
+                GitProcessStatus.Failed,
+                128,
+                string.Empty,
+                stderr,
+                GitProcessErrorKind.Unknown,
+                "Git commit failed.")));
+        (GitCommitService service, _, _, _) = CreateService(scripted);
+
+        GitCommitResult result = await service.CommitAsync(repo.RootPath, "no identity");
+
+        Assert.Equal(GitCommitOutcome.MissingIdentity, result.Outcome);
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Commit);
+        Assert.Equal(128, Assert.IsType<GitProcessResult>(result.Failure).ExitCode);
+
+        Assert.Equal(headBefore, Head(repo));
+        Assert.Equal(countBefore, CommitCount(repo));
+        Assert.Equal(new[] { "docs/a.md" }, StagedNames(repo.RootPath).ToArray());
+    }
+
+    /// <summary>
+    /// Race safety: if the index changed between the status pre-check and the
+    /// commit, Git's own "nothing to commit" answer is surfaced as the typed
+    /// <see cref="GitCommitOutcome.NothingStaged"/> instead of an anonymous
+    /// failure or an empty commit (spec 13 §11.3/§19).
+    /// </summary>
+    [Theory]
+    [InlineData("nothing to commit, working tree clean\n", "")]
+    [InlineData("", "nothing added to commit but untracked files present (use \"git add\" to track)\n")]
+    public async Task IndexChangedBetweenPreCheckAndCommitIsReportedAsNothingStaged(
+        string stdout,
+        string stderr)
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md" });
+        repo.WriteFile("docs/a.md", "a v2");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "--", "docs/a.md"));
+        string headBefore = Head(repo);
+
+        var scripted = new ScriptedGitProcessRunner(
+            new GitProcessRunner(GitProcessRunnerOptions.Default, new GitWorktreeMutationQueue()),
+            ("commit", new GitProcessResult(
+                GitProcessStatus.Failed,
+                1,
+                stdout,
+                stderr,
+                GitProcessErrorKind.Unknown,
+                "Git commit failed.")));
+        (GitCommitService service, _, _, _) = CreateService(scripted);
+
+        GitCommitResult result = await service.CommitAsync(repo.RootPath, "raced away");
+
+        Assert.Equal(GitCommitOutcome.NothingStaged, result.Outcome);
+        Assert.Null(result.Commit);
+        Assert.Equal("NothingStaged", result.ErrorCode);
+        Assert.Equal(headBefore, Head(repo));
+    }
+
+    /// <summary>
+    /// Failure/edge case "commit blocked by an unresolved merge conflict": with
+    /// unmerged entries the pre-check deliberately lets Git be the reporting
+    /// authority, and the typed failure carries
+    /// <see cref="GitProcessErrorKind.GitConflict"/> (spec 13 §11/§20). HEAD is
+    /// unchanged because no commit was recorded.
+    /// </summary>
+    [Fact]
+    public async Task UnresolvedConflictIsATypedCommitFailure()
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md" });
+        repo.WriteFile("docs/a.md", "main side");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "-A"));
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "commit", "-qm", "main side"));
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "checkout", "-q", "-b", "feature", "HEAD~1"));
+        repo.WriteFile("docs/a.md", "feature side");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "-A"));
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "commit", "-qm", "feature side"));
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "checkout", "-q", "main"));
+        Assert.NotEqual(0, TestGitRepository.RunGit(repo.RootPath, "merge", "--no-edit", "feature"));
+        string headBefore = Head(repo);
+
+        (GitCommitService service, _, _, _) = CreateService();
+        GitCommitResult result = await service.CommitAsync(repo.RootPath, "must not commit a conflict");
+
+        Assert.Equal(GitCommitOutcome.Failed, result.Outcome);
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Commit);
+
+        GitProcessResult failure = Assert.IsType<GitProcessResult>(result.Failure);
+        Assert.Equal(GitProcessErrorKind.GitConflict, failure.ErrorKind);
+        Assert.Equal(headBefore, Head(repo));
+    }
+
     // -----------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------
@@ -734,6 +928,53 @@ public sealed class GitCommitTests
             lock (Invocations)
             {
                 Invocations.Add(request.Arguments);
+            }
+
+            return await _inner.RunAsync(request, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Delegates to a real runner but substitutes a canned
+    /// <see cref="GitProcessResult"/> for one subcommand (keyed by the first
+    /// argument). Used to pin failure signatures that depend on machine
+    /// configuration — e.g. a missing Git identity, which cannot be reproduced
+    /// reliably against a host that has a global <c>user.name</c>/<c>user.email</c>.
+    /// </summary>
+    private sealed class ScriptedGitProcessRunner : IGitProcessRunner
+    {
+        private readonly IGitProcessRunner _inner;
+        private readonly Dictionary<string, GitProcessResult> _overrides;
+
+        public ScriptedGitProcessRunner(
+            IGitProcessRunner inner,
+            params (string Subcommand, GitProcessResult Result)[] overrides)
+        {
+            _inner = inner;
+            _overrides = overrides.ToDictionary(
+                entry => entry.Subcommand,
+                entry => entry.Result,
+                StringComparer.Ordinal);
+        }
+
+        public List<IReadOnlyList<string>> Invocations { get; } = new();
+
+        public Task<GitCapabilityInfo> GetCapabilityAsync(CancellationToken cancellationToken = default) =>
+            _inner.GetCapabilityAsync(cancellationToken);
+
+        public async Task<GitProcessResult> RunAsync(
+            GitProcessRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            lock (Invocations)
+            {
+                Invocations.Add(request.Arguments);
+            }
+
+            if (request.Arguments.Count > 0
+                && _overrides.TryGetValue(request.Arguments[0], out GitProcessResult? canned))
+            {
+                return canned;
             }
 
             return await _inner.RunAsync(request, cancellationToken);

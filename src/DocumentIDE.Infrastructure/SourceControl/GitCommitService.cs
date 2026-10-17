@@ -183,19 +183,33 @@ public sealed class GitCommitService
     /// never runs when staging failed, so a partial staging can never be
     /// reported as a commit (spec 13 §11.2/§20).
     /// </summary>
-    private static GitCommitResult StageFailure(GitCommitFlow flow, GitStageResult staged) => new(
-        staged.Outcome switch
+    private static GitCommitResult StageFailure(GitCommitFlow flow, GitStageResult staged)
+    {
+        // A locked index fails the staging step first; reporting it as the
+        // commit's own typed lock outcome keeps both flows consistent
+        // (spec 13 §11.2/§19).
+        bool locked = staged.Outcome == GitStageOutcome.Failed
+            && staged.Failure?.ErrorKind == GitProcessErrorKind.GitLockContention;
+
+        GitCommitOutcome outcome = staged.Outcome switch
         {
             GitStageOutcome.NoRepository => GitCommitOutcome.NoRepository,
             GitStageOutcome.GitUnavailable => GitCommitOutcome.GitUnavailable,
+            _ when locked => GitCommitOutcome.IndexLocked,
             _ => GitCommitOutcome.Failed,
-        },
-        flow,
-        null,
-        staged.Status,
-        staged.Failure,
-        staged.Message ?? "The Commit All staging step failed; no commit was created.",
-        staged.ErrorCode);
+        };
+
+        return new GitCommitResult(
+            outcome,
+            flow,
+            null,
+            staged.Status,
+            staged.Failure,
+            locked
+                ? "The Git index is locked by another process; nothing was committed."
+                : staged.Message ?? "The Commit All staging step failed; no commit was created.",
+            locked ? "IndexLocked" : staged.ErrorCode);
+    }
 
     /// <summary>
     /// Validates the client-supplied commit message. Rejection is typed and
