@@ -123,7 +123,7 @@ Rules:
 | SCM-04 | Markdown Git Diff | DONE | SCM-02, MD-01 | feat/markdown-git-diff | docs/sprints/handoffs/SCM-04-HANDOFF.md |
 | SCM-05 | DOCX Document-Aware Git Diff | DONE | SCM-02, IDX-02, DOCX-01 | feat/docx-document-aware-git-diff | docs/sprints/handoffs/SCM-05-HANDOFF.md |
 | SCM-06 | Git Stage & Unstage | DONE | SCM-02, SCM-03 | feat/git-stage-unstage | docs/sprints/handoffs/SCM-06-HANDOFF.md |
-| SCM-07 | Git Commit & Commit All | BLOCKED | SCM-06, SCM-05 |  |  |
+| SCM-07 | Git Commit & Commit All | READY | SCM-06, SCM-05 |  |  |
 | SCM-08 | Git Commit History & File History | BLOCKED | SCM-02, SCM-07 |  |  |
 | SCM-09 | Document IDE History ↔ Git Correlation | BLOCKED | SCM-07, HIST-01 |  |  |
 | SCM-10 | Safe Git Discard & Restore | BLOCKED | SCM-08, HIST-01, FS-07 |  |  |
