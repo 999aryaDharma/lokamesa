@@ -201,6 +201,96 @@ public sealed class GitCommitTests
         Assert.Empty(UntrackedNames(repo));
     }
 
+    // ---------------------------------------------------------------------
+    // Step 2/3 — Nothing staged is never an empty commit
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Acceptance criterion "Commit never silently includes unstaged-only
+    /// changes": with only working-tree edits the commit reports a typed
+    /// <see cref="GitCommitOutcome.NothingStaged"/>, no commit is attempted and
+    /// the edit survives untouched (spec 13 §9.4/§11.3).
+    /// </summary>
+    [Fact]
+    public async Task UnstagedOnlyChangesAreNeverCommittedAndReportNothingStaged()
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md" });
+        string aPath = repo.WriteFile("docs/a.md", "a v2 (unstaged only)");
+        string headBefore = Head(repo);
+        int countBefore = CommitCount(repo);
+
+        var recording = new RecordingGitProcessRunner(
+            new GitProcessRunner(GitProcessRunnerOptions.Default, new GitWorktreeMutationQueue()));
+        (GitCommitService service, _, _, _) = CreateService(recording);
+
+        GitCommitResult result = await service.CommitAsync(repo.RootPath, "should not commit");
+
+        Assert.Equal(GitCommitOutcome.NothingStaged, result.Outcome);
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Commit);
+        Assert.Null(result.Failure);
+        Assert.Equal(GitCommitFlow.Commit, result.Flow);
+
+        // No commit was created and no `git commit` was even attempted.
+        Assert.Equal(headBefore, Head(repo));
+        Assert.Equal(countBefore, CommitCount(repo));
+        Assert.DoesNotContain(recording.Invocations, arguments => arguments[0] == "commit");
+
+        // The unstaged edit is untouched.
+        Assert.Equal("a v2 (unstaged only)", File.ReadAllText(aPath));
+        Assert.Equal(new[] { "docs/a.md" }, UnstagedNames(repo).ToArray());
+    }
+
+    /// <summary>
+    /// A clean working tree reports the same typed outcome — the UI must never
+    /// create an empty commit (spec 13 §11.3).
+    /// </summary>
+    [Fact]
+    public async Task CleanWorktreeReportsNothingStagedWithoutCreatingAnEmptyCommit()
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md" });
+        string headBefore = Head(repo);
+        int countBefore = CommitCount(repo);
+
+        (GitCommitService service, _, _, _) = CreateService();
+        GitCommitResult result = await service.CommitAsync(repo.RootPath, "nothing to do");
+
+        Assert.Equal(GitCommitOutcome.NothingStaged, result.Outcome);
+        Assert.Equal(headBefore, Head(repo));
+        Assert.Equal(countBefore, CommitCount(repo));
+    }
+
+    /// <summary>
+    /// Failure/edge case "Word has changed a DOCX between status/diff/stage
+    /// operations": the commit records the staged version, and the newer
+    /// working-tree save remains an unstaged change (spec 13 §10/§11.1) — the
+    /// commit never silently absorbs the newer content.
+    /// </summary>
+    [Fact]
+    public async Task DocumentSavedAgainAfterStagingIsNotPartOfTheCommit()
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/treaty.docx" });
+        repo.WriteFile("docs/treaty.docx", "docx v2 (staged)");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "--", "docs/treaty.docx"));
+
+        // Word saves again after the file was staged.
+        repo.WriteFile("docs/treaty.docx", "docx v3 (saved after staging)");
+
+        (GitCommitService service, _, _, _) = CreateService();
+        GitCommitResult result = await service.CommitAsync(repo.RootPath, "commit staged docx");
+
+        Assert.Equal(GitCommitOutcome.Succeeded, result.Outcome);
+        string commitId = result.Commit!.CommitId;
+        Assert.Equal(
+            "docx v2 (staged)",
+            TestGitRepository.RunGitCaptureUtf8(repo.RootPath, "show", $"{commitId}:docs/treaty.docx").Trim());
+
+        Assert.Equal(
+            "docx v3 (saved after staging)",
+            File.ReadAllText(Path.Combine(repo.RootPath, "docs", "treaty.docx")));
+        Assert.Equal(new[] { "docs/treaty.docx" }, UnstagedNames(repo).ToArray());
+    }
+
     // -----------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------

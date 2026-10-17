@@ -141,6 +141,28 @@ public sealed class GitCommitService
         string message,
         CancellationToken cancellationToken)
     {
+        // Nothing staged is never an empty commit (spec 13 §11.3): the index is
+        // the authority, so a clean staged state is reported typed and Git is
+        // not invoked at all. An unresolved conflict keeps Git as the reporting
+        // authority instead (its failure is classified below).
+        GitStatusResult preStatus = await _repositories.GetStatusAsync(worktreeRoot, cancellationToken);
+        if (preStatus.IsAvailable && preStatus.Snapshot is not null)
+        {
+            bool hasStaged = preStatus.Snapshot.Entries.Any(entry => entry.HasStagedChange);
+            bool hasConflicts = preStatus.Snapshot.Entries.Any(entry => entry.IsConflicted);
+            if (!hasStaged && !hasConflicts)
+            {
+                return new GitCommitResult(
+                    GitCommitOutcome.NothingStaged,
+                    flow,
+                    null,
+                    preStatus,
+                    null,
+                    "There is nothing staged to commit; no empty commit was created.",
+                    "NothingStaged");
+            }
+        }
+
         GitProcessResult commit = await _runner.RunAsync(
             new GitProcessRequest(new[] { "commit", "-m", message }, worktreeRoot),
             cancellationToken);
