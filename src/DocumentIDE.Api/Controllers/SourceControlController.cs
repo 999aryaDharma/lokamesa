@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DocumentIDE.Core.Domain.Repositories;
+using DocumentIDE.Core.History;
 using DocumentIDE.Core.SourceControl;
 using DocumentIDE.Infrastructure.SourceControl;
 using Microsoft.AspNetCore.Mvc;
@@ -157,6 +158,71 @@ public sealed record SourceControlCommitResponse(
     SourceControlFailureResponse? Failure);
 
 /// <summary>
+/// SCM-09 — request body that starts a Document IDE work session (spec 13
+/// §13/§24). <c>Path</c> is the workspace folder or active-document path used
+/// only for a read-only Git discovery so the session can record repository
+/// context; the session itself is Document IDE History metadata and stays valid
+/// with no Git repository at all.
+/// </summary>
+public sealed record SourceControlWorkSessionRequest(string? Path, string? WorkspaceId, string? Label);
+
+/// <summary>
+/// SCM-09 — request body that records one changed document against a session.
+/// <c>DocumentId</c> is required (a blank id is a typed 400); <c>Path</c> is the
+/// path the operation reported and is optional display metadata.
+/// </summary>
+public sealed record SourceControlWorkSessionDocumentRequest(string? DocumentId, string? Path);
+
+/// <summary>
+/// SCM-09 — request body that correlates one already-created Git commit with a
+/// session. <c>CommitId</c> is required (a blank id is a typed 400); the short
+/// id and summary are convenience display metadata copied from the commit
+/// response, never invented by this surface and never written into Git.
+/// </summary>
+public sealed record SourceControlWorkSessionCommitRequest(string? CommitId, string? ShortId, string? Summary);
+
+/// <summary>SCM-09 — one changed-document association in a session payload.</summary>
+public sealed record SourceControlWorkSessionDocumentResponse(string DocumentId, string? Path);
+
+/// <summary>
+/// SCM-09 — one correlated commit in a session payload. It is derived metadata:
+/// the id is exactly what Git reported at commit time and is never required for
+/// the commit to remain valid (spec 13 §24).
+/// </summary>
+public sealed record SourceControlWorkSessionCommitResponse(string CommitId, string? ShortId, string? Summary);
+
+/// <summary>
+/// SCM-09 — the Document IDE History side of the correlation payload: the
+/// session plus the documents it changed. It is kept deliberately separate from
+/// any Git history so the pane renders a correlation, not a unified timeline.
+/// </summary>
+public sealed record SourceControlWorkSessionResponse(
+    string Id,
+    string? WorkspaceId,
+    string? RepositoryRoot,
+    string? WorktreeRoot,
+    string StartedAt,
+    string? EndedAt,
+    string? Label,
+    IReadOnlyList<SourceControlWorkSessionDocumentResponse> ChangedDocuments,
+    IReadOnlyList<SourceControlWorkSessionCommitResponse> CommitCorrelations);
+
+/// <summary>
+/// SCM-09 — typed correlation outcome (spec 13 §20/§24). Input rejections
+/// (<c>SessionRequired</c>/<c>DocumentRequired</c>/<c>CommitRequired</c>) are
+/// typed 400s where nothing ran; every execution outcome — including
+/// <c>SessionNotFound</c> and <c>StoreUnavailable</c> — stays HTTP 200 with this
+/// body so the pane renders it and never mistakes a correlation problem for a
+/// broken commit.
+/// </summary>
+public sealed record SourceControlCorrelationResponse(
+    string Outcome,
+    bool IsSuccess,
+    string? ErrorCode,
+    string? Message,
+    SourceControlWorkSessionResponse? Session);
+
+/// <summary>
 /// SCM-03/SCM-06/SCM-07 — privileged Source Control API consumed by the changes
 /// pane (spec 13 §18): read-only repository/status queries, explicit file-level
 /// stage/unstage actions, and the explicit Commit / Commit All actions. Every
@@ -178,17 +244,20 @@ public sealed class SourceControlController : ControllerBase
     private readonly GitStageService _stages;
     private readonly GitCommitService _commits;
     private readonly IDocumentRepository _documents;
+    private readonly IWorkSessionService _workSessions;
 
     public SourceControlController(
         GitRepositoryService repositories,
         GitStageService stages,
         GitCommitService commits,
-        IDocumentRepository documents)
+        IDocumentRepository documents,
+        IWorkSessionService workSessions)
     {
         _repositories = repositories ?? throw new ArgumentNullException(nameof(repositories));
         _stages = stages ?? throw new ArgumentNullException(nameof(stages));
         _commits = commits ?? throw new ArgumentNullException(nameof(commits));
         _documents = documents ?? throw new ArgumentNullException(nameof(documents));
+        _workSessions = workSessions ?? throw new ArgumentNullException(nameof(workSessions));
     }
 
     /// <summary>
@@ -635,4 +704,138 @@ public sealed class SourceControlController : ControllerBase
                 failure.ErrorKind.ToString(),
                 failure.ErrorMessage,
                 failure.ExitCode);
+
+    // =====================================================================
+    // SCM-09 — Document IDE History ↔ Git correlation (spec 13 §13/§24)
+    //
+    // Bounded region: this surface owns no Git mutation at all. Starting a
+    // session performs only a read-only Git discovery to record repository
+    // context; a session, its changed documents and its commit correlations are
+    // derived Document IDE History metadata that stay usable without Git, and
+    // no route here can create, amend or push a commit.
+    // =====================================================================
+
+    /// <summary>
+    /// Starts a Document IDE work session (spec 13 §13). The Git context is
+    /// discovered read-only; when the path is outside Git the session still
+    /// starts with no repository context and Git is never initialised.
+    /// </summary>
+    [HttpPost("work-sessions")]
+    public async Task<IActionResult> StartWorkSession(
+        [FromBody] SourceControlWorkSessionRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.Path))
+        {
+            return PathRequiredBadRequest("request field");
+        }
+
+        // Read-only context discovery: the correlation surface never initialises
+        // Git and never mutates the repository.
+        GitRepositoryContext context = await _repositories.DiscoverAsync(request.Path!, cancellationToken);
+
+        return ToCorrelationResponse(await _workSessions.StartAsync(
+            request.WorkspaceId,
+            context.HasRepository ? context.RepositoryRoot : null,
+            context.HasRepository ? context.WorktreeRoot : null,
+            request.Label,
+            cancellationToken));
+    }
+
+    /// <summary>Reads one work session and its correlation metadata.</summary>
+    [HttpGet("work-sessions/{sessionId}")]
+    public async Task<IActionResult> GetWorkSession(
+        string? sessionId,
+        CancellationToken cancellationToken) =>
+        ToCorrelationResponse(await _workSessions.GetAsync(sessionId, cancellationToken));
+
+    /// <summary>
+    /// Records one document as changed by a session (Document IDE History
+    /// association, spec 13 §13). A blank document id is a typed 400 and nothing
+    /// is written.
+    /// </summary>
+    [HttpPost("work-sessions/{sessionId}/documents")]
+    public async Task<IActionResult> RecordWorkSessionDocument(
+        string? sessionId,
+        [FromBody] SourceControlWorkSessionDocumentRequest? request,
+        CancellationToken cancellationToken) =>
+        ToCorrelationResponse(await _workSessions.RecordChangedDocumentAsync(
+            sessionId,
+            request?.DocumentId,
+            request?.Path,
+            cancellationToken));
+
+    /// <summary>
+    /// Correlates an already-created Git commit id with a session (spec 13 §13).
+    /// The commit was created by the explicit SCM-07 flow; this route only
+    /// records derived correlation metadata and never touches Git. A blank
+    /// commit id is a typed 400.
+    /// </summary>
+    [HttpPost("work-sessions/{sessionId}/commit-correlations")]
+    public async Task<IActionResult> CorrelateWorkSessionCommit(
+        string? sessionId,
+        [FromBody] SourceControlWorkSessionCommitRequest? request,
+        CancellationToken cancellationToken) =>
+        ToCorrelationResponse(await _workSessions.AttachCommitAsync(
+            sessionId,
+            request?.CommitId,
+            request?.ShortId,
+            request?.Summary,
+            cancellationToken));
+
+    /// <summary>
+    /// Drops one session and its correlation metadata (spec 13 §24). The Git
+    /// commit it described is untouched and stays valid.
+    /// </summary>
+    [HttpDelete("work-sessions/{sessionId}")]
+    public async Task<IActionResult> DeleteWorkSession(
+        string? sessionId,
+        CancellationToken cancellationToken) =>
+        ToCorrelationResponse(await _workSessions.DeleteAsync(sessionId, cancellationToken));
+
+    /// <summary>
+    /// Maps a typed work-session/correlation result onto the privileged API
+    /// contract (spec 13 §20/§24): input rejections are typed 400s (nothing
+    /// ran), every execution outcome stays HTTP 200 with a typed body so the
+    /// pane renders it, and a correlation failure is never conflated with a
+    /// broken Git commit.
+    /// </summary>
+    private static IActionResult ToCorrelationResponse(WorkSessionResult result) =>
+        result.Outcome is WorkSessionOutcome.SessionRequired
+            or WorkSessionOutcome.DocumentRequired
+            or WorkSessionOutcome.CommitRequired
+            ? new BadRequestObjectResult(new
+            {
+                errorCode = result.ErrorCode ?? result.Outcome.ToString(),
+                error = result.Message,
+            })
+            : new OkObjectResult(new SourceControlCorrelationResponse(
+                result.Outcome.ToString(),
+                result.IsSuccess,
+                result.ErrorCode,
+                result.Message,
+                ToWorkSessionResponse(result.Session)));
+
+    private static SourceControlWorkSessionResponse? ToWorkSessionResponse(WorkSession? session) =>
+        session is null
+            ? null
+            : new SourceControlWorkSessionResponse(
+                session.Id,
+                session.WorkspaceId,
+                session.RepositoryRoot,
+                session.WorktreeRoot,
+                session.StartedAt,
+                session.EndedAt,
+                session.Label,
+                session.ChangedDocuments
+                    .Select(document => new SourceControlWorkSessionDocumentResponse(
+                        document.DocumentId,
+                        document.Path))
+                    .ToList(),
+                session.CommitCorrelations
+                    .Select(correlation => new SourceControlWorkSessionCommitResponse(
+                        correlation.CommitId,
+                        correlation.ShortId,
+                        correlation.Summary))
+                    .ToList());
 }

@@ -3,6 +3,7 @@ using DocumentIDE.Api;
 using DocumentIDE.Api.Security;
 using DocumentIDE.Core.Domain.Repositories;
 using DocumentIDE.Core.Filesystem;
+using DocumentIDE.Core.History;
 using DocumentIDE.Core.Word;
 using DocumentIDE.Infrastructure.Filesystem;
 using DocumentIDE.Infrastructure.Persistence;
@@ -80,6 +81,14 @@ builder.Services.AddSingleton(sp => new GitCommitService(
     sp.GetRequiredService<IGitProcessRunner>(),
     sp.GetRequiredService<GitRepositoryService>(),
     sp.GetRequiredService<GitStageService>()));
+
+// SCM-09: Document IDE History ↔ Git correlation. Correlation is derived
+// metadata stored in the application database (spec 13 §13/§24): the session
+// service is Git-free by construction, so no correlation operation can create a
+// commit, and dropping correlation data never touches the repository.
+builder.Services.AddScoped<IWorkSessionRepository, WorkSessionRepository>();
+builder.Services.AddScoped<IWorkSessionService>(sp => new WorkSessionService(
+    sp.GetRequiredService<IWorkSessionRepository>()));
 
 builder.Services.AddScoped<PdfExportService>();
 builder.Services.AddScoped<BatchPdfExportService>();
