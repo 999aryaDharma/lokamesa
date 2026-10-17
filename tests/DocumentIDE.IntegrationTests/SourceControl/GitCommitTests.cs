@@ -758,6 +758,90 @@ public sealed class GitCommitTests
         Assert.Equal(headBefore, Head(repo));
     }
 
+    // ---------------------------------------------------------------------
+    // Step 4 — Discovery failures stay typed and never touch Git state
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// A workspace outside any Git worktree is a valid Document IDE source with
+    /// no Git state: the commit reports the typed
+    /// <see cref="GitCommitOutcome.NoRepository"/> and no <c>git commit</c> is
+    /// ever attempted (spec 13 §5/§11).
+    /// </summary>
+    [Fact]
+    public async Task CommitOutsideAnyRepositoryIsTypedNoRepositoryWithoutRunningGit()
+    {
+        string scratch = Path.Combine(Path.GetTempPath(), $"scm07-norepo-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(scratch);
+        try
+        {
+            var recording = new RecordingGitProcessRunner(
+                new GitProcessRunner(GitProcessRunnerOptions.Default, new GitWorktreeMutationQueue()));
+            (GitCommitService service, _, _, _) = CreateService(recording);
+
+            GitCommitResult result = await service.CommitAsync(scratch, "nowhere to commit");
+
+            Assert.Equal(GitCommitOutcome.NoRepository, result.Outcome);
+            Assert.False(result.IsSuccess);
+            Assert.Null(result.Commit);
+            Assert.DoesNotContain(recording.Invocations, arguments => arguments[0] == "commit");
+            Assert.DoesNotContain(recording.Invocations, arguments => arguments[0] == "add");
+        }
+        finally
+        {
+            DeleteDirectoryBestEffort(scratch);
+        }
+    }
+
+    /// <summary>
+    /// Git being missing/unusable is a typed
+    /// <see cref="GitCommitOutcome.GitUnavailable"/> for both flows — never an
+    /// exception and never a silent no-op (spec 13 §20).
+    /// </summary>
+    [Fact]
+    public async Task CommitWhenGitIsUnavailableIsTypedGitUnavailable()
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md" });
+        repo.WriteFile("docs/a.md", "a v2");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "--", "docs/a.md"));
+
+        (GitCommitService service, _, _, _) = CreateService(new UnavailableGitProcessRunner());
+
+        GitCommitResult plain = await service.CommitAsync(repo.RootPath, "no git to run");
+        GitCommitResult all = await service.CommitAllAsync(repo.RootPath, "no git to run either");
+
+        Assert.Equal(GitCommitOutcome.GitUnavailable, plain.Outcome);
+        Assert.Equal(GitCommitOutcome.GitUnavailable, all.Outcome);
+        Assert.Null(plain.Commit);
+        Assert.Null(all.Commit);
+    }
+
+    /// <summary>
+    /// Failure/edge case "the worktree disappears mid-request": a repository
+    /// path that no longer exists yields the typed
+    /// <see cref="GitCommitOutcome.Failed"/> with the runner's
+    /// <see cref="GitProcessErrorKind.GitWorktreeInvalid"/> failure, and no
+    /// commit is created (spec 13 §19/§20).
+    /// </summary>
+    [Fact]
+    public async Task WorktreeThatDisappearedIsATypedFailureAndCreatesNoCommit()
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md" });
+        repo.WriteFile("docs/a.md", "a v2");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "--", "docs/a.md"));
+        string root = repo.RootPath;
+        DeleteDirectoryForcefully(root);
+        Assert.False(Directory.Exists(root));
+
+        (GitCommitService service, _, _, _) = CreateService();
+        GitCommitResult result = await service.CommitAsync(root, "the worktree is gone");
+
+        Assert.Equal(GitCommitOutcome.Failed, result.Outcome);
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Commit);
+        Assert.Equal(GitProcessErrorKind.GitWorktreeInvalid, Assert.IsType<GitProcessResult>(result.Failure).ErrorKind);
+    }
+
     // -----------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------
