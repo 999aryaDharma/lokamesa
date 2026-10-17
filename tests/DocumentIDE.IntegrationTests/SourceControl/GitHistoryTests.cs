@@ -1087,3 +1087,429 @@ public sealed class GitHistoryTests
         return repo;
     }
 }
+
+/// <summary>
+/// SCM-08 — privileged HTTP surface for Git history and document versions
+/// (spec 13 §12/§18/§20/§25).
+///
+/// The routes are guarded exactly like the other Source Control routes
+/// (localhost origin + session token), a rejected request is a typed HTTP 400
+/// with nothing run, and every Git-reported state stays HTTP 200 so the pane
+/// renders the typed outcome instead of an error page.
+/// </summary>
+public sealed class GitHistoryApiTests : IClassFixture<WebApplicationFactory<Program>>
+{
+    private const string SourceMarker = "Git";
+
+    private readonly WebApplicationFactory<Program> _factory;
+
+    public GitHistoryApiTests(WebApplicationFactory<Program> factory)
+    {
+        _factory = factory;
+    }
+
+    /// <summary>
+    /// The history route reports the repository's real commits with their
+    /// metadata and file counts, and marks the data as Git-derived so the pane
+    /// keeps Git History separate from Document IDE History (spec 13 §4.3/§12).
+    /// </summary>
+    [Fact]
+    public async Task HistoryEndpointReturnsCommitsWithMetadataAndSourceMarker()
+    {
+        using TestGitRepository repo = CreateRepositoryWithKnownHistory();
+        using var client = await CreateAuthorizedClientAsync();
+
+        using var response = await client.GetAsync(HistoryUri(repo.RootPath));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        SourceControlHistoryResponse? body =
+            await response.Content.ReadFromJsonAsync<SourceControlHistoryResponse>();
+
+        Assert.NotNull(body);
+        Assert.Equal("Available", body!.Status);
+        Assert.Equal(SourceMarker, body.Source);
+        Assert.True(body.IsAvailable);
+        Assert.Null(body.ErrorCode);
+        Assert.Null(body.Failure);
+
+        Assert.NotNull(body.Page);
+        Assert.Equal(0, body.Page!.Skip);
+        Assert.Equal(GitHistoryQuery.DefaultLimit, body.Page.Limit);
+        Assert.False(body.Page.HasMore);
+        Assert.Null(body.Page.NextSkip);
+        Assert.Equal(
+            new[] { "third: adds a unicode file", "second: edits a", "first commit" },
+            body.Page.Commits.Select(commit => commit.Summary).ToArray());
+
+        SourceControlHistoryCommitResponse head = body.Page.Commits[0];
+        Assert.Equal(Head(repo), head.CommitId);
+        Assert.StartsWith(head.ShortId, head.CommitId, StringComparison.Ordinal);
+        Assert.Equal("SCM-08 Author", head.AuthorName);
+        Assert.Equal("scm08@example.invalid", head.AuthorEmail);
+        Assert.False(string.IsNullOrWhiteSpace(head.CommitterTime));
+        Assert.Equal(2, head.FileCount);
+    }
+
+    /// <summary>
+    /// Large histories load incrementally through the skip/limit window: the
+    /// route echoes the window, reports <c>HasMore</c>/<c>NextSkip</c> from Git
+    /// and the next page continues without overlap (spec 13 §25).
+    /// </summary>
+    [Fact]
+    public async Task HistoryEndpointLoadsLargeHistoriesIncrementally()
+    {
+        using TestGitRepository repo = CreateRepositoryWithManyCommits(commitCount: 5);
+        using var client = await CreateAuthorizedClientAsync();
+
+        using var first = await client.GetAsync(HistoryUri(repo.RootPath, skip: 0, limit: 2));
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        SourceControlHistoryResponse? firstBody =
+            await first.Content.ReadFromJsonAsync<SourceControlHistoryResponse>();
+
+        Assert.NotNull(firstBody);
+        Assert.Equal(2, firstBody!.Page!.Commits.Count);
+        Assert.Equal(2, firstBody.Page.Limit);
+        Assert.True(firstBody.Page.HasMore);
+        Assert.Equal(2, firstBody.Page.NextSkip);
+        Assert.Equal(new[] { "commit 05", "commit 04" }, firstBody.Page.Commits.Select(c => c.Summary).ToArray());
+
+        using var second = await client.GetAsync(HistoryUri(repo.RootPath, skip: 2, limit: 2));
+        SourceControlHistoryResponse? secondBody =
+            await second.Content.ReadFromJsonAsync<SourceControlHistoryResponse>();
+
+        Assert.NotNull(secondBody);
+        Assert.Equal(2, secondBody!.Page!.Skip);
+        Assert.Equal(new[] { "commit 03", "commit 02" }, secondBody.Page.Commits.Select(c => c.Summary).ToArray());
+        Assert.Equal(4, secondBody.Page.NextSkip);
+
+        using var third = await client.GetAsync(HistoryUri(repo.RootPath, skip: 4, limit: 2));
+        SourceControlHistoryResponse? thirdBody =
+            await third.Content.ReadFromJsonAsync<SourceControlHistoryResponse>();
+
+        Assert.NotNull(thirdBody);
+        Assert.Equal(new[] { "commit 01" }, thirdBody!.Page!.Commits.Select(c => c.Summary).ToArray());
+        Assert.False(thirdBody.Page.HasMore);
+        Assert.Null(thirdBody.Page.NextSkip);
+    }
+
+    /// <summary>
+    /// The file-history route targets one selected document and filters to the
+    /// commits that touched it (spec 13 §9.4/§12).
+    /// </summary>
+    [Fact]
+    public async Task FileHistoryEndpointFiltersToTheSelectedDocument()
+    {
+        using TestGitRepository repo = CreateRepositoryWithKnownHistory();
+        using var client = await CreateAuthorizedClientAsync();
+
+        using var response = await client.GetAsync(FileHistoryUri(repo.RootPath, "docs/notes.md"));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        SourceControlHistoryResponse? body =
+            await response.Content.ReadFromJsonAsync<SourceControlHistoryResponse>();
+
+        Assert.NotNull(body);
+        Assert.Equal("Available", body!.Status);
+        SourceControlHistoryCommitResponse only =
+            Assert.Single(body.Page!.Commits);
+        Assert.Equal("first commit", only.Summary);
+        Assert.Equal(1, only.FileCount);
+    }
+
+    /// <summary>
+    /// Input rejections are typed HTTP 400 responses with nothing run: a
+    /// missing path, a bad pagination window, a non-contained document path and
+    /// a non-commit identifier all fail the same way (spec 13 §20/§23).
+    /// </summary>
+    [Theory]
+    [InlineData("history", "?path=&limit=10", "PathRequired")]
+    [InlineData("history", "?path={path}&skip=-1", "InvalidSkip")]
+    [InlineData("history", "?path={path}&limit=0", "InvalidLimit")]
+    [InlineData("history", "?path={path}&limit=100000", "InvalidLimit")]
+    [InlineData("file-history", "?path={path}&file=../outside.md", "PathRejected")]
+    [InlineData("file-history", "?path={path}&file=", "PathRequired")]
+    [InlineData("file-version", "?path={path}&file=docs/a.md&commit=HEAD", "InvalidCommitId")]
+    [InlineData("file-version", "?path={path}&file=../outside.md&commit=abcdef0123", "PathRejected")]
+    public async Task HistoryRoutesRejectInvalidInputWithTypedBadRequest(
+        string route,
+        string query,
+        string expectedErrorCode)
+    {
+        using TestGitRepository repo = CreateRepositoryWithKnownHistory();
+        using var client = await CreateAuthorizedClientAsync();
+        string url = $"/api/source-control/{route}{query.Replace("{path}", Uri.EscapeDataString(repo.RootPath))}";
+
+        using var response = await client.GetAsync(url);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using JsonDocument payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(expectedErrorCode, payload.RootElement.GetProperty("errorCode").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(payload.RootElement.GetProperty("error").GetString()));
+    }
+
+    /// <summary>
+    /// Git-reported states stay HTTP 200 with a typed body: a folder outside any
+    /// worktree is <c>NoRepository</c> and a document that does not exist at the
+    /// selected commit is <c>NotFound</c>; neither is an error page
+    /// (spec 13 §5/§12/§20).
+    /// </summary>
+    [Fact]
+    public async Task HistoryRoutesReportTypedNoRepositoryAndNotFoundStates()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), $"scm08-api-norepo-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(folder);
+        try
+        {
+            using var client = await CreateAuthorizedClientAsync();
+
+            using var noRepo = await client.GetAsync(HistoryUri(folder));
+            Assert.Equal(HttpStatusCode.OK, noRepo.StatusCode);
+            SourceControlHistoryResponse? noRepoBody =
+                await noRepo.Content.ReadFromJsonAsync<SourceControlHistoryResponse>();
+            Assert.NotNull(noRepoBody);
+            Assert.Equal("NoRepository", noRepoBody!.Status);
+            Assert.False(noRepoBody.IsAvailable);
+            Assert.Null(noRepoBody.Page);
+        }
+        finally
+        {
+            TryDeleteDirectory(folder);
+        }
+
+        using TestGitRepository repo = CreateRepositoryWithKnownHistory();
+        using var authorized = await CreateAuthorizedClientAsync();
+        string firstCommit = TestGitRepository
+            .RunGitCaptureUtf8(repo.RootPath, "rev-list", "--max-parents=0", "HEAD")
+            .Trim();
+
+        using var absent = await authorized.GetAsync(
+            FileVersionUri(repo.RootPath, "docs/b \u00e9.md", firstCommit));
+        Assert.Equal(HttpStatusCode.OK, absent.StatusCode);
+        SourceControlFileVersionResponse? absentBody =
+            await absent.Content.ReadFromJsonAsync<SourceControlFileVersionResponse>();
+
+        Assert.NotNull(absentBody);
+        Assert.Equal("NotFound", absentBody!.Status);
+        Assert.False(absentBody.IsAvailable);
+        Assert.Null(absentBody.Version);
+        Assert.NotNull(absentBody.Failure);
+        Assert.False(string.IsNullOrWhiteSpace(absentBody.Message));
+    }
+
+    /// <summary>
+    /// The version route returns the document as it was committed: text content
+    /// with its size, and for a binary document the binary flag with no content
+    /// pretending to be text (spec 13 §9.3/§12).
+    /// </summary>
+    [Fact]
+    public async Task FileVersionEndpointReturnsTextAndBinaryVersions()
+    {
+        using TestGitRepository repo = CreateRepositoryWithKnownHistory();
+        repo.WriteFile("docs/treaty.docx", "not really a docx");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "-A"));
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "commit", "-qm", "adds a document"));
+        using var client = await CreateAuthorizedClientAsync();
+
+        using var text = await client.GetAsync(FileVersionUri(repo.RootPath, "docs/a.md", Head(repo)));
+        Assert.Equal(HttpStatusCode.OK, text.StatusCode);
+        SourceControlFileVersionResponse? textBody =
+            await text.Content.ReadFromJsonAsync<SourceControlFileVersionResponse>();
+
+        Assert.NotNull(textBody);
+        Assert.Equal("Available", textBody!.Status);
+        Assert.Equal(SourceMarker, textBody.Source);
+        Assert.NotNull(textBody.Version);
+        Assert.Equal("docs/a.md", textBody.Version!.Path);
+        Assert.Equal("a v3", textBody.Version.Content);
+        Assert.False(textBody.Version.IsBinary);
+        Assert.False(textBody.Version.IsTruncated);
+        Assert.Equal(4, textBody.Version.SizeBytes);
+
+        // A NUL byte makes it binary, and the pane gets no text content.
+        byte[] binary = { (byte)'P', (byte)'K', 0x03, 0x04, 0x00, 0x11, 0x22 };
+        File.WriteAllBytes(Path.Combine(repo.RootPath, "docs", "bytes.bin"), binary);
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "-A"));
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "commit", "-qm", "adds a binary document"));
+
+        using var binaryResponse = await client.GetAsync(FileVersionUri(repo.RootPath, "docs/bytes.bin", Head(repo)));
+        SourceControlFileVersionResponse? binaryBody =
+            await binaryResponse.Content.ReadFromJsonAsync<SourceControlFileVersionResponse>();
+
+        Assert.NotNull(binaryBody);
+        Assert.Equal("Available", binaryBody!.Status);
+        Assert.True(binaryBody.Version!.IsBinary);
+        Assert.Null(binaryBody.Version.Content);
+        Assert.Equal(binary.Length, binaryBody.Version.SizeBytes);
+    }
+
+    /// <summary>
+    /// All three routes are guarded exactly like the other privileged Source
+    /// Control routes: a missing token is 401, a hostile origin is 403 and a
+    /// wrong token is 401, and nothing in the repository changes (spec 13 §18).
+    /// </summary>
+    [Fact]
+    public async Task HistoryRoutesRejectMissingInvalidTokenAndHostileOrigin()
+    {
+        using TestGitRepository repo = CreateRepositoryWithKnownHistory();
+        string headBefore = Head(repo);
+        string statusBefore = Status(repo);
+
+        string[] routes =
+        {
+            HistoryUri(repo.RootPath),
+            FileHistoryUri(repo.RootPath, "docs/a.md"),
+            FileVersionUri(repo.RootPath, "docs/a.md", headBefore),
+        };
+
+        foreach (string route in routes)
+        {
+            using var anonymous = _factory.CreateClient();
+            using var anonymousResponse = await anonymous.GetAsync(route);
+            Assert.Equal(HttpStatusCode.Unauthorized, anonymousResponse.StatusCode);
+        }
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var tokenProvider = scope.ServiceProvider.GetRequiredService<ISessionTokenProvider>();
+
+            foreach (string route in routes)
+            {
+                using var hostileOrigin = _factory.CreateClient();
+                hostileOrigin.DefaultRequestHeaders.Add("Origin", "https://attacker.example");
+                hostileOrigin.DefaultRequestHeaders.Add("X-DocumentIDE-Session-Token", tokenProvider.SessionToken);
+                using var hostileResponse = await hostileOrigin.GetAsync(route);
+                Assert.Equal(HttpStatusCode.Forbidden, hostileResponse.StatusCode);
+
+                using var wrongToken = _factory.CreateClient();
+                wrongToken.DefaultRequestHeaders.Add("Origin", "http://localhost:5173");
+                wrongToken.DefaultRequestHeaders.Add("X-DocumentIDE-Session-Token", "invalid-token");
+                using var wrongResponse = await wrongToken.GetAsync(route);
+                Assert.Equal(HttpStatusCode.Unauthorized, wrongResponse.StatusCode);
+            }
+        }
+
+        // No unauthenticated or rejected request touched the repository.
+        Assert.Equal(headBefore, Head(repo));
+        Assert.Equal(statusBefore, Status(repo));
+    }
+
+    // -----------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------
+
+    private static string HistoryUri(string path, int? skip = null, int? limit = null)
+    {
+        string query = $"?path={Uri.EscapeDataString(path)}";
+        if (skip is not null)
+        {
+            query += $"&skip={skip.Value}";
+        }
+
+        if (limit is not null)
+        {
+            query += $"&limit={limit.Value}";
+        }
+
+        return "/api/source-control/history" + query;
+    }
+
+    private static string FileHistoryUri(string path, string file, int? skip = null, int? limit = null)
+    {
+        string query = $"?path={Uri.EscapeDataString(path)}&file={Uri.EscapeDataString(file)}";
+        if (skip is not null)
+        {
+            query += $"&skip={skip.Value}";
+        }
+
+        if (limit is not null)
+        {
+            query += $"&limit={limit.Value}";
+        }
+
+        return "/api/source-control/file-history" + query;
+    }
+
+    private static string FileVersionUri(string path, string file, string commit) =>
+        $"/api/source-control/file-version?path={Uri.EscapeDataString(path)}" +
+        $"&file={Uri.EscapeDataString(file)}&commit={Uri.EscapeDataString(commit)}";
+
+    private Task<HttpClient> CreateAuthorizedClientAsync()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var tokenProvider = scope.ServiceProvider.GetRequiredService<ISessionTokenProvider>();
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("Origin", "http://localhost:5173");
+        client.DefaultRequestHeaders.Add("X-DocumentIDE-Session-Token", tokenProvider.SessionToken);
+        return Task.FromResult(client);
+    }
+
+    private static string Head(TestGitRepository repo) =>
+        TestGitRepository.RunGitCaptureUtf8(repo.RootPath, "rev-parse", "HEAD").Trim();
+
+    private static string Status(TestGitRepository repo) =>
+        TestGitRepository.RunGitCaptureUtf8(repo.RootPath, "status", "--porcelain=v2", "-z");
+
+    /// <summary>
+    /// Deterministic three-commit history (the same fixture the service suite
+    /// uses, kept local to this host-level class).
+    /// </summary>
+    private static TestGitRepository CreateRepositoryWithKnownHistory()
+    {
+        var repo = TestGitRepository.Create($"scm08-api-{Guid.NewGuid():N}");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "checkout", "-b", "main"));
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "config", "user.name", "SCM-08 Author"));
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "config", "user.email", "scm08@example.invalid"));
+
+        repo.WriteFile("docs/a.md", "a v1");
+        repo.WriteFile("docs/notes.md", "notes v1");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "-A"));
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "commit", "-qm", "first commit"));
+
+        repo.WriteFile("docs/a.md", "a v2");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "-A"));
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "commit", "-qm", "second: edits a"));
+
+        repo.WriteFile("docs/a.md", "a v3");
+        repo.WriteFile("docs/b \u00e9.md", "b v1");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "-A"));
+        Assert.Equal(
+            0,
+            TestGitRepository.RunGit(repo.RootPath, "commit", "-qm", "third: adds a unicode file"));
+
+        return repo;
+    }
+
+    private static TestGitRepository CreateRepositoryWithManyCommits(int commitCount)
+    {
+        var repo = TestGitRepository.Create($"scm08-api-large-{Guid.NewGuid():N}");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "checkout", "-b", "main"));
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "config", "user.name", "SCM-08 Author"));
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "config", "user.email", "scm08@example.invalid"));
+
+        for (int index = 1; index <= commitCount; index++)
+        {
+            repo.WriteFile("docs/journal.md", $"entry {index:D2}");
+            Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "-A"));
+            Assert.Equal(
+                0,
+                TestGitRepository.RunGit(repo.RootPath, "commit", "-qm", $"commit {index:D2}"));
+        }
+
+        return repo;
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+        }
+        catch (Exception)
+        {
+            // Best effort cleanup; a locked temp directory must not fail the test.
+        }
+    }
+}
