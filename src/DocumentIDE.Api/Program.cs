@@ -90,6 +90,10 @@ builder.Services.AddScoped<IDocumentSearchService, DocumentSearchService>();
 builder.Services.AddControllers();
 DocumentIDE.Api.BatchPreviewRegistration.AddBatchPreviewServices(builder.Services);
 
+// G2/G3/G8: wire the reviewed batch apply/undo/history engines, the realtime
+// search service and the PDF finalization engines behind the privileged API.
+builder.Services.AddPrivilegedSurfaces();
+
 var app = builder.Build();
 
 // Ensure DB migrations run on startup

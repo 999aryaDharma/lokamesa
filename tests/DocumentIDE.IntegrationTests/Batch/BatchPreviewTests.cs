@@ -206,7 +206,15 @@ public sealed class BatchPreviewTests : IDisposable
         var stale = await client.PutAsJsonAsync($"/api/batch-operations/{planId}/selection", selection);
         Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
         Assert.Equal("StalePlan", (await stale.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("errorCode").GetString());
-        Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync($"/api/batch-operations/{planId}/apply", new { })).StatusCode);
+        // G2: the reviewed apply route is now served (it was a deliberate 404 before
+        // the wiring fix). The only reviewed file is unselected, so apply completes
+        // without mutating and reports no per-file outcomes.
+        using (var applied = await client.PostAsJsonAsync($"/api/batch-operations/{planId}/apply", new { }))
+        {
+            Assert.Equal(HttpStatusCode.OK, applied.StatusCode);
+            Assert.Empty((await applied.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("files").EnumerateArray());
+        }
+        Assert.Equal("changed after preview", await File.ReadAllTextAsync(Path.Combine(_root, "notes.md")));
         Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsync($"/api/batch-operations/{planId}/cancel", null)).StatusCode);
     }
 

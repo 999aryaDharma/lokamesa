@@ -50,6 +50,10 @@ public class WebAppHost : IAsyncDisposable, IDisposable
         builder.Services.AddSingleton<ISessionTokenProvider, SessionTokenProvider>();
         if (database != null) builder.Services.AddSingleton(database);
         builder.Services.AddBatchPreviewServices();
+        // G4: serve the required privileged surfaces (Word open, folder sources,
+        // rebind, batch apply/undo, search, PDF) through the same FND-02/QA-03
+        // guard. The controller allow-list below still restricts the surface.
+        builder.Services.AddPrivilegedSurfaces();
         builder.Services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
         builder.Services.AddScoped<IFolderSourceRepository, FolderSourceRepository>();
         builder.Services.AddScoped<StartupRecoveryService>();
@@ -137,6 +141,19 @@ public class WebAppHost : IAsyncDisposable, IDisposable
 
     private sealed class BatchPreviewControllerProvider : ControllerFeatureProvider
     {
-        protected override bool IsController(TypeInfo typeInfo) => typeInfo.AsType() == typeof(BatchPreviewController);
+        // G4: the shipped desktop host deliberately allow-lists its privileged
+        // controller surface. Security is enforced per request by
+        // PrivilegedRequestGuard (Origin/Host/session token), not by omission.
+        private static readonly Type[] AllowedControllers =
+        {
+            typeof(BatchPreviewController),
+            typeof(WordController),
+            typeof(FolderSourcesController),
+            typeof(MoveCorrelationController),
+            typeof(SearchController),
+            typeof(PdfController),
+        };
+
+        protected override bool IsController(TypeInfo typeInfo) => Array.IndexOf(AllowedControllers, typeInfo.AsType()) >= 0;
     }
 }

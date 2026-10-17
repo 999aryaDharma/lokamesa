@@ -2,6 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { batchRequest, type Preview } from './batchApi';
 import SearchReplaceReview from './SearchReplaceReview';
 
+export interface BatchApplyResult {
+  planId: string; snapshotId: string | null; status: string;
+  files: { documentId: string; filePath: string; outcome: string; reasonCode: string | null; detail: string | null }[];
+}
+
 const scopeNames = ['Selection', 'Folder', 'Workspace', 'Collection'];
 const lines = (value: string) => value.split(/\r?\n/).map(v => v.trim()).filter(Boolean);
 export default function BatchPreviewPanel() {
@@ -23,8 +28,12 @@ export default function BatchPreviewPanel() {
   const [saved, setSaved] = useState(false);
   const [stale, setStale] = useState(false);
   const [pollFailed, setPollFailed] = useState(false);
+  const [applyState, setApplyState] = useState<{ planId: string; summary: string } | null>(null);
   const active = useRef<{ controller: AbortController; planId?: string; timer?: ReturnType<typeof setTimeout>; running: boolean } | null>(null);
   const editable = preview?.status === 'Completed' && !busy && !stale;
+  // Applying uses the plan that was last saved server-side, so unsaved local
+  // edits (dirty) must be saved first; a plan can only be applied once.
+  const canApply = editable && !dirty && applyState?.planId !== preview?.planId;
   useEffect(() => () => {
     const job = active.current;
     if (!job) return;
@@ -72,7 +81,7 @@ export default function BatchPreviewPanel() {
     if (active.current) { active.current.controller.abort(); clearTimeout(active.current.timer); }
     const job = { controller: new AbortController(), running: true, planId: undefined as string | undefined, timer: undefined as ReturnType<typeof setTimeout> | undefined };
     active.current = job;
-    setError(''); setPreview(null); setBusy(true); setDirty(false); setSaved(false); setStale(false); setPollFailed(false);
+    setError(''); setPreview(null); setBusy(true); setDirty(false); setSaved(false); setStale(false); setPollFailed(false); setApplyState(null);
     try {
       const result = await batchRequest<{ planId: string }>('/preview', { method: 'POST', body: JSON.stringify({ scope: { workspaceId, type: Number(type), documentIds: type === '0' ? documentIds : [], folderPath: type === '1' ? folderPath : null, collectionId: type === '3' ? collectionId : null, includeSubfolders: type === '1' ? includeSubfolders : true, excludedBranches: type === '1' ? lines(excludedBranches) : [] }, find, replacement }) });
       if (active.current !== job) {
@@ -104,6 +113,21 @@ export default function BatchPreviewPanel() {
       const data = await batchRequest<Preview>(`/${encodeURIComponent(preview.planId)}/selection`, { method: 'PUT', signal: job.controller.signal, body: JSON.stringify({ files: preview.files.map(f => ({ documentId: f.documentId, selected: f.selected, selectedOccurrenceIds: f.occurrences.filter(o => o.selected).map(o => o.id) })) }) });
       if (job.controller.signal.aborted) return;
       setPreview(data); setDirty(false); setSaved(true);
+    } catch (e) {
+      if (!job.controller.signal.aborted) { const message = (e as Error).message; setError(message); setStale(message.includes('Re-preview')); }
+    } finally { if (!job.controller.signal.aborted) setBusy(false); }
+  }
+  async function apply() {
+    const job = active.current;
+    if (!preview || !job || !canApply) return;
+    setBusy(true); setError('');
+    try {
+      const result = await batchRequest<BatchApplyResult>(`/${encodeURIComponent(preview.planId)}/apply`, { method: 'POST', signal: job.controller.signal });
+      if (job.controller.signal.aborted) return;
+      const applied = result.files.filter(f => f.outcome === 'Success').length;
+      const skipped = result.files.filter(f => f.outcome === 'Skipped').length;
+      const failed = result.files.filter(f => f.outcome === 'Failure').length;
+      setApplyState({ planId: preview.planId, summary: `Apply ${result.status}: ${applied} applied / ${skipped} skipped / ${failed} failed` });
     } catch (e) {
       if (!job.controller.signal.aborted) { const message = (e as Error).message; setError(message); setStale(message.includes('Re-preview')); }
     } finally { if (!job.controller.signal.aborted) setBusy(false); }
@@ -144,7 +168,9 @@ export default function BatchPreviewPanel() {
       />
     </div>}
     <button disabled={!editable || !dirty} onClick={() => void save()}>Save selection</button>{saved && <p role="status">Selection saved.</p>}
-    <button disabled title="Applying changes is not available yet">Apply</button><p>Preview and review only. Applying changes is not available yet.</p>
+    <button disabled={!canApply} onClick={() => void apply()}>Apply</button>
+    {applyState && <p role="status">{applyState.summary}</p>}
+    {!applyState && dirty && <p role="status">Save the reviewed selection before applying.</p>}
   </section>;
 }
 

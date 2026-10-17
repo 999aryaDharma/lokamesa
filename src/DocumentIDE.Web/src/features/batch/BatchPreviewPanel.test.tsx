@@ -13,14 +13,16 @@ const completed = {
 };
 let getPlan: unknown;
 let saveStatus: number;
+let applyStatus: number;
 let requests: { url: string; init?: RequestInit }[];
+const applied = { planId: 'p1', snapshotId: 's1', status: 'Completed', files: [{ documentId: 'd1', filePath: 'one.docx', outcome: 'Success', reasonCode: null, detail: null }] };
 beforeEach(() => {
-  requests = []; getPlan = completed; saveStatus = 200;
+  requests = []; getPlan = completed; saveStatus = 200; applyStatus = 200;
   Object.assign(window, { __DOCUMENTIDE_API_URL__: 'http://localhost:5000', __DOCUMENTIDE_SESSION_TOKEN__: 'secret' });
   vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
     requests.push({ url, init });
-    const data = url.endsWith('/workspaces') ? [{ id: 'w1', name: 'Office' }] : url.endsWith('/scope-options') ? { documents: [{ id: 'trusted-id', fileName: 'Trusted.md' }], collections: [] } : url.endsWith('/preview') ? { planId: 'p1', jobId: 'j1' } : getPlan;
-    const status = url.endsWith('/selection') ? saveStatus : url.endsWith('/cancel') ? 204 : 200;
+    const data = url.endsWith('/workspaces') ? [{ id: 'w1', name: 'Office' }] : url.endsWith('/scope-options') ? { documents: [{ id: 'trusted-id', fileName: 'Trusted.md' }], collections: [] } : url.endsWith('/preview') ? { planId: 'p1', jobId: 'j1' } : url.endsWith('/apply') ? applied : getPlan;
+    const status = url.endsWith('/selection') ? saveStatus : url.endsWith('/apply') ? applyStatus : url.endsWith('/cancel') ? 204 : 200;
     return { ok: status < 400, status, json: async () => data } as Response;
   }));
 });
@@ -33,17 +35,37 @@ async function start() {
   fireEvent.change(screen.getByLabelText('Exact find'), { target: { value: 'needle' } });
   fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
 }
-it('requests explicit authenticated scope and renders counts, origins, scope and failures without apply', async () => {
+it('requests explicit authenticated scope and renders counts, origins, scope and failures', async () => {
   await start();
   expect(await screen.findByText('2 files scanned; 1 files affected; 4 occurrences')).toBeInTheDocument();
   for (const origin of ['Body', 'Table', 'Header', 'Footer']) expect(screen.getByText(`${origin}: 1`)).toBeInTheDocument();
   expect(screen.getByText('child')).toBeInTheDocument();
   expect(screen.getByText(/InvalidPackage/)).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled();
-  expect(screen.getByText('Preview and review only. Applying changes is not available yet.')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Apply' })).toBeEnabled();
   const request = requests.find(r => r.url.endsWith('/preview'))!;
   expect(JSON.parse(request.init!.body as string).scope).toMatchObject({ workspaceId: 'w1', type: 1, includeSubfolders: true, folderPath: 'root' });
   expect(request.init!.headers).toMatchObject({ 'X-DocumentIDE-Session-Token': 'secret' });
+});
+it('applies the saved reviewed plan through the API and reports the typed outcome once', async () => {
+  await start(); await screen.findByText('Completed: 100%');
+  fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+  expect(await screen.findByText('Apply Completed: 1 applied / 0 skipped / 0 failed')).toBeInTheDocument();
+  const request = requests.find(r => r.url.endsWith('/p1/apply'))!;
+  expect(request.init!.method).toBe('POST');
+  expect(request.init!.headers).toMatchObject({ 'X-DocumentIDE-Session-Token': 'secret' });
+  expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled();
+});
+it('requires re-preview when apply is rejected as stale and withholds apply until saved', async () => {
+  await start(); await screen.findByText('Completed: 100%');
+  fireEvent.click(screen.getByLabelText('Select one.docx'));
+  expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Save selection' }));
+  await screen.findByText('Selection saved.');
+  expect(screen.getByRole('button', { name: 'Apply' })).toBeEnabled();
+  applyStatus = 409;
+  fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Plan is stale or expired. Re-preview required.');
+  expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled();
 });
 it('keeps edits local until Save selection and requires re-preview on stale save', async () => {
   await start(); await screen.findByText('Completed: 100%');
