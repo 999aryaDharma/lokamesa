@@ -842,6 +842,127 @@ public sealed class GitCommitTests
         Assert.Equal(GitProcessErrorKind.GitWorktreeInvalid, Assert.IsType<GitProcessResult>(result.Failure).ErrorKind);
     }
 
+    // ---------------------------------------------------------------------
+    // Step 6 — Argument discipline: no -a/--all, no remote, worktree scope
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Required test 5 (part 1): "the commit path never passes <c>-a</c> /
+    /// <c>--all</c>." Even for Commit All, the commit invocation itself is the
+    /// plain <c>["commit", "-m", message]</c>; the only <c>--all</c> in the whole
+    /// request is the SCM-06 staging step (spec 13 §9.4/§11.2).
+    /// </summary>
+    [Fact]
+    public async Task CommitAllNeverUsesTheAllFlagOnTheCommitItself()
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md", "docs/b.md" });
+        repo.WriteFile("docs/a.md", "a v2");
+        repo.WriteFile("docs/b.md", "b v2");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "--", "docs/b.md"));
+
+        var recording = new RecordingGitProcessRunner(
+            new GitProcessRunner(GitProcessRunnerOptions.Default, new GitWorktreeMutationQueue()));
+        (GitCommitService service, _, _, _) = CreateService(recording);
+
+        GitCommitResult result = await service.CommitAllAsync(repo.RootPath, "commit all");
+
+        Assert.Equal(GitCommitOutcome.Succeeded, result.Outcome);
+        IReadOnlyList<string> commitInvocation = Assert.Single(
+            recording.Invocations,
+            arguments => arguments[0] == "commit");
+        Assert.Equal(new[] { "commit", "-m", "commit all" }, commitInvocation);
+
+        // The commit invocation is exactly the plain form, so it carries no
+        // -a/--all: the only --all anywhere is the SCM-06 staging step.
+        Assert.Equal(
+            new[] { "add", "--all", "--", "." },
+            Assert.Single(recording.Invocations, arguments => arguments.Contains("--all")));
+
+        Assert.DoesNotContain(recording.Invocations, arguments => arguments.Contains("-a"));
+        Assert.DoesNotContain(recording.Invocations, arguments => arguments.Contains("--amend"));
+        Assert.DoesNotContain(recording.Invocations, arguments => arguments.Contains("--allow-empty"));
+        Assert.DoesNotContain(recording.Invocations, arguments => arguments.Contains("--no-verify"));
+
+        // Both paths are committed, which proves the staging step did the work
+        // rather than the commit invocation.
+        Assert.Equal(
+            new[] { "docs/a.md", "docs/b.md" },
+            CommitFiles(repo, result.Commit!.CommitId).OrderBy(name => name, StringComparer.Ordinal).ToArray());
+    }
+
+    /// <summary>
+    /// Required test 5 (part 2): "no automatic push." Neither flow runs any
+    /// remote-facing subcommand, so a commit can never publish itself
+    /// (spec 13 §14.4/§23).
+    /// </summary>
+    [Fact]
+    public async Task CommitNeverTouchesARemote()
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md" });
+        repo.WriteFile("docs/a.md", "a v2");
+
+        var recording = new RecordingGitProcessRunner(
+            new GitProcessRunner(GitProcessRunnerOptions.Default, new GitWorktreeMutationQueue()));
+        (GitCommitService service, _, _, _) = CreateService(recording);
+
+        Assert.Equal(GitCommitOutcome.Succeeded, (await service.CommitAllAsync(repo.RootPath, "one")).Outcome);
+        repo.WriteFile("docs/a.md", "a v3");
+        Assert.Equal(GitCommitOutcome.Succeeded, (await service.CommitAllAsync(repo.RootPath, "two")).Outcome);
+
+        string[] remoteCommand = { "push", "fetch", "pull", "remote", "ls-remote", "clone", "submodule" };
+        Assert.DoesNotContain(recording.Invocations, arguments => remoteCommand.Contains(arguments[0]));
+    }
+
+    /// <summary>
+    /// The commit is scoped to the resolved worktree: committing inside a linked
+    /// worktree advances only that worktree's HEAD, runs Git with the linked
+    /// worktree root as the working directory (the SCM-01 mutation-queue key),
+    /// and reports the linked branch (spec 13 §5/§9.4/§19).
+    /// </summary>
+    [Fact]
+    public async Task CommitInALinkedWorktreeAdvancesOnlyThatWorktree()
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md" });
+        string mainHeadBefore = Head(repo);
+
+        Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "scm07"));
+        string worktreePath = Path.Combine(Path.GetTempPath(), "scm07", $"linked-{Guid.NewGuid():N}");
+        try
+        {
+            Assert.Equal(
+                0,
+                TestGitRepository.RunGit(repo.RootPath, "worktree", "add", "-q", "-b", "linked", worktreePath));
+            File.WriteAllText(Path.Combine(worktreePath, "docs", "a.md"), "linked v2");
+            Assert.Equal(0, TestGitRepository.RunGit(worktreePath, "add", "--", "docs/a.md"));
+
+            var recording = new RecordingGitProcessRunner(
+                new GitProcessRunner(GitProcessRunnerOptions.Default, new GitWorktreeMutationQueue()));
+            (GitCommitService service, _, _, _) = CreateService(recording);
+
+            GitCommitResult result = await service.CommitAsync(worktreePath, "linked commit");
+
+            Assert.Equal(GitCommitOutcome.Succeeded, result.Outcome);
+            Assert.Equal("linked", result.Commit!.BranchName);
+            Assert.Equal(Head(worktreePath), result.Commit.CommitId);
+
+            // The main worktree's HEAD was not advanced by the linked commit.
+            Assert.Equal(mainHeadBefore, Head(repo));
+
+            // The mutation ran in the linked worktree root, not the main one.
+            GitProcessRequest commitRequest = Assert.Single(
+                recording.Requests,
+                request => request.Arguments[0] == "commit");
+            Assert.Equal(
+                Path.GetFullPath(worktreePath),
+                Path.GetFullPath(commitRequest.WorkingDirectory),
+                ignoreCase: true);
+        }
+        finally
+        {
+            DeleteDirectoryForcefully(worktreePath);
+        }
+    }
+
     // -----------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------
@@ -1002,6 +1123,9 @@ public sealed class GitCommitTests
 
         public List<IReadOnlyList<string>> Invocations { get; } = new();
 
+        /// <summary>Full requests, so tests can also assert the working directory scope.</summary>
+        public List<GitProcessRequest> Requests { get; } = new();
+
         public Task<GitCapabilityInfo> GetCapabilityAsync(CancellationToken cancellationToken = default) =>
             _inner.GetCapabilityAsync(cancellationToken);
 
@@ -1012,6 +1136,7 @@ public sealed class GitCommitTests
             lock (Invocations)
             {
                 Invocations.Add(request.Arguments);
+                Requests.Add(request);
             }
 
             return await _inner.RunAsync(request, cancellationToken);
