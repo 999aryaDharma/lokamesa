@@ -415,4 +415,38 @@ describe('SourceControlPanel', () => {
     expect(onOpenDocument).not.toHaveBeenCalled();
     expect(row).toHaveAttribute('aria-selected', 'false');
   });
+
+  it('hosts a caller-provided commit box above the change list without owning commit logic', () => {
+    render(
+      <SourceControlPanel
+        status={statusModel({
+          sections: sections({ unstaged: [change('contract.docx')] }),
+        })}
+        renderCommitBox={() => (
+          <div data-testid="hosted-commit-box">
+            <button type="button">Commit</button>
+          </div>
+        )}
+      />
+    );
+
+    const hosted = screen.getByTestId('hosted-commit-box');
+    const list = screen.getByTestId('source-control-entry-contract.docx');
+
+    // The commit box belongs to the caller: the pane only places it, above the
+    // changes, and keeps no commit state of its own (SCM-07, spec 13 §11).
+    expect(hosted).toBeInTheDocument();
+    expect(within(hosted).getByRole('button', { name: 'Commit' })).toBeInTheDocument();
+    expect(hosted.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('renders no commit box when the caller provides none', () => {
+    render(
+      <SourceControlPanel
+        status={statusModel({ sections: sections({ unstaged: [change('contract.docx')] }) })}
+      />
+    );
+
+    expect(screen.queryByTestId('commit-box')).toBeNull();
+  });
 });
