@@ -1,10 +1,14 @@
 // src/DocumentIDE.Web/src/features/graph/graphStore.ts
 
 /**
- * Graph state store – persists node coordinates independently from canvas.
+ * Graph state store – persists node coordinates independently from canvas and
+ * holds the loaded relation graph (nodes + truthful edges) for the Graph view.
+ *
+ * Truthfulness note (master spec §27.2 / spec 08 §14): an edge's `origin`
+ * classifies it as `explicit` (solid) or `inferred` (dashed). The store never
+ * reclassifies; rendering must not present an inferred relation as factual.
  */
 type Listener = () => void;
-
 
 const POSITION_STORAGE_KEY = "graphNodePositions";
 
@@ -15,10 +19,37 @@ type Position = {
   y: number;
 };
 
+/** A document node in the knowledge graph. */
+export interface GraphNode {
+  id: string;
+  title: string;
+  docType?: 'docx' | 'md' | 'unknown';
+}
+
+/** Edge origin, mapped from the backend RelationOrigin vocabulary. */
+export type GraphEdgeOrigin = 'explicit' | 'inferred';
+
+/**
+ * A relation edge. `origin` is `explicit` for Markdown links / wikilinks /
+ * frontmatter / manual relations and `inferred` for semantic suggestions.
+ */
+export interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  relationType: string;
+  origin: GraphEdgeOrigin;
+  confidence?: number;
+}
+
 export interface GraphActions {
   /** Set position for a node */
   setPosition: (id: NodeId, pos: Position) => void;
-  /** Reset all positions (used in tests) */
+  /** Replace the loaded graph (nodes + edges) in one atomic update. */
+  setGraph: (nodes: GraphNode[], edges: GraphEdge[]) => void;
+  /** Clear the loaded graph (used on workspace switch / tests). */
+  clearGraph: () => void;
+  /** Reset all positions + graph (used in tests) */
   reset: () => void;
   /** Load persisted positions from localStorage (call on startup) */
   loadPersistedPositions: () => void;
@@ -26,10 +57,14 @@ export interface GraphActions {
 
 export type GraphStoreState = {
   positions: Map<NodeId, Position>;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
 } & GraphActions;
 
 class GraphStore {
   private positions = new Map<NodeId, Position>();
+  private nodes: GraphNode[] = [];
+  private edges: GraphEdge[] = [];
   private listeners = new Set<Listener>();
   private cachedSnapshot: GraphStoreState | null = null;
 
@@ -41,8 +76,20 @@ class GraphStore {
       
       this.notify();
     },
+    setGraph: (nodes: GraphNode[], edges: GraphEdge[]) => {
+      this.nodes = [...nodes];
+      this.edges = [...edges];
+      this.notify();
+    },
+    clearGraph: () => {
+      this.nodes = [];
+      this.edges = [];
+      this.notify();
+    },
     reset: () => {
       this.positions.clear();
+      this.nodes = [];
+      this.edges = [];
       // also clear persisted storage for test isolation
       try {
         localStorage.removeItem(POSITION_STORAGE_KEY);
@@ -74,6 +121,8 @@ class GraphStore {
   private buildSnapshot(): GraphStoreState {
     return {
       positions: new Map(this.positions),
+      nodes: this.nodes,
+      edges: this.edges,
       ...this.actions,
     };
   }
@@ -97,7 +146,10 @@ class GraphStore {
 }
 
 export const graphStoreInstance = new GraphStore();
+
 export const useGraphStore = {
-  getState: () => graphStoreInstance.getState(),
+  getState: (): GraphStoreState => graphStoreInstance.getState(),
   subscribe: (listener: Listener) => graphStoreInstance.subscribe(listener),
+  setGraph: (nodes: GraphNode[], edges: GraphEdge[]): void =>
+    graphStoreInstance.getState().setGraph(nodes, edges),
 };

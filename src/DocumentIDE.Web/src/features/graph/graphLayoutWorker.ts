@@ -13,23 +13,23 @@ export interface GraphEdge {
   [key: string]: any;
 }
 
-export interface BoundedGraphResult {
+export interface BoundedGraphResult<N extends { id: string } = GraphNode, E extends { source: string; target: string } = GraphEdge> {
   isBounded: boolean;
-  visibleNodes: GraphNode[];
-  visibleEdges: GraphEdge[];
+  visibleNodes: N[];
+  visibleEdges: E[];
 }
 
 /**
  * Bounds visible nodes when node count exceeds threshold (>250 by default),
  * unless full graph rendering is explicitly enabled.
  */
-export function computeBoundedGraph(
-  nodes: GraphNode[],
-  edges: GraphEdge[],
+export function computeBoundedGraph<N extends { id: string }, E extends { source: string; target: string }>(
+  nodes: N[],
+  edges: E[],
   selectedNodeId?: string,
   isFullGraphExplicit: boolean = false,
   threshold: number = 250
-): BoundedGraphResult {
+): BoundedGraphResult<N, E> {
   if (isFullGraphExplicit || nodes.length <= threshold) {
     return {
       isBounded: false,
@@ -86,9 +86,9 @@ export function computeBoundedGraph(
 /**
  * Computes force / grid layout asynchronously to prevent UI thread blocking.
  */
-export async function computeLayoutAsync(
-  nodes: GraphNode[],
-  _edges: GraphEdge[]
+export async function computeLayoutAsync<N extends { id: string }>(
+  nodes: N[],
+  _edges: Array<{ source: string; target: string }>
 ): Promise<Map<string, { x: number; y: number }>> {
   return new Promise((resolve) => {
     // Off-thread asynchronous positioning (can also dispatch to WebWorker if available)
