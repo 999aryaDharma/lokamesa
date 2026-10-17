@@ -16,6 +16,20 @@
  *     explicit-vs-inferred semantics.
  *   - G7: double-clicking a Markdown graph node or canvas card opens the
  *     internal Markdown editor overlay (source-first, safe-write via the API).
+ *   - G8: the PDF export panel mounts from the tool bar against the live
+ *     privileged PDF route (single / separate / merge), driven by the current
+ *     canvas selection and its workspace document paths.
+ *
+ * G4 deliberate decision — DOCX Quick Look: the owner DOCX "preview" surface is
+ * intentionally open-in-Word, not the WORD-04 high-fidelity `QuickLook`
+ * overlay. `QuickLook` needs a page-render source (Word → temp PDF → page
+ * images) that no shipped host exposes (`QuickLookService` has no controller;
+ * `IQuickLookRenderer` is not registered in any host), and the master spec
+ * (spec 06 §12) makes that pipeline the prerequisite. Building the overlay over
+ * a non-existent data source would be dishonest, so the product path stays:
+ * double-click a DOCX (canvas card or graph node) → `openInWord` →
+ * `POST /api/word/open`. Mounting `QuickLook` is deferred until a page-render
+ * route exists; this is recorded in `docs/quality/v1-gap-fixes-pdf-quicklook.md`.
  *
  * Workspace identity comes from the host-injected
  * `window.__DOCUMENTIDE_WORKSPACE_ID__` global, falling back to `default`.
@@ -31,6 +45,8 @@ import DocumentGraph from './features/graph/DocumentGraph';
 import type { GraphNode } from './features/graph/graphStore';
 import DocumentList from './features/list/DocumentList';
 import MarkdownEditor from './features/markdown/MarkdownEditor';
+import PdfExportPanel from './features/pdf/PdfExportPanel';
+import type { PdfSelectableDocument } from './features/pdf/PdfActions';
 import { SearchPanel } from './features/search/SearchPanel';
 import { SharePanel } from './features/sharing/SharePanel';
 import AddFolderSource from './features/workspace/AddFolderSource';
@@ -74,9 +90,16 @@ export default function App() {
   const [sharesOpen, setSharesOpen] = useState(false);
   const [addFolderOpen, setAddFolderOpen] = useState(false);
   const [batchOpen, setBatchOpen] = useState(false);
+  const [pdfOpen, setPdfOpen] = useState(false);
   const [markdownDoc, setMarkdownDoc] = useState<{ id: string; title: string } | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [folderFiles, setFolderFiles] = useState<Record<string, FolderPickerFile[]>>({});
+  /**
+   * G8: workspace document id → local source path, from the same bootstrap that
+   * populates the canvas. Used to resolve the PDF export source; never a new
+   * local-path surface (the DTO already carries it for the owner app only).
+   */
+  const [documentPaths, setDocumentPaths] = useState<Record<string, string>>({});
 
   /**
    * Document objects produced by the bootstrap, keyed by DocumentId. Folder
@@ -98,6 +121,13 @@ export default function App() {
     });
     documentObjectsRef.current = new Map(result.documentObjects.map((doc) => [doc.id, doc]));
     setFolderFiles(result.folderFiles);
+    setDocumentPaths(
+      Object.fromEntries(
+        result.documents
+          .filter((doc) => Boolean(doc.currentPath))
+          .map((doc) => [doc.id, doc.currentPath as string]),
+      ),
+    );
     setObjects(result.objects);
   }, [workspaceId, setObjects]);
 
@@ -140,6 +170,28 @@ export default function App() {
   );
   const selectedDocumentIds = useMemo(() => Array.from(selectedIds), [selectedIds]);
 
+  /**
+   * G8: the PDF export selection is the current canvas selection, mapped to the
+   * presentational surface. `kind` comes from the canvas doc type, so a
+   * non-DOCX selection simply offers no export (PDF stays output-only).
+   */
+  const pdfSelection = useMemo<PdfSelectableDocument[]>(
+    () =>
+      objects
+        .filter((object) => object.type === 'document' && selectedIds.has(object.id))
+        .map((object) => ({
+          id: object.id,
+          name: object.title,
+          kind: object.docType ?? 'unknown',
+        })),
+    [objects, selectedIds],
+  );
+
+  const resolveDocumentPath = useCallback(
+    (documentId: string) => documentPaths[documentId],
+    [documentPaths],
+  );
+
   return (
     <div className="w-screen h-screen overflow-hidden bg-slate-50 flex flex-col">
       <nav
@@ -175,6 +227,13 @@ export default function App() {
           onClick={() => setBatchOpen((open) => !open)}
         >
           Batch operations
+        </button>
+        <button
+          type="button"
+          aria-pressed={pdfOpen}
+          onClick={() => setPdfOpen((open) => !open)}
+        >
+          PDF
         </button>
       </nav>
 
@@ -247,6 +306,14 @@ export default function App() {
         )}
 
         {batchOpen && <BatchPreviewPanel />}
+
+        {pdfOpen && (
+          <PdfExportPanel
+            selection={pdfSelection}
+            resolveSourcePath={resolveDocumentPath}
+            onClose={() => setPdfOpen(false)}
+          />
+        )}
 
         {markdownDoc && (
           <div className="absolute inset-0 z-40 bg-white" data-testid="markdown-overlay">
