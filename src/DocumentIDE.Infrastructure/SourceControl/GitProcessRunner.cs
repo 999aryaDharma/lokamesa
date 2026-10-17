@@ -208,8 +208,14 @@ public sealed class GitProcessRunner : IGitProcessRunner
         CancellationToken cancellationToken)
     {
         CloseChildStdin(process);
-        Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync();
+        bool captureBinary = request.CaptureBinaryOutput;
         Task<string> stderrTask = process.StandardError.ReadToEndAsync();
+        Task<byte[]?> stdoutBytesTask = captureBinary
+            ? ReadAllBytesAsync(process.StandardOutput.BaseStream)
+            : Task.FromResult<byte[]?>(null);
+        Task<string> stdoutTask = captureBinary
+            ? DecodeUtf8Async(stdoutBytesTask)
+            : process.StandardOutput.ReadToEndAsync();
 
         using var timeoutSource = new CancellationTokenSource(timeout);
         using var linkedSource = CancellationTokenSource.CreateLinkedTokenSource(
@@ -228,6 +234,7 @@ public sealed class GitProcessRunner : IGitProcessRunner
 
             string killedStdout = await ReadStreamBestEffortAsync(stdoutTask);
             string killedStderr = await ReadStreamBestEffortAsync(stderrTask);
+            byte[]? killedStdoutBytes = await ReadRawStreamBestEffortAsync(stdoutBytesTask);
 
             return timedOut
                 ? new GitProcessResult(
@@ -237,22 +244,32 @@ public sealed class GitProcessRunner : IGitProcessRunner
                     killedStderr,
                     GitProcessErrorKind.None,
                     $"`{executable} {SummarizeArguments(request.Arguments)}` exceeded the timeout of {timeout} and its process tree was terminated.")
+                {
+                    StandardOutputBytes = killedStdoutBytes,
+                }
                 : new GitProcessResult(
                     GitProcessStatus.Cancelled,
                     null,
                     killedStdout,
                     killedStderr,
                     GitProcessErrorKind.None,
-                    "Git operation was cancelled and its process tree was terminated.");
+                    "Git operation was cancelled and its process tree was terminated.")
+                {
+                    StandardOutputBytes = killedStdoutBytes,
+                };
         }
 
         string stdout = await stdoutTask;
         string stderr = await stderrTask;
+        byte[]? stdoutBytes = await stdoutBytesTask;
         int exitCode = process.ExitCode;
 
         if (exitCode == 0)
         {
-            return new GitProcessResult(GitProcessStatus.Succeeded, exitCode, stdout, stderr);
+            return new GitProcessResult(GitProcessStatus.Succeeded, exitCode, stdout, stderr)
+            {
+                StandardOutputBytes = stdoutBytes,
+            };
         }
 
         return new GitProcessResult(
@@ -261,7 +278,10 @@ public sealed class GitProcessRunner : IGitProcessRunner
             stdout,
             stderr,
             GitFailureClassifier.Classify(exitCode, stdout, stderr),
-            $"`{executable} {SummarizeArguments(request.Arguments)}` exited with code {exitCode}.");
+            $"`{executable} {SummarizeArguments(request.Arguments)}` exited with code {exitCode}.")
+        {
+            StandardOutputBytes = stdoutBytes,
+        };
     }
 
     private static ProcessStartInfo BuildStartInfo(
@@ -388,6 +408,31 @@ public sealed class GitProcessRunner : IGitProcessRunner
         {
             return string.Empty;
         }
+    }
+
+    private static async Task<byte[]?> ReadRawStreamBestEffortAsync(Task<byte[]?> readTask)
+    {
+        try
+        {
+            return await readTask;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static async Task<byte[]?> ReadAllBytesAsync(Stream stream)
+    {
+        using var buffer = new MemoryStream();
+        await stream.CopyToAsync(buffer).ConfigureAwait(false);
+        return buffer.ToArray();
+    }
+
+    private static async Task<string> DecodeUtf8Async(Task<byte[]?> readTask)
+    {
+        byte[]? bytes = await readTask.ConfigureAwait(false);
+        return bytes is null ? string.Empty : Encoding.UTF8.GetString(bytes);
     }
 
     private static string SummarizeArguments(IReadOnlyList<string> arguments) =>
