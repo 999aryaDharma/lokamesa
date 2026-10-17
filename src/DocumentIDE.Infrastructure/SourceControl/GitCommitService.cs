@@ -77,13 +77,58 @@ public sealed class GitCommitService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repositoryPath);
 
+        // Message validation happens before any Git invocation: a blank
+        // message must never become a Git-level "empty commit message"
+        // failure, and a NUL cannot travel as a process argument at all
+        // (spec 13 §11.1).
+        GitCommitResult? rejection = ValidateMessage(flow, message);
+        if (rejection is not null)
+        {
+            return rejection;
+        }
+
         GitRepositoryContext context = await _repositories.DiscoverAsync(repositoryPath, cancellationToken);
         if (!context.HasRepository)
         {
             return DiscoveryFailure(flow, context);
         }
 
-        return await CommitCoreAsync(context.WorktreeRoot!, flow, message, cancellationToken);
+        // ValidateMessage guarantees a non-blank message from here on.
+        return await CommitCoreAsync(context.WorktreeRoot!, flow, message!, cancellationToken);
+    }
+
+    /// <summary>
+    /// Validates the client-supplied commit message. Rejection is typed and
+    /// happens before Git runs, so a rejected message can never be interpreted
+    /// as an option or reach a shell (spec 13 §18/§23).
+    /// </summary>
+    private static GitCommitResult? ValidateMessage(GitCommitFlow flow, string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return new GitCommitResult(
+                GitCommitOutcome.MessageRequired,
+                flow,
+                null,
+                null,
+                null,
+                "A commit message is required; no commit was created.",
+                "MessageRequired");
+        }
+
+        if (message.Contains('\0'))
+        {
+            return new GitCommitResult(
+                GitCommitOutcome.MessageInvalid,
+                flow,
+                null,
+                null,
+                null,
+                "The commit message contains an unsupported NUL character; no commit was created.",
+                "MessageInvalid");
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -93,11 +138,11 @@ public sealed class GitCommitService
     private async Task<GitCommitResult> CommitCoreAsync(
         string worktreeRoot,
         GitCommitFlow flow,
-        string? message,
+        string message,
         CancellationToken cancellationToken)
     {
         GitProcessResult commit = await _runner.RunAsync(
-            new GitProcessRequest(new[] { "commit", "-m", message! }, worktreeRoot),
+            new GitProcessRequest(new[] { "commit", "-m", message }, worktreeRoot),
             cancellationToken);
 
         if (!commit.IsSuccess)

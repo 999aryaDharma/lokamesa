@@ -98,6 +98,109 @@ public sealed class GitCommitTests
         Assert.Empty(refreshed.Snapshot.Entries.Where(entry => entry.HasStagedChange));
     }
 
+    // ---------------------------------------------------------------------
+    // Step 1 — Commit message validation
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Required test 2: an empty or whitespace-only commit message is rejected
+    /// typed before any Git invocation — no commit is created and the staged
+    /// state is untouched (spec 13 §11.1 "the commit message is required").
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("\t\n \r\n")]
+    public async Task BlankOrWhitespaceOnlyCommitMessageIsRejectedTypedWithoutRunningGit(string? message)
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md" });
+        repo.WriteFile("docs/a.md", "a v2");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "--", "docs/a.md"));
+        string headBefore = Head(repo);
+        int countBefore = CommitCount(repo);
+
+        (GitCommitService service, _, _, _) = CreateService();
+        GitCommitResult result = await service.CommitAsync(repo.RootPath, message);
+
+        Assert.Equal(GitCommitOutcome.MessageRequired, result.Outcome);
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Commit);
+        Assert.Null(result.Failure);
+        Assert.False(string.IsNullOrWhiteSpace(result.ErrorCode));
+        Assert.False(string.IsNullOrWhiteSpace(result.Message));
+
+        // No commit, no index change, nothing touched.
+        Assert.Equal(headBefore, Head(repo));
+        Assert.Equal(countBefore, CommitCount(repo));
+        Assert.Equal(new[] { "docs/a.md" }, StagedNames(repo.RootPath).ToArray());
+    }
+
+    /// <summary>
+    /// A message that cannot be passed as a process argument (a NUL character)
+    /// is rejected typed before any Git invocation instead of escaping the
+    /// structured argument boundary.
+    /// </summary>
+    [Fact]
+    public async Task CommitMessageContainingNulIsRejectedTypedWithoutRunningGit()
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md" });
+        repo.WriteFile("docs/a.md", "a v2");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "--", "docs/a.md"));
+        string headBefore = Head(repo);
+
+        var recording = new RecordingGitProcessRunner(
+            new GitProcessRunner(GitProcessRunnerOptions.Default, new GitWorktreeMutationQueue()));
+        (GitCommitService service, _, _, _) = CreateService(recording);
+
+        GitCommitResult result = await service.CommitAsync(repo.RootPath, "subject\0injected");
+
+        Assert.Equal(GitCommitOutcome.MessageInvalid, result.Outcome);
+        Assert.Null(result.Failure);
+        Assert.False(string.IsNullOrWhiteSpace(result.ErrorCode));
+        Assert.Equal(headBefore, Head(repo));
+
+        // A rejected message never reaches Git at all.
+        Assert.Empty(recording.Invocations);
+    }
+
+    /// <summary>
+    /// The commit message is data, never a shell string (spec 13 §18/§23): it
+    /// travels as a single structured <c>-m</c> argument, so metacharacters
+    /// stay literal and no redirection/command substitution happens.
+    /// </summary>
+    [Fact]
+    public async Task CommitMessageIsPassedAsAStructuredArgumentAndNeverShellInterpreted()
+    {
+        using var repo = CreateRepositoryWithBaselineCommit(new[] { "docs/a.md" });
+        repo.WriteFile("docs/a.md", "a v2");
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "--", "docs/a.md"));
+
+        const string message = "feat: \"quoted\" $HOME `id` ; && | > < * ? [x] 'single' %s %n";
+        var recording = new RecordingGitProcessRunner(
+            new GitProcessRunner(GitProcessRunnerOptions.Default, new GitWorktreeMutationQueue()));
+        (GitCommitService service, _, _, _) = CreateService(recording);
+
+        GitCommitResult result = await service.CommitAsync(repo.RootPath, message);
+
+        Assert.Equal(GitCommitOutcome.Succeeded, result.Outcome);
+        Assert.Equal(message, result.Commit!.Summary);
+        Assert.Equal(
+            message,
+            TestGitRepository.RunGitCaptureUtf8(repo.RootPath, "log", "-1", "--format=%s").Trim());
+
+        // The message became one argument of the commit invocation.
+        IReadOnlyList<string> commitInvocation = Assert.Single(
+            recording.Invocations.Where(arguments => arguments[0] == "commit"));
+        Assert.Equal(new[] { "commit", "-m", message }, commitInvocation);
+
+        // No shell interpretation: the metacharacters created no file.
+        Assert.Equal(
+            new[] { "docs/a.md" },
+            CommitFiles(repo, Head(repo)));
+        Assert.Empty(UntrackedNames(repo));
+    }
+
     // -----------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------
@@ -222,6 +325,39 @@ public sealed class GitCommitTests
         }
 
         Directory.Delete(path, recursive: true);
+    }
+
+    /// <summary>
+    /// Records every Git invocation while delegating to a real runner. Used to
+    /// prove which arguments the commit path used (no shell string, no
+    /// <c>-a</c>/<c>--all</c>, no <c>--no-verify</c>) and that it never touched
+    /// a remote.
+    /// </summary>
+    private sealed class RecordingGitProcessRunner : IGitProcessRunner
+    {
+        private readonly IGitProcessRunner _inner;
+
+        public RecordingGitProcessRunner(IGitProcessRunner inner)
+        {
+            _inner = inner;
+        }
+
+        public List<IReadOnlyList<string>> Invocations { get; } = new();
+
+        public Task<GitCapabilityInfo> GetCapabilityAsync(CancellationToken cancellationToken = default) =>
+            _inner.GetCapabilityAsync(cancellationToken);
+
+        public async Task<GitProcessResult> RunAsync(
+            GitProcessRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            lock (Invocations)
+            {
+                Invocations.Add(request.Arguments);
+            }
+
+            return await _inner.RunAsync(request, cancellationToken);
+        }
     }
 
     /// <summary>Git is not installed/discoverable: typed unavailable, never an exception.</summary>
