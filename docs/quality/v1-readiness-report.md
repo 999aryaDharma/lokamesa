@@ -233,3 +233,32 @@ Until then, V1 is **BLOCKED**. The tested subsystem core is substantial, and thi
 ---
 
 *Artifacts: `tests/DocumentIDE.IntegrationTests/Scripts/V1ReadinessGateTests.cs` enforces this report's existence, single-verdict consistency (GO ⇒ no FAIL/UNVERIFIED rows; BLOCKED ⇒ itemized blockers), verbatim coverage of all 22 spec-12 completion gates, scan/offline/risk evidence sections, and the no-skipped-tests rule for release-blocking suites.*
+
+---
+
+## 10. Re-review 2026-10-17 (post Lane B + Lane C + SCM-07 merges)
+
+Verdict unchanged: **BLOCKED**. Blocker set is now much smaller than §5, but two §9 conditions are
+not yet satisfied. Evidence was re-derived from the artifacts on `integration/parallel-batches`
+(HEAD `0c4ff6a`, release gate REL-02 PASSED at `0c4ff6a676946b2714a75f25ccfcdaf5f3fcecfd`).
+
+| Gap | Status | Evidence |
+| --- | --- | --- |
+| G1 graph placeholder | **CLOSED** | `features/graph/DocumentGraph.tsx` is a real view (explicit edges SOLID, inferred/semantic DASHED, top-K capped via `filterSemanticEdgesTopK`), mounted at `App.tsx:221`; `DocumentGraph.test.tsx` `TruthfulEdgeSemantics` present. |
+| G2 batch apply/undo unreachable | **CLOSED** | `BatchPreviewController` exposes `POST {planId}/apply`, `POST {planId}/undo`, `GET {planId}/history`; `BatchPreviewPanel.tsx` has a real `apply()` path with `canApply` (the "not available yet" disabled button is gone). |
+| G3 search unreachable | **CLOSED** | `SearchController` served by the privileged API and registered in the shipped host (`WebAppHost.cs:163`); `SearchPanel` mounted at `App.tsx:200`. |
+| G4 Word/QuickLook unreachable in shipped host | **PARTIALLY CLOSED** | `WebAppHost.cs` now registers the privileged surfaces deliberately (`:160-171`: Word, Search, Pdf, Graph, Markdown + folder sources via `PrivilegedSurfaceRegistration.cs`). The QuickLook overlay is still imported only by its own test. |
+| G5 share lifecycle unreachable | **CLOSED** | `ShareController` + `ShareLifecycleService` (create/list/get/stop/revoke/regenerate/members); `SharePanel` mounted at `App.tsx:35`. **Caveat carried from the lane report:** ShareHost viewer-side stop/revoke is not enforced cross-process (in-memory `ShareTokenService` vs persisted `TokenHash`) — link revocation must not be claimed end-to-end before SHR-09. |
+| G6 workspace/canvas bootstrap unreachable | **CLOSED** | `workspaceBootstrap` + `fetchWorkspaceDocuments`/`fetchFolderSources` (`App.tsx:39-40`) populate the canvas store on startup; `GET /api/workspaces/{id}/documents` added; `AddFolderSource` imported. |
+| G7 markdown editor stub | **CLOSED** | `MarkdownEditor` mounted at `App.tsx:253`; `MarkdownDocumentController` (`GET/PUT /api/documents/{id}/markdown`) served by the host. |
+| G8 PDF finalization unreachable | **OPEN (reduced)** | The privileged route now exists (`PdfController`, registered `WebAppHost.cs:164`) and is exercised by tests, so the backend half of §9 condition 8 is done. But `features/pdf/PdfActions.tsx` is still imported only by its own test — the UX is **not mounted**, and §9 condition 8 explicitly requires the mount. |
+| G9 E2E administrative workflow test missing | **CLOSED** | `tests/DocumentIDE.IntegrationTests/EndToEnd/AdministrativeWorkflowE2ETests.cs` (2/2 passing in the lane run). |
+
+### Remaining conditions before this verdict can become GO
+
+1. §9.8 — mount the PDF UX (`PdfActions`, plus a progress surface) in the app shell against the now-live route.
+2. §9.4 — finish the shipped-host expansion decision for QuickLook (either mount it or record the deliberate
+   product decision that double-click opens Word instead).
+3. Re-run `scripts/verify-release.ps1` after those land and re-issue this report.
+
+This addendum is evidence, not a schedule. It does not itself change the verdict.
