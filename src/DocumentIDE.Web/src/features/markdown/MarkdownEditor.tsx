@@ -1,59 +1,213 @@
-import React, { useEffect, useState } from 'react';
+/**
+ * MD-01 — Source-first Markdown editor (real editing surface).
+ *
+ * Replaces the demo stub: loads raw `.md` source from the document API for a
+ * real stable DocumentId, detects changes, exposes explicit Save (Ctrl+S) and
+ * optional autosave, and reports save state/errors. The `.md` file on disk
+ * remains the source of truth (spec 08 §2) — the editor never invents sidecar
+ * metadata and never injects unsanitized HTML (preview renders inert text; the
+ * escaped source is shown, never executed — spec 08 §6).
+ */
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { loadMarkdown, saveMarkdown } from './markdownApi';
 
+export type MarkdownEditorMode = 'edit' | 'preview' | 'split';
 
-// Placeholder imports – in the real implementation CodeMirror 6 will be used.
-// This component demonstrates the source‑first editor surface required by the sprint.
+export interface MarkdownEditorProps {
+  /** Stable FS-02 document id. When omitted the editor is a scratch surface. */
+  documentId?: string;
+  /** Pre-seeded source (used before/without a document load, e.g. tests). */
+  initialSource?: string;
+  /** Optional autosave (spec 08 §4 — autosave is optional but explicit). */
+  autoSave?: boolean;
+  /** Autosave debounce window in milliseconds. */
+  autoSaveDelayMs?: number;
+  onSaved?: (documentId: string) => void;
+  onClose?: () => void;
+}
 
-export const MarkdownEditor: React.FC = () => {
-  // DocumentId is obtained from route parameters or other context in the real app.
-  const documentId = 'dummy';
-  const [source, setSource] = useState<string>('');
-  const [isDirty, setIsDirty] = useState(false);
+export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
+  documentId,
+  initialSource = '',
+  autoSave = false,
+  autoSaveDelayMs = 1500,
+  onSaved,
+  onClose,
+}) => {
+  const [source, setSource] = useState<string>(initialSource);
+  const [savedSource, setSavedSource] = useState<string>(initialSource);
+  const [mode, setMode] = useState<MarkdownEditorMode>('edit');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const loadToken = useRef(0);
 
-  // Load source on mount – in real code this would call MarkdownDocumentService.
+  const isDirty = source !== savedSource;
+
+  // Load source when the target document changes.
   useEffect(() => {
-    // Simulate async load.
-    const load = async () => {
-      // Placeholder: empty source.
-      setSource('');
-    };
-    load();
-  }, [documentId]);
+    if (!documentId) {
+      setSource(initialSource);
+      setSavedSource(initialSource);
+      return;
+    }
+    const token = ++loadToken.current;
+    setIsLoading(true);
+    setError(null);
+    loadMarkdown(documentId)
+      .then((doc) => {
+        if (loadToken.current !== token) return;
+        setSource(doc.source);
+        setSavedSource(doc.source);
+      })
+      .catch((err: unknown) => {
+        if (loadToken.current !== token) return;
+        setError(err instanceof Error ? err.message : 'Failed to load Markdown document.');
+      })
+      .finally(() => {
+        if (loadToken.current === token) setIsLoading(false);
+      });
+  }, [documentId, initialSource]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setSource(e.target.value);
-    setIsDirty(true);
-  };
+  const handleSave = useCallback(async () => {
+    if (!documentId || !isDirty || isSaving) return;
+    setIsSaving(true);
+    setError(null);
+    try {
+      await saveMarkdown(documentId, source);
+      setSavedSource(source);
+      onSaved?.(documentId);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to save Markdown document.');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [documentId, isDirty, isSaving, source, onSaved]);
 
-  const handleSave = () => {
-    // In real implementation this would invoke a service to persist.
-    console.log(`Saving markdown document ${documentId}, length=${source.length}`);
-    setIsDirty(false);
-  };
-
-  // Ctrl+S shortcut handling.
+  // Ctrl+S / Cmd+S manual save.
   useEffect(() => {
     const keyHandler = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key === 's') {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
         e.preventDefault();
-        handleSave();
+        void handleSave();
       }
     };
     window.addEventListener('keydown', keyHandler);
     return () => window.removeEventListener('keydown', keyHandler);
-  }, [source]);
+  }, [handleSave]);
+
+  // Optional autosave (explicitly enabled by the shell/settings).
+  useEffect(() => {
+    if (!autoSave || !documentId || !isDirty) return;
+    const timer = setTimeout(() => {
+      void handleSave();
+    }, autoSaveDelayMs);
+    return () => clearTimeout(timer);
+  }, [autoSave, autoSaveDelayMs, documentId, isDirty, source, handleSave]);
+
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setSource(e.target.value);
+  }, []);
+
+  const status = useMemo(() => {
+    if (isLoading) return 'Loading…';
+    if (isSaving) return 'Saving…';
+    if (error) return 'Save failed';
+    if (isDirty) return 'Unsaved changes';
+    return 'Saved';
+  }, [isLoading, isSaving, error, isDirty]);
 
   return (
-    <div className="markdown-editor">
-      {/* Simple textarea for now – will be replaced with CodeMirror in future steps. */}
-      <textarea
-        value={source}
-        onChange={handleChange}
-        style={{ width: '100%', height: '80vh' }}
-      />
-      <button onClick={handleSave} disabled={!isDirty}>
-        Save (Ctrl+S)
-      </button>
-    </div>
+    <section className="markdown-editor flex flex-col h-full w-full" aria-label="Markdown editor">
+      <header className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-2">
+        <span className="text-xs font-semibold text-slate-700 truncate" data-testid="markdown-title">
+          {documentId ?? 'Markdown'}
+        </span>
+        <div role="group" aria-label="Editor mode" className="inline-flex rounded border border-slate-200 overflow-hidden">
+          <button
+            type="button"
+            aria-pressed={mode === 'edit'}
+            onClick={() => setMode('edit')}
+            className={`px-2 py-0.5 text-xs ${mode === 'edit' ? 'bg-slate-200' : 'bg-white'}`}
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            aria-pressed={mode === 'preview'}
+            onClick={() => setMode('preview')}
+            className={`px-2 py-0.5 text-xs border-l border-slate-200 ${mode === 'preview' ? 'bg-slate-200' : 'bg-white'}`}
+          >
+            Preview
+          </button>
+          <button
+            type="button"
+            aria-pressed={mode === 'split'}
+            onClick={() => setMode('split')}
+            className={`px-2 py-0.5 text-xs border-l border-slate-200 ${mode === 'split' ? 'bg-slate-200' : 'bg-white'}`}
+          >
+            Split
+          </button>
+        </div>
+
+        <span className="text-[11px] text-slate-500" role="status" data-testid="markdown-status">
+          {status}
+        </span>
+        {isDirty && (
+          <span
+            data-testid="markdown-dirty"
+            className="h-2 w-2 rounded-full bg-amber-400"
+            aria-label="Unsaved changes"
+          />
+        )}
+
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void handleSave()}
+            disabled={!isDirty || isSaving || !documentId}
+            className="px-2 py-1 text-xs rounded bg-blue-600 text-white disabled:opacity-40"
+          >
+            Save (Ctrl+S)
+          </button>
+          {onClose && (
+            <button type="button" onClick={onClose} className="px-2 py-1 text-xs rounded border border-slate-300">
+              Close
+            </button>
+          )}
+        </div>
+      </header>
+
+      {error && (
+        <p role="alert" className="px-3 py-1 text-xs text-red-700 bg-red-50 border-b border-red-200">
+          {error}
+        </p>
+      )}
+
+      <div className="flex-1 min-h-0 flex overflow-hidden">
+        {mode !== 'preview' && (
+          <textarea
+            aria-label="Markdown source"
+            value={source}
+            onChange={handleChange}
+            spellCheck={false}
+            className="flex-1 min-w-0 h-full w-full p-3 font-mono text-sm resize-none focus:outline-none"
+          />
+        )}
+        {mode !== 'edit' && (
+          <pre
+            data-testid="markdown-preview"
+            aria-label="Markdown preview"
+            className={`flex-1 min-w-0 h-full w-full p-3 text-sm overflow-auto bg-slate-50 ${
+              mode === 'split' ? 'border-l border-slate-200' : ''
+            }`}
+          >
+            {source}
+          </pre>
+        )}
+      </div>
+    </section>
   );
 };
+
+export default MarkdownEditor;

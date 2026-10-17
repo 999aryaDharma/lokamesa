@@ -4,7 +4,7 @@
  * TDD Red → Green → Refactor per sprint rules.
  * First failing test: Viewport_Persists_In_Store_Or_LocalStorage
  */
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import DocumentCanvas from './DocumentCanvas';
 import { useCanvasStore } from './canvasStore';
@@ -143,5 +143,94 @@ describe('No_Dashboard_Cards_In_Default_Canvas', () => {
     // It should have a light canvas surface
     const canvasSurface = container.querySelector('[data-testid="canvas-surface"]');
     expect(canvasSurface).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CAN-06 / CAN-07: object drag uses SelectionController + persists positions
+// ---------------------------------------------------------------------------
+describe('Canvas_ObjectDrag_PersistsPosition', () => {
+  const docA: CanvasObject = {
+    id: 'doc-a',
+    x: 0,
+    y: 0,
+    width: 140,
+    height: 100,
+    title: 'alpha.md',
+    type: 'document',
+    docType: 'md',
+  };
+  const docB: CanvasObject = {
+    id: 'doc-b',
+    x: 200,
+    y: 0,
+    width: 140,
+    height: 100,
+    title: 'beta.md',
+    type: 'document',
+    docType: 'md',
+  };
+
+  it('dragging a document card persists a manual position for the workspace', () => {
+    act(() => useCanvasStore.getState().setObjects([docA]));
+    render(<DocumentCanvas workspaceId="ws-1" />);
+
+    fireEvent.mouseDown(screen.getByText('alpha.md'), { button: 0, clientX: 100, clientY: 100 });
+    fireEvent.mouseMove(window, { clientX: 160, clientY: 150 });
+    fireEvent.mouseUp(window);
+
+    const persisted = JSON.parse(localStorageStore['documentide_canvas_positions:ws-1']);
+    expect(persisted['doc-a']).toEqual({ x: 60, y: 50, mode: 'manual' });
+  });
+
+  it('clicking a document replaces the selection (SelectionController)', () => {
+    act(() => useCanvasStore.getState().setObjects([docA, docB]));
+    render(<DocumentCanvas workspaceId="ws-1" />);
+
+    fireEvent.mouseDown(screen.getByText('beta.md'), { button: 0, clientX: 0, clientY: 0 });
+    fireEvent.mouseUp(window);
+    fireEvent.click(screen.getByText('beta.md'));
+
+    const { selectedIds } = useCanvasStore.getState();
+    expect(Array.from(selectedIds)).toEqual(['doc-b']);
+  });
+
+  it('moving graph-style drag does not touch the canvas viewport', () => {
+    act(() => useCanvasStore.getState().setObjects([docA]));
+    render(<DocumentCanvas workspaceId="ws-1" />);
+    act(() => useCanvasStore.getState().setViewport({ x: 5, y: 6, zoom: 1 }));
+    const before = { ...useCanvasStore.getState().viewport };
+
+    fireEvent.mouseDown(screen.getByText('alpha.md'), { button: 0, clientX: 10, clientY: 10 });
+    fireEvent.mouseMove(window, { clientX: 80, clientY: 90 });
+    fireEvent.mouseUp(window);
+
+    expect(useCanvasStore.getState().viewport).toEqual(before);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// MD-01 (gap G7): double-click routes Markdown to the internal editor
+// ---------------------------------------------------------------------------
+describe('Canvas_DocumentDoubleClick_RoutesByType', () => {
+  const mdDoc: CanvasObject = {
+    id: 'md-1',
+    x: 0,
+    y: 0,
+    width: 140,
+    height: 100,
+    title: 'notes.md',
+    type: 'document',
+    docType: 'md',
+  };
+
+  it('double-clicking a Markdown document opens the internal editor, not Word', () => {
+    const onOpenMarkdownDocument = vi.fn();
+    act(() => useCanvasStore.getState().setObjects([mdDoc]));
+    render(<DocumentCanvas workspaceId="ws-1" onOpenMarkdownDocument={onOpenMarkdownDocument} />);
+
+    fireEvent.doubleClick(screen.getByText('notes.md'));
+
+    expect(onOpenMarkdownDocument).toHaveBeenCalledWith('md-1');
   });
 });

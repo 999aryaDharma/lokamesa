@@ -31,6 +31,8 @@ export interface CanvasActions {
   upsertObject: (object: CanvasObject) => void;
   /** Toggle selection of an object by id. */
   toggleSelect: (id: string) => void;
+  /** Replace the whole selection (CAN-07 SelectionController result). */
+  setSelection: (ids: string[]) => void;
   /** Clear all selected objects. */
   clearSelection: () => void;
   /** Load the persisted viewport from localStorage (call on startup). */
@@ -126,6 +128,11 @@ class CanvasStore {
         selectedIds.add(id);
       }
       this.state = { ...this.state, selectedIds };
+      this.notify();
+    },
+
+    setSelection: (ids: string[]): void => {
+      this.state = { ...this.state, selectedIds: new Set(ids) };
       this.notify();
     },
 

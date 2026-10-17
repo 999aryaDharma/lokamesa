@@ -21,6 +21,8 @@ export interface DocumentNodeProps {
   statusText?: string;
   onSelect?: (id: string) => void;
   onDoubleClick?: (id: string) => void;
+  /** CAN-07: pointer-down hook so the canvas can start a group drag. */
+  onMouseDown?: (event: React.MouseEvent) => void;
 }
 
 /**
@@ -91,6 +93,7 @@ const DocumentNode = memo(function DocumentNode({
   statusText,
   onSelect,
   onDoubleClick,
+  onMouseDown,
 }: DocumentNodeProps) {
   const [imgFailed, setImgFailed] = useState(false);
 
@@ -159,6 +162,7 @@ const DocumentNode = memo(function DocumentNode({
       ].join(' ')}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
+      onMouseDown={onMouseDown}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           onSelect?.(id);

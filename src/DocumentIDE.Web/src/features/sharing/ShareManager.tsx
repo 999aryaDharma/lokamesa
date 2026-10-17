@@ -92,6 +92,8 @@ export interface ShareManagerProps {
   onAddMember?: (documentId: string) => void;
   onRemoveMember?: (documentId: string) => void;
   onCopyLink?: (shareUrl: string) => void;
+  /** Spec §17: stop serving (the share becomes `stopped` and rejects its link). */
+  onStop?: () => void;
   onRevoke?: () => void;
   onRegenerate?: () => void;
 }
@@ -101,6 +103,7 @@ export function ShareManager({
   onAddMember,
   onRemoveMember,
   onCopyLink,
+  onStop,
   onRevoke,
   onRegenerate,
 }: ShareManagerProps) {
@@ -134,6 +137,9 @@ export function ShareManager({
       <p>{share.shareUrl}</p>
       <button onClick={() => onCopyLink?.(share.shareUrl)} type="button">
         Copy link
+      </button>
+      <button onClick={() => onStop?.()} type="button">
+        Stop
       </button>
       <button onClick={() => onRevoke?.()} type="button">
         Revoke
