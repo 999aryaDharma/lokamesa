@@ -1,10 +1,12 @@
 /**
- * SCM-03 — read-only mirror of the privileged Source Control API contract
- * (`SourceControlController` records in DocumentIDE.Api; spec 13 §7/§18).
+ * SCM-03/SCM-06 — mirror of the privileged Source Control API contract
+ * (`SourceControlController` records in DocumentIDE.Api; spec 13 §7/§10/§18).
  *
- * These types carry Git state only: nothing in the pane mutates the
- * repository, and the branch fields are presentation context. String unions
- * match the enum names the API serializes via `ToString()`.
+ * SCM-03 types carry Git state only; nothing here mutates the repository.
+ * SCM-06 adds the typed stage/unstage result: the mutation response carries
+ * the status the API re-read from Git, and Document IDE keeps no proprietary
+ * staging area of its own. String unions match the enum names the API
+ * serializes via `ToString()`.
  */
 
 export type SourceControlStatus = 'Available' | 'NoRepository' | 'GitUnavailable' | 'Failed';
@@ -90,5 +92,28 @@ export interface SourceControlStatusModel {
   ahead: number | null;
   behind: number | null;
   sections: SourceControlSections;
+  failure: SourceControlFailure | null;
+}
+
+/** SCM-06 — typed outcome of one stage/unstage request (spec 13 §10/§20). */
+export type GitStageOutcome =
+  | 'Succeeded'
+  | 'RejectedPath'
+  | 'NoRepository'
+  | 'GitUnavailable'
+  | 'Failed';
+
+/**
+ * SCM-06 — typed stage/unstage result. On success `status` carries the status
+ * re-read from Git after the mutation (the real index is the only staging
+ * authority); failures keep their typed classification in `failure`.
+ */
+export interface SourceControlStageResult {
+  outcome: GitStageOutcome;
+  isSuccess: boolean;
+  /** Machine-readable rejection code, or null outside `RejectedPath` outcomes. */
+  errorCode: string | null;
+  message: string | null;
+  status: SourceControlStatusModel | null;
   failure: SourceControlFailure | null;
 }
