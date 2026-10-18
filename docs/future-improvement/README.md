@@ -2,7 +2,7 @@
 
 **Label:** `future-improvement`
 **Scope:** post-V1 roadmap
-**Planned range:** `1.1.0 → 1.9.x`
+**Planned range:** `1.1.0 → 1.10.x`
 **Status model:** FUTURE / SPECIFIED / CANDIDATE / PROMOTED
 
 This directory contains approved product direction that is intentionally **outside the active V1 sprint board**. It must not be added to `docs/sprints/SPRINT-STATUS.md` until the owner explicitly promotes a version into an implementation cycle.
@@ -11,7 +11,7 @@ This directory contains approved product direction that is intentionally **outsi
 
 Future improvements must extend the Document IDE model without weakening the existing source-of-truth, safety, deterministic mutation, local-first, and separation-of-concerns rules.
 
-The nine planned improvement lines are:
+The ten planned improvement lines are:
 
 1. `1.1.0` — Command Palette + Quick Open
 2. `1.2.0` — Review Workspace
@@ -22,6 +22,7 @@ The nine planned improvement lines are:
 7. `1.7.0` — Wildboard Core (`SPECIFIED` — second-brain workspace kind, `WB-01…WB-05`)
 8. `1.8.0` — Rich Writing & Organization (`CANDIDATE` — Medium-style editor over Markdown)
 9. `1.9.0` — Media & References (`CANDIDATE` — images, video, links, webclips, PDF)
+10. `1.10.0` — Diagram Boards (`SPECIFIED` — native diagram engine, `DB-01…DB-07`; ADR-004)
 
 ## V1 Boundary
 

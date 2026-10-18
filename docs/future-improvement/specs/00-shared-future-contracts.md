@@ -1,6 +1,6 @@
 # Future Improvement — Shared UX & Domain Contracts
 
-These contracts apply across versions 1.1.0–1.9.x.
+These contracts apply across versions 1.1.0–1.10.x.
 
 ## 1. Feature objects remain non-authoritative for document contents
 

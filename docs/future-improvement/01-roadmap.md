@@ -1,4 +1,4 @@
-# Future Improvement Roadmap — 1.1.0 → 1.9.x
+# Future Improvement Roadmap — 1.1.0 → 1.10.x
 
 ## Release map
 
@@ -13,6 +13,7 @@
 | `1.7.0` | Wildboard Core | A second workspace kind: unstructured, local-first canvas with a content vault | Canvas, SQLite, filesystem | SPECIFIED |
 | `1.8.0` | Rich Writing & Organization | Medium-style block editor over Markdown, labels, layer view, wildboard search | `1.7.0`, Markdown, search | CANDIDATE |
 | `1.9.0` | Media & References | Images, video, links, page clips, PDF viewing, importers | `1.7.0`, filesystem, sharing security | CANDIDATE |
+| `1.10.0` | Diagram Boards | Whiteboard/diagram native di Loka (ADR-004: tanpa engine pihak ketiga) | `1.7.0`, canvas | SPECIFIED |
 
 ## Version philosophy
 
@@ -42,6 +43,9 @@ Make writing in the Wildboard feel like formatting a document rather than typing
 
 ### 1.9.0 — Media & References
 Let the board hold what a second brain collects: images, video, links, page snapshots, and PDFs — all stored locally, with webclip capture behind SSRF and sanitization controls.
+
+### 1.10.0 — Diagram Boards
+Decide how whiteboard/diagram capability enters Loka. This line is a decision document first: native diagram-lite, embed Excalidraw, or embed draw.io. No implementation starts until the spike in the spec passes its decision gate.
 
 ## Global non-goals
 

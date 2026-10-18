@@ -2,7 +2,7 @@
 
 **Total future sprints:** 32
 
-These sprints are planning artifacts for roadmap versions `1.1.0 → 1.9.0`. They are not part of the active V1 sprint count until promoted.
+These sprints are planning artifacts for roadmap versions `1.1.0 → 1.7.0`. Versions `1.8.0`, `1.9.0`, and `1.10.0` are not decomposed yet. None of these sprints is part of the active V1 sprint count until promoted.
 
 ## Sprint table
 

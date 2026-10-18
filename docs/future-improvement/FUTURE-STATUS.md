@@ -13,6 +13,7 @@
 | `1.7.0` | `WB-01…WB-05` | SPECIFIED | Owner promotes 1.7.0 to active implementation (ADR-003 accepted) |
 | `1.8.0` | `RW-01…RW-05` (tentative) | CANDIDATE | Owner approves the "source-first" amendment, then specifies and promotes 1.8.0 |
 | `1.9.0` | `MR-01…MR-06` (tentative) | CANDIDATE | Owner confirms media/network risk, then specifies and promotes 1.9.0 |
+| `1.10.0` | `DB-01…DB-07` (tentative) | SPECIFIED | Native dikunci (ADR-004); owner confirms scope, then promotes 1.10.0 |
 
 ## Status definitions
 
@@ -23,4 +24,4 @@
 
 ## Current rule
 
-The six `1.1.0`–`1.6.0` feature lines are `SPECIFIED` and remain outside the active V1 sprint count. `1.7.0` is now `SPECIFIED` (`WB-01…WB-05`, ADR-003 accepted) and is also outside the active V1 sprint count until promoted. `1.8.0` and `1.9.0` remain `CANDIDATE` with no sprint decomposition yet.
+The six `1.1.0`–`1.6.0` feature lines are `SPECIFIED` and remain outside the active V1 sprint count. `1.7.0` is `SPECIFIED` (`WB-01…WB-05`, ADR-003 accepted) and `1.10.0` is `SPECIFIED` (`DB-01…DB-07`, native direction locked by ADR-004); both stay outside the active V1 board until promoted. `1.8.0` and `1.9.0` remain `CANDIDATE`.
