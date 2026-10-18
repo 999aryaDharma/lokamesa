@@ -242,3 +242,216 @@ captured separately; the red evidence above is from the host test and the new sc
 - **Follow-up (not this sprint):** expose the SCM-04/05 diff routes (`GET /api/source-control/diff`)
   so screen 05/06 can render the typed document-aware report directly and the Markdown UI-side
   composition can be retired.
+
+---
+
+# Sprint Handoff — UI-03 (part B)
+
+**Status:** part B DONE (with one recorded data gap) · **Branch:** `feat/ui-03-mac-screens-slicing`
+**Scope of this commit:** screens **10 History & undo**, **04 Batch operations**, **12 Dialogs**, plus the
+architecture-boundary correction for the SCM registration part A added. Part A's commit is untouched;
+this is a second commit on the same branch.
+
+## What changed
+
+### 1. Screen 10 — `HistoryScreen` (`features/history/HistoryScreen.tsx`, new)
+
+One History surface, two visibly separate authorities (spec 13 §4.3/§12):
+
+- macOS `SegmentedControl` **`Operations | Git`** (`aria-label="History source"`).
+- **Git** = part A's `GitHistoryScreen` unchanged (`GET /api/source-control/history`). It is the
+  default tab, preserving the shipped History-row behaviour.
+- **Operations** = the shipped `HistoryPanel` (operation rows, per-file outcomes, the real
+  storage-capacity meter and its warning) plus the shipped `UndoConflictDialog` for the HIST-02
+  conflict review. Rows only come from an injected `OperationHistorySource` (`load` + `undo`);
+  there is no sample data in the component.
+- The inspector shows the selected operation's real fields (type, status, recorded time, file count,
+  snapshot id) and an accurate undo-policy card. The storage meter is not duplicated.
+
+**HONEST DATA GAP — blocking for the owner.** There is no privileged route that lists Document IDE
+operations or history storage usage, so the shipped shell passes **no `source`** and the Operations
+tab renders a typed unavailable state (`history-operations-unavailable`) with no rows, no meter and
+no "no operations recorded" claim. What exists today:
+
+- `POST /api/batch-operations/{planId}/apply`, `POST .../{planId}/undo`,
+  `GET .../{planId}/history` — per-plan only; the client has no way to discover plan ids after a
+  restart, so they cannot back a History list.
+- `HistoryStorage.GetAllMetadataAsync()` / `GetTotalSizeAsync()` / `GetCapacityBytesAsync()` exist in
+  Infrastructure and are DI-registered, but no controller exposes them.
+- `JsonlHistoryStore` reads apply/undo records **per plan** only (no enumeration API, no
+  operation-level status/type record).
+
+Adding a listing route would therefore also require deciding how to project operation type and
+operation status (neither is persisted), and per-file undo outcomes (only undo status is persisted).
+That is a backend contract decision, not a UI slice, so it is recorded here instead of being invented
+in the client. Wiring the eventual route is one `source` prop at the shell; `HistoryScreen` needs no
+change. Until then `undo-conflict` is mounted but cannot be triggered in the shipped build.
+
+**Why no backend change in this commit:** the alternative (a route that enumerates `apply-*.jsonl`
+and derives "Completed/Partial" plus a generic type) would publish derived semantics the engine does
+not persist. The sprint forbids invented data; a typed gap is the honest outcome.
+
+### 2. Screen 04 — centred, non-modal batch sheet
+
+`BatchPreviewPanel` now renders the design's **centred sheet chrome** via the shared `SheetShell`
+with `scrim={false}`:
+
+- full-content layer `absolute inset-0 … items-center justify-center pointer-events-none`; the sheet
+  panel re-enables pointer events, so the canvas stays usable outside the sheet (**not modal**, no
+  scrim, no `aria-modal`);
+- sheet header (title + optional `✕` via a new optional `onClose` prop, wired in `App` to the same
+  state the toolbar toggle uses), an honest status line (`n files · m occurrences`), scrolling body
+  and a footer with secondary `Save selection` + primary `Apply` (and `Cancel preview` while a job is
+  running);
+- the outer `<section aria-label="Batch operations">` region is preserved, so `BatchApp.test.tsx`
+  and `BatchPreviewPanel.test.tsx` keep every existing assertion;
+- no batch request, plan, selection, apply/undo or persistence semantics changed.
+
+### 3. Screen 12 — dialogs reachability
+
+| Overlay | Reachable? | Why |
+| --- | --- | --- |
+| Merge order | **yes** | `PdfExportPanel` → `Merge to PDF` (real selection) |
+| PDF progress | **yes** | `PdfExportPanel` → separate/merge response (`BatchExportProgress`) |
+| PDF collision | **yes** | typed `OutputCollision` from `/api/pdf/export` → decision fieldset |
+| Undo review | **mounted, not triggerable** | host is `HistoryScreen`; no operations list exists yet (screen 10 gap) |
+| QuickLook | **no** | needs the WORD-04 Word → temp PDF → page-image pipeline; `QuickLook` is imported only by its own test. Not stubbed. |
+| Context pack | **no** | `ContextPackDialog` has no context-pack data source. Not stubbed. |
+| Missing resource | **no** | `MissingResourceCard` has **no rendered host** in this build (verified: imported only by `MissingResourceCard.test.tsx`). Not mounted speculatively. |
+
+So **three** overlays are reachable end-to-end, one is mounted behind an honest missing data source,
+and three are deliberately absent. `App.dialogs.test.tsx` asserts the three positives and the
+absences, including negative assertions for `quick-look-dialog`, the context-pack dialog and the
+missing-resource group so a later stub cannot be added silently.
+
+### 4. Architecture-boundary fix (part A regression)
+
+Part A registered the SCM runtime inline in `src/DocumentIDE.Desktop/WebView/WebAppHost.cs`,
+including `IGitProcessRunner -> GitProcessRunner`. That violates
+`SourceControlProcessBoundaryTests.ApiCompositionRoot_IsTheOnlyCSharpPlaceWiringTheGitRunner`, which
+permits the concrete runner name only in `src/DocumentIDE.Api/Program.cs` or under
+`src/DocumentIDE.Infrastructure/SourceControl/`.
+
+- New `src/DocumentIDE.Infrastructure/SourceControl/SourceControlServiceRegistration.cs`:
+  `public static IServiceCollection AddSourceControlServices(this IServiceCollection services)`
+  containing the same **16** `TryAdd*` registrations part A added (options, mutation queue, runner,
+  repository, stage, commit, work-session repository/service, remote, push, pull, history, restore,
+  worktree read/mutation, conflicts). `TryAdd*` keeps caller overrides intact.
+- `WebAppHost` now calls `builder.Services.AddSourceControlServices();` once and no longer names
+  `GitProcessRunner`.
+- `DocumentIDE.Api/Program.cs` was **not** touched (it is permitted to name the runner).
+
+**Residual (stated plainly):** the SCM runtime is now registered in two places — the inline block in
+`Program.cs` and this new extension. They currently agree, but they can drift. A later cleanup should
+move `Program.cs` onto `AddSourceControlServices()` and delete the inline block. That was explicitly
+out of scope for this pass.
+
+## Files changed (part B)
+
+**New**
+
+- `src/DocumentIDE.Web/src/features/history/HistoryScreen.tsx` / `.test.tsx`
+- `src/DocumentIDE.Web/src/features/batch/BatchPreviewPanel.sheet.test.tsx`
+- `src/DocumentIDE.Web/src/App.dialogs.test.tsx`
+- `src/DocumentIDE.Infrastructure/SourceControl/SourceControlServiceRegistration.cs`
+
+**Modified**
+
+- `src/DocumentIDE.Web/src/App.tsx` — mounts `HistoryScreen` on the History surface, adds the
+  document-name/open handlers, passes `onClose` to the batch sheet. All part-A surfaces remain.
+- `src/DocumentIDE.Web/src/features/shell/Sidebar.tsx` — one History row; surface id
+  `'git-history'` renamed to `'history'`, test id `sidebar-git-history` → `sidebar-history`.
+- `src/DocumentIDE.Web/src/features/batch/BatchPreviewPanel.tsx` — centred non-modal `SheetShell`.
+- `src/DocumentIDE.Desktop/WebView/WebAppHost.cs` — one `AddSourceControlServices()` call.
+
+**Existing tests changed (deliberate, listed in full)**
+
+1. `src/DocumentIDE.Web/src/features/shell/Sidebar.test.tsx` — one expected navigation value:
+   `onNavigate` third call is now `'history'` instead of `'git-history'`. The row is no longer
+   Git-only; the intent (the History row navigates to the History surface) is unchanged.
+2. `src/DocumentIDE.Web/src/App.shell.test.tsx` — the part-A History test now clicks
+   `sidebar-history` (renamed test id) and also asserts `history-screen` renders; title updated to
+   "composed History surface on its Git tab". No assertion was removed or weakened. Added one new
+   test for the segmented control + typed unavailable state.
+3. No other existing test was edited. `BatchPreviewPanel.test.tsx`, `BatchApp.test.tsx`,
+   `Sidebar`'s other tests, `HistoryPanel.test.tsx` and `UndoConflictDialog.test.tsx` are untouched
+   and pass.
+
+## Verification
+
+- `npx tsc -b` → **exit 0**
+- `npx oxlint` → **exit 0**, **35 warnings**, all pre-existing `react(only-export-components)`; no
+  finding in any part-B file (same count as part A).
+- `npx vitest run` → **85 files / 593 tests passed, 0 failed, 0 skipped**
+  (part A baseline: 82 / 580; +3 files, +13 tests).
+- `dotnet build DocumentIDE.sln --nologo` → **0 errors, 104 warnings** (incremental build; all
+  pre-existing package/analyzer warnings, none from the new registration file or `WebAppHost`).
+- `dotnet test tests/DocumentIDE.ArchitectureTests/DocumentIDE.ArchitectureTests.csproj` →
+  **12/12 passed, 0 failed, 0 skipped** (the boundary test is green).
+- `dotnet test tests/DocumentIDE.IntegrationTests --filter "FullyQualifiedName~SourceControlHostTests"`
+  → **1/1 passed, 0 skipped**.
+- `git diff --check` → clean.
+
+### TDD evidence (Red → Green → Refactor)
+
+1. **Screen 10 RED:** `HistoryScreen.test.tsx` failed at module resolution
+   (`Failed to resolve import "./HistoryScreen"`). After implementation, a wrong default import
+   surfaced as "Element type is invalid"; after fixing the named `UndoConflictDialog` import the
+   focused run was **6/6**.
+2. **Screen 04 RED:** `BatchPreviewPanel.sheet.test.tsx` failed with
+   `Unable to find … [data-testid="batch-sheet-layer"]`; after the sheet refactor it was **2/2** and
+   the existing batch suites stayed green (26/26 combined).
+3. **App wiring RED:** the new App History test failed with
+   `Unable to find … [data-testid="sidebar-history"]`; after the Sidebar/App wiring,
+   `App.shell.test.tsx` + `Sidebar.test.tsx` were **19/19**.
+4. **Screen 12:** merge order/progress/collision were already reachable from part A/G8 and are now
+   pinned by positive assertions; the new negative assertions are guards. The genuinely new overlay
+   (undo review) has its Red evidence in the screen-10 test above.
+5. **Refactor:** tab switching now dismisses transient undo state; import grouping kept; no
+   behavioural change to batch or Git code. All gates re-run after the final edits.
+
+## Acceptance criteria — part B
+
+- [x] Screen 10 is reachable from the existing single History row and has a working
+      `Operations | Git` segmented control. Evidence: `HistoryScreen.test.tsx` (6),
+      `App.shell.test.tsx` (2 History tests).
+- [~] **Screen 10 renders real operations with outcome chips and the real storage meter; undo
+      works.** The composed `HistoryPanel` + `UndoConflictDialog` do this for a real payload and are
+      fully tested, **but the shipped build has no operations-listing route**, so the tab renders a
+      typed unavailable state. This is a **blocking data gap**, not a fake list. Evidence:
+      `HistoryScreen.test.tsx` + `history-operations-unavailable`.
+- [x] Screen 04 is a centred sheet and **non-modal** (no scrim, no `aria-modal`), footer actions
+      work, and every existing batch assertion still passes. Evidence:
+      `BatchPreviewPanel.sheet.test.tsx` (2) + untouched `BatchPreviewPanel.test.tsx` /
+      `BatchApp.test.tsx`.
+- [x] QuickLook and the context pack are absent, not stubbed; missing-resource is absent because its
+      host is not rendered. Evidence: `App.dialogs.test.tsx` negative assertions.
+- [x] Frontend gates green; backend build green; architecture suite **12/12**; no skipped required
+      test.
+
+## Deviations / residual risks
+
+1. **Screen 10 data gap (main residual).** A read-only route that lists operations + storage usage
+   is required before the Operations tab can show real rows. The UI contract (`OperationHistorySource`)
+   is ready and the typed unavailable state names the missing route.
+2. **Undo review is not triggerable end-to-end** until (1) lands; the overlay itself is mounted and
+   tested with a real-shaped undo result.
+3. **SCM registration duplication** between `Program.cs` and `AddSourceControlServices()` (see §4).
+4. **Batch is now an overlay, not a column.** It covers the content centre while open (design
+   fidelity), instead of shrinking the canvas. No canvas object, selection, batch request or
+   persistence behaviour changed; the canvas remains mounted and interactive outside the sheet.
+5. The batch sheet's `✕` is new chrome wired to the same close state as the toolbar toggle; when the
+   panel is rendered without `onClose` (unit tests) no close button is rendered.
+6. Screen 10's default tab is Git, not Operations. This preserves part A's shipped History behaviour
+   and avoids landing every History visit on a data-unavailable surface. The design's Operations
+   default should be restored when the listing route exists.
+
+## Next eligible work
+
+- **Backend follow-up (owner decision needed):** expose a read-only operations + history-usage route
+  (and decide whether operation type/status are persisted or derived), then pass a real
+  `OperationHistorySource` in `App.tsx`. That single wiring makes screen 10 fully real and makes the
+  undo-conflict overlay reachable.
+- **Cleanup:** consolidate `DocumentIDE.Api/Program.cs` SCM registrations onto
+  `AddSourceControlServices()`.
+- **Unchanged from part A:** SCM-04/05 diff routes for screens 05/06.
