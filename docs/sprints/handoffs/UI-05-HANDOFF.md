@@ -245,6 +245,10 @@ No required test was skipped. No flake was observed in either integration run.
 - The pack route reads Markdown from `CurrentPath` directly (same file authority
   as the Markdown route) rather than calling HTTP; both paths share the
   filesystem source of truth, so this is consistent, not a new authority.
+- Missing status is as fresh as the workspace bootstrap: a file that disappears
+  after startup appears on the next workspace reload (there is no new watcher
+  subscription in this sprint). The card always reflects the payload's real
+  `availabilityStatus`, never a synthesized state.
 - Context pack is copy-only until a real export destination/model exists.
 
 ## Acceptance criteria
