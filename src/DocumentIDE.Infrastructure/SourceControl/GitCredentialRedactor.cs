@@ -27,11 +27,14 @@ public static class GitCredentialRedactor
     /// <summary>
     /// Matches the userinfo of a URI with an explicit scheme, up to (and
     /// including) the <c>@</c> that separates it from the host. The userinfo
-    /// character class excludes <c>/</c>, <c>@</c> and whitespace, so it can
-    /// never swallow the path or a following token.
+    /// character class excludes <c>/</c> and whitespace, so it can never swallow
+    /// the path or a following token - but it deliberately <i>does</i> allow
+    /// <c>@</c> and is greedy, so a password that itself contains the separator
+    /// (<c>https://user:p@ss@host/repo.git</c>) is consumed as one userinfo
+    /// instead of leaving its tail behind.
     /// </summary>
     private static readonly Regex UrlUserInfoPattern = new(
-        @"(?<scheme>[A-Za-z][A-Za-z0-9+.\-]*)://[^/@\s]*@",
+        @"(?<scheme>[A-Za-z][A-Za-z0-9+.\-]*)://[^/\s]*@",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     /// <summary>

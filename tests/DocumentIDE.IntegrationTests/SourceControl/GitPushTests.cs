@@ -342,6 +342,38 @@ public sealed class GitPushTests
         Assert.DoesNotContain("alice:", result.Failure.StandardOutput);
     }
 
+    [Fact]
+    public async Task PushFailureRedactsPasswordContainingAnAtSign()
+    {
+        using var repo = GitFetchTests.CreateRepositoryWithUpstream(out _);
+
+        // A password that itself contains the userinfo separator. Git echoes the
+        // remote URL verbatim, so the redactor must consume the whole userinfo,
+        // not stop at the first '@'.
+        const string secret = "p@s3cr3t";
+        string remoteUrl = $"https://alice:{secret}@example.invalid/repo.git";
+
+        var inner = new GitProcessRunner(GitProcessRunnerOptions.Default, new GitWorktreeMutationQueue());
+        var scripted = new ScriptedGitProcessRunner(
+            inner,
+            ("push", new GitProcessResult(
+                GitProcessStatus.Failed,
+                128,
+                $"To {remoteUrl}",
+                $"fatal: unable to access '{remoteUrl}/': The requested URL returned error: 401")));
+        GitPushService service = CreateService(scripted);
+
+        GitPushResult result = await service.PushAsync(repo.RootPath);
+
+        Assert.Equal(GitPushOutcome.AuthenticationRequired, result.Outcome);
+        Assert.DoesNotContain("s3cr3t", result.Message ?? string.Empty);
+        Assert.DoesNotContain("s3cr3t", result.Failure!.ErrorMessage ?? string.Empty);
+        Assert.DoesNotContain("s3cr3t", result.Failure.StandardOutput);
+        Assert.DoesNotContain("s3cr3t", result.Failure.StandardError);
+        Assert.DoesNotContain("alice:", result.Failure.StandardError);
+        Assert.DoesNotContain("alice:", result.Failure.StandardOutput);
+    }
+
     // ---------------------------------------------------------------------
     // Controlled invocation, serialization and environment (spec 13 §18/§19/§23)
     // ---------------------------------------------------------------------

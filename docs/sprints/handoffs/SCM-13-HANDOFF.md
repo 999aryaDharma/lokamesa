@@ -392,3 +392,31 @@ Definition of Done:
   recovery-snapshot/temp-mutation/atomic-replace rule is **N/A** in one sentence:
   this sprint mutates no user file content — it publishes existing commits through
   Git's own `push` and never rewrites local history.
+
+## Controller review round 1 (fix-up applied)
+
+The controller independently reviewed this branch and **falsified one claim**, then fixed it here
+(TDD: RED first, then GREEN).
+
+**Finding (credential exposure, narrow but real):** `GitCredentialRedactor`'s userinfo character
+class excluded `@` (`[^/@\s]*`). Git echoes the remote URL verbatim, so a password that itself
+contains the userinfo separator was only redacted up to the **first** `@`, leaving the tail behind:
+
+    https://alice:p@s3cr3t@example.invalid/repo.git
+      before: https://***@s3cr3t@example.invalid/repo.git   <- password tail leaked
+
+That is a direct counterexample to the "no credential material can reach an outcome message, error
+or log line" claim. The class doc even documented the exclusion as intentional, so the gap was not
+noticed by the original test (which used a password without `@`).
+
+**Fix:** the userinfo class is now `[^/\s]*` and greedy - it still cannot cross `/` or whitespace
+(so it can never swallow the path or a following token) but consumes the **whole** userinfo up to the
+last `@` of the authority.
+
+**Evidence:** new test `PushFailureRedactsPasswordContainingAnAtSign` written first and observed
+failing (the tail `s3cr3t` surfaced in `StandardOutput`/`StandardError`); after the fix the whole
+`GitPush` suite is **21 passed / 0 failed / 0 skipped** (was 20).
+
+**Residual limit (unchanged, stated honestly):** redaction covers explicit-scheme
+`scheme://userinfo@host` URLs only. scp-style `user@host:path` locations carry no password and are
+deliberately left untouched; a credential embedded in some other textual shape is not covered.
