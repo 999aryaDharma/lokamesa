@@ -176,6 +176,16 @@ builder.Services.AddScoped(sp => new GitConflictService(
     sp.GetRequiredService<GitRepositoryService>(),
     sp.GetRequiredService<IDocumentRepository>()));
 
+// SCM-19: document-aware DOCX diff surface. The already-tested SCM-05 provider
+// materializes the compared Git versions into temporary read-only artifacts and
+// classifies them through the existing DOCX infrastructure (spec 13 §9.2/§9.3).
+// It is strictly read-only: it never joins the per-worktree mutation queue,
+// never touches the index and never opens the document. The desktop host
+// registers the same provider through AddSourceControlServices, so screen 06
+// is served by both composition paths.
+builder.Services.AddSingleton(sp => new DocxGitDiffProvider(
+    sp.GetRequiredService<IGitProcessRunner>()));
+
 builder.Services.AddScoped<PdfExportService>();
 builder.Services.AddScoped<BatchPdfExportService>();
 builder.Services.AddScoped<PdfMergeService>();
