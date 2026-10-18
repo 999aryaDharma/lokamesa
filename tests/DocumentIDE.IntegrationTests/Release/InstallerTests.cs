@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using System.Xml.Linq;
 using DocumentIDE.Core.Security;
 using Xunit;
@@ -94,5 +96,67 @@ public class InstallerTests
 
         string installerMsi = Path.Combine(repoRoot, "artifacts", "installer", "DocumentIDE-Setup.msi");
         Assert.True(File.Exists(installerMsi), $"Installer MSI artifact should exist at {installerMsi}");
+
+        // Existence alone is not evidence: an earlier manifest produced a 0.31 MB
+        // MSI that carried only the two apphosts, so the installed product could
+        // not start. Assert the File table actually carries the self-contained
+        // published payload (runtime assemblies, SQLite, WebView2 loader, wwwroot).
+        AssertMsiContainsPublishedPayload(installerMsi);
+    }
+
+    /// <summary>
+    /// Reads the MSI's File table through the Windows Installer COM API and
+    /// asserts the self-contained desktop payload is really packaged.
+    /// A size/existence check on the .msi file itself would not catch a manifest
+    /// that references only two files.
+    /// </summary>
+    private static void AssertMsiContainsPublishedPayload(string msiPath)
+    {
+        Type? installerType = Type.GetTypeFromProgID("WindowsInstaller.Installer");
+        Assert.True(installerType is not null, "Windows Installer COM must be available to inspect the MSI.");
+
+        object installer = Activator.CreateInstance(installerType!)!;
+        object database = installerType!.InvokeMember(
+            "OpenDatabase", BindingFlags.InvokeMethod, null, installer, new object?[] { msiPath, 0 })!;
+        object view = database.GetType().InvokeMember(
+            "OpenView", BindingFlags.InvokeMethod, null, database,
+            new object?[] { "SELECT FileName, FileSize FROM File" })!;
+        view.GetType().InvokeMember("Execute", BindingFlags.InvokeMethod, null, view, null);
+
+        var names = new List<string>();
+        long totalBytes = 0;
+        while (true)
+        {
+            object? record = view.GetType().InvokeMember("Fetch", BindingFlags.InvokeMethod, null, view, null);
+            if (record is null)
+            {
+                break;
+            }
+
+            names.Add((string)record.GetType().InvokeMember(
+                "StringData", BindingFlags.GetProperty, null, record, new object?[] { 1 })!);
+            totalBytes += (int)record.GetType().InvokeMember(
+                "IntegerData", BindingFlags.GetProperty, null, record, new object?[] { 2 })!;
+        }
+
+        foreach (string required in new[]
+                 {
+                     "DocumentIDE.Api.dll",
+                     "DocumentIDE.Core.dll",
+                     "DocumentIDE.Infrastructure.dll",
+                     "DocumentIDE.Desktop.exe",
+                     "DocumentIDE.ShareHost.exe",
+                     "index.html",
+                 })
+        {
+            Assert.Contains(names, name => name.EndsWith(required, StringComparison.OrdinalIgnoreCase));
+        }
+
+        Assert.True(
+            names.Count > 100,
+            $"The MSI should carry the whole published payload; it lists only {names.Count} file(s).");
+        Assert.True(
+            totalBytes > 100L * 1024 * 1024,
+            $"The MSI payload should exceed 100 MB; it totals {totalBytes} bytes.");
     }
 }

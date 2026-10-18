@@ -4,7 +4,7 @@
            Version="1.0.0.0"
            UpgradeCode="C3B24F81-99A1-4E12-B8E5-77981A6498B1"
            Scope="perMachine">
-    
+
     <MajorUpgrade DowngradeErrorMessage="A newer version of Document IDE is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
@@ -19,21 +19,7 @@
     </Property>
 
     <StandardDirectory Id="ProgramFiles64Folder">
-      <Directory Id="INSTALLFOLDER" Name="Document IDE">
-        <Component Id="MainExecutable" Guid="84E1A2B5-5F8D-4E90-B8A7-33E980453C01">
-          <File Id="DocumentIDE.Desktop.exe" Source="$(var.SourceDir)\DocumentIDE.Desktop.exe" KeyPath="yes" />
-        </Component>
-
-        <Component Id="ShareHostExecutable" Guid="92B3C4D5-6E7F-8A9B-0C1D-2E3F4A5B6C7D">
-          <File Id="DocumentIDE.ShareHost.exe" Source="$(var.SourceDir)\DocumentIDE.ShareHost.exe" KeyPath="yes" />
-        </Component>
-
-        <Directory Id="WwwrootDir" Name="wwwroot">
-          <Component Id="WwwrootFolder" Guid="A1B2C3D4-E5F6-7A8B-9C0D-1E2F3A4B5C6D">
-            <CreateFolder />
-          </Component>
-        </Directory>
-      </Directory>
+      <Directory Id="INSTALLFOLDER" Name="Document IDE" />
     </StandardDirectory>
 
     <StandardDirectory Id="ProgramMenuFolder">
@@ -46,10 +32,21 @@
       </Component>
     </StandardDirectory>
 
+    <!--
+      The published desktop payload is a self-contained win-x64 deployment: the
+      two executables (DocumentIDE.Desktop.exe and DocumentIDE.ShareHost.exe)
+      cannot run without DocumentIDE.Api/Core/Infrastructure and the .NET runtime
+      beside them. This group harvests the whole publish output, including the
+      wwwroot web assets, so the installed app is complete. A test asserts the MSI
+      File table actually contains the runtime assemblies and the web assets; an
+      existence-only check is what let a 0.31 MB installer pass before.
+    -->
+    <ComponentGroup Id="PayloadFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(var.SourceDir)\**" />
+    </ComponentGroup>
+
     <Feature Id="MainFeature" Title="Document IDE Application" Level="1">
-      <ComponentRef Id="MainExecutable" />
-      <ComponentRef Id="ShareHostExecutable" />
-      <ComponentRef Id="WwwrootFolder" />
+      <ComponentGroupRef Id="PayloadFiles" />
       <ComponentRef Id="ApplicationShortcut" />
     </Feature>
   </Package>
