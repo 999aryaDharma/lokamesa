@@ -125,6 +125,101 @@ public sealed class GitFetchTests
     }
 
     /// <summary>
+    /// F1 — a branch whose upstream is <b>configured</b> but whose
+    /// remote-tracking ref is absent (the upstream branch was deleted remotely,
+    /// or a <c>fetch --prune</c> removed the ref) is <b>not</b>
+    /// <c>NoUpstream</c>. <c>git rev-parse --abbrev-ref --symbolic-full-name
+    /// @{upstream}</c> exits 128 in that case, so the state must be resolved
+    /// from the <i>configured</i> upstream, and the fetch gate must not refuse
+    /// the fetch. The counters are unknown (<c>null</c>), never a fake
+    /// <c>0/0</c>.
+    /// </summary>
+    [Fact]
+    public async Task ConfiguredUpstreamWithMissingTrackingRefIsNotNoUpstream()
+    {
+        using var repo = CreateRepositoryWithUpstream(out _);
+
+        // Simulate "deleted remotely / pruned": the configured upstream
+        // (branch.main.remote/merge) stays; its remote-tracking ref is gone.
+        Assert.Equal(
+            0,
+            TestGitRepository.RunGit(repo.RootPath, "update-ref", "-d", "refs/remotes/origin/main"));
+
+        GitRemoteService service = CreateService();
+
+        GitRemoteStateResult state = await service.GetRemoteStateAsync(repo.RootPath);
+
+        // The configured upstream is still reported, and this is not NoUpstream.
+        Assert.Equal(GitRemoteOutcome.Available, state.Outcome);
+        Assert.True(state.HasUpstream);
+        GitRemoteState resolved = Assert.IsType<GitRemoteState>(state.State);
+        Assert.Equal("origin/main", resolved.UpstreamReference);
+        Assert.Equal("origin", resolved.RemoteName);
+        // The counters cannot be computed without the tracking ref: null, not 0.
+        Assert.Null(resolved.Ahead);
+        Assert.Null(resolved.Behind);
+
+        // F1: the fetch is not refused as NoUpstream, and running it restores
+        // the tracking ref and real counters.
+        GitFetchResult fetch = await service.FetchAsync(repo.RootPath);
+        Assert.Equal(GitFetchOutcome.Succeeded, fetch.Outcome);
+        Assert.True(fetch.IsSuccess);
+        Assert.NotNull(fetch.Remote);
+        Assert.Equal("origin/main", fetch.Remote!.UpstreamReference);
+        Assert.Equal(0, fetch.Remote.Ahead);
+        Assert.Equal(0, fetch.Remote.Behind);
+    }
+
+    /// <summary>
+    /// F6 — a local-branch upstream (<c>branch.main.remote = "."</c>) has no
+    /// remote at all; the upstream reference is the local branch name and the
+    /// remote name must be <c>null</c> rather than that branch name. Without
+    /// the fix the whole upstream string is shown as a remote.
+    /// </summary>
+    [Fact]
+    public async Task LocalBranchUpstreamReportsNoRemoteName()
+    {
+        using var repo = CreateRepositoryWithoutUpstream();
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "branch", "other"));
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "config", "branch.main.remote", "."));
+        Assert.Equal(0, TestGitRepository.RunGit(
+            repo.RootPath, "config", "branch.main.merge", "refs/heads/other"));
+
+        GitRemoteService service = CreateService();
+        GitRemoteStateResult result = await service.GetRemoteStateAsync(repo.RootPath);
+
+        Assert.Equal(GitRemoteOutcome.Available, result.Outcome);
+        GitRemoteState state = Assert.IsType<GitRemoteState>(result.State);
+        Assert.Equal("other", state.UpstreamReference);
+        Assert.Null(state.RemoteName);
+    }
+
+    /// <summary>
+    /// F6 — a local-branch upstream whose branch name itself contains a slash
+    /// must not be mistaken for a remote: the first segment of the upstream
+    /// reference only names a remote when the branch's configured
+    /// <c>branch.&lt;name&gt;.remote</c> is that remote.
+    /// </summary>
+    [Fact]
+    public async Task LocalBranchUpstreamWithSlashIsNotMistakenForARemote()
+    {
+        using var repo = CreateRepositoryWithoutUpstream();
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "branch", "feature/topic"));
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "config", "branch.main.remote", "."));
+        Assert.Equal(0, TestGitRepository.RunGit(
+            repo.RootPath, "config", "branch.main.merge", "refs/heads/feature/topic"));
+
+        GitRemoteService service = CreateService();
+        GitRemoteStateResult result = await service.GetRemoteStateAsync(repo.RootPath);
+
+        Assert.Equal(GitRemoteOutcome.Available, result.Outcome);
+        GitRemoteState state = Assert.IsType<GitRemoteState>(result.State);
+        Assert.Equal("feature/topic", state.UpstreamReference);
+        // "feature" is not a configured remote.
+        Assert.Null(state.RemoteName);
+    }
+
+    /// <summary>
     /// Required test 3: ahead/behind counts match the fixture remote after the
     /// remote-tracking state is refreshed (spec 13 §14.2). Two local commits not
     /// on the remote and one remote commit not local are reported as
@@ -238,9 +333,18 @@ public sealed class GitFetchTests
         GitRemoteStateResult before = await service.GetRemoteStateAsync(repo.RootPath);
         Assert.Equal(0, Assert.IsType<GitRemoteState>(before.State).Behind);
 
+        // F7 — pre-stage a path so the "index untouched" evidence compares a
+        // non-empty staged list; an empty list before and after would only
+        // prove "still clean".
+        repo.WriteFile("docs/staged-before-fetch.md", "staged before fetch");
+        Assert.Equal(
+            0,
+            TestGitRepository.RunGit(repo.RootPath, "add", "--", "docs/staged-before-fetch.md"));
+
         IReadOnlyList<string> treeBefore = SnapshotWorkingTree(repo.RootPath);
         string statusBefore = WorkingTreeStatus(repo.RootPath);
         string stagedBefore = StagedNames(repo.RootPath);
+        Assert.NotEmpty(stagedBefore);
 
         GitFetchResult result = await service.FetchAsync(repo.RootPath);
 
@@ -348,19 +452,25 @@ public sealed class GitFetchTests
 
     /// <summary>
     /// Fetch runs through the SCM-01 per-worktree mutation queue, so concurrent
-    /// fetches against one worktree serialize (spec 13 §19).
+    /// fetches against one worktree serialize (spec 13 §19). F10 — a call from
+    /// the worktree root and a call from a nested subdirectory must share the
+    /// same queue slot (the service resolves the true worktree root before the
+    /// fetch runs, so the subdirectory never gets its own slot).
     /// </summary>
     [Fact]
     public async Task FetchRunsThroughThePerWorktreeMutationQueue()
     {
         using var repo = CreateRepositoryWithUpstream(out _);
+        string nested = Path.Combine(repo.RootPath, "docs");
 
         var queue = new GitWorktreeMutationQueue();
         var runner = new GitProcessRunner(GitProcessRunnerOptions.Default, queue);
         var service = new GitRemoteService(runner, new GitRepositoryService(runner));
 
         GitFetchResult[] results = await Task.WhenAll(
-            Enumerable.Range(0, 3).Select(_ => service.FetchAsync(repo.RootPath)));
+            service.FetchAsync(repo.RootPath),
+            service.FetchAsync(nested),
+            service.FetchAsync(repo.RootPath));
 
         Assert.All(results, result => Assert.Equal(GitFetchOutcome.Succeeded, result.Outcome));
         Assert.Equal(1, queue.MaxObservedConcurrency);
@@ -392,15 +502,50 @@ public sealed class GitFetchTests
     }
 
     /// <summary>
-    /// A remote that requires authentication yields the typed
-    /// <c>AuthenticationRequired</c> outcome and returns promptly instead of
-    /// hanging (spec 13 §14.4/§18): the SCM-01 runner pins
-    /// <c>GIT_TERMINAL_PROMPT=0</c> and closes child stdin, and the service maps
-    /// the failure typed. Driven with a scripted runner so no network is needed
-    /// and the signature is deterministic.
+    /// F3 — a remote that requires authentication is classified from Git's own
+    /// <c>LC_ALL=C</c>-pinned diagnostics with the runner's
+    /// <see cref="GitProcessErrorKind"/> deliberately <b>unset</b>, so the test
+    /// exercises the text classification rather than a canned kind. Driven with
+    /// a scripted runner so no network is needed and the signature is
+    /// deterministic.
     /// </summary>
     [Fact]
-    public async Task FetchAuthenticationRequiredIsTypedWithoutHanging()
+    public async Task FetchAuthenticationFailureIsTypedFromGitDiagnostics()
+    {
+        using var repo = CreateRepositoryWithUpstream(out _);
+
+        var inner = new GitProcessRunner(GitProcessRunnerOptions.Default, new GitWorktreeMutationQueue());
+        // ErrorKind is left at its default (unset/None): only the diagnostic
+        // text identifies the failure (F3).
+        var scripted = new ScriptedGitProcessRunner(
+            inner,
+            ("fetch", new GitProcessResult(
+                GitProcessStatus.Failed,
+                128,
+                string.Empty,
+                "fatal: could not read Username for 'https://example.invalid': terminal prompts disabled")));
+        GitRemoteService service = CreateService(scripted);
+
+        GitFetchResult result = await service.FetchAsync(repo.RootPath);
+
+        Assert.Equal(GitFetchOutcome.AuthenticationRequired, result.Outcome);
+        Assert.False(result.IsSuccess);
+        Assert.Equal("AuthenticationRequired", result.ErrorCode);
+        Assert.NotNull(result.Failure);
+        Assert.Equal(GitProcessErrorKind.None, result.Failure!.ErrorKind);
+
+        // No credential/secret material is echoed into the surfaced message.
+        Assert.DoesNotContain("Username", result.Message ?? string.Empty);
+        Assert.DoesNotContain("https://", result.Message ?? string.Empty);
+    }
+
+    /// <summary>
+    /// F5 — an HTTP 401 ("unable to access … The requested URL returned error:
+    /// 401") is an authentication failure, not <c>HostUnreachable</c> (the
+    /// generic remote-reachability wording also matches "unable to access").
+    /// </summary>
+    [Fact]
+    public async Task FetchHttpUnauthorizedIsTypedAsAuthenticationRequired()
     {
         using var repo = CreateRepositoryWithUpstream(out _);
 
@@ -411,29 +556,45 @@ public sealed class GitFetchTests
                 GitProcessStatus.Failed,
                 128,
                 string.Empty,
-                "fatal: could not read Username for 'https://example.invalid': terminal prompts disabled",
-                GitProcessErrorKind.GitAuthRequired,
-                "`git fetch` exited with code 128.")));
+                "fatal: unable to access 'https://example.invalid/repo.git/': " +
+                "The requested URL returned error: 401")));
         GitRemoteService service = CreateService(scripted);
 
-        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         GitFetchResult result = await service.FetchAsync(repo.RootPath);
-        stopwatch.Stop();
 
         Assert.Equal(GitFetchOutcome.AuthenticationRequired, result.Outcome);
-        Assert.False(result.IsSuccess);
         Assert.Equal("AuthenticationRequired", result.ErrorCode);
-        Assert.NotNull(result.Failure);
-        Assert.Equal(GitProcessErrorKind.GitAuthRequired, result.Failure!.ErrorKind);
+    }
 
-        // The operation failed fast — it never blocked on an interactive prompt.
-        Assert.True(
-            stopwatch.Elapsed < TimeSpan.FromSeconds(10),
-            $"Fetch blocked for {stopwatch.Elapsed}; an auth failure must not hang.");
+    /// <summary>
+    /// F3/F4 — the effective environment the runner applies to the fetch process
+    /// must neutralize interactive credential prompting: a configured
+    /// credential helper (e.g. <c>credential.helper=manager</c>) can otherwise
+    /// block on a GUI prompt for the whole default timeout and be mis-typed.
+    /// </summary>
+    [Fact]
+    public async Task FetchProcessEnvironmentDisablesInteractiveCredentials()
+    {
+        using var repo = CreateRepositoryWithUpstream(out _);
 
-        // No credential/secret material is echoed into the surfaced message.
-        Assert.DoesNotContain("Username", result.Message ?? string.Empty);
-        Assert.DoesNotContain("https://", result.Message ?? string.Empty);
+        var recording = new RecordingGitProcessRunner(
+            new GitProcessRunner(GitProcessRunnerOptions.Default, new GitWorktreeMutationQueue()));
+        GitRemoteService service = CreateService(recording);
+
+        GitFetchResult result = await service.FetchAsync(repo.RootPath);
+        Assert.Equal(GitFetchOutcome.Succeeded, result.Outcome);
+
+        GitProcessRequest fetchRequest = Assert.Single(
+            recording.Requests,
+            request => request.Arguments.Count > 0 && request.Arguments[0] == "fetch");
+
+        IReadOnlyDictionary<string, string> effective =
+            GitProcessRunnerOptions.ResolveEnvironmentVariables(fetchRequest.EnvironmentOverrides);
+
+        Assert.Equal("0", effective["GIT_TERMINAL_PROMPT"]);
+        Assert.Equal(string.Empty, effective["GIT_ASKPASS"]);
+        Assert.Equal(string.Empty, effective["SSH_ASKPASS"]);
+        Assert.Equal("never", effective["GCM_INTERACTIVE"]);
     }
 
     /// <summary>
@@ -885,9 +1046,16 @@ public sealed class GitFetchApiTests : IClassFixture<WebApplicationFactory<Progr
             GitFetchTests.DeleteDirectoryBestEffort(clone);
         }
 
+        // F7 — pre-stage a path so the "index untouched" evidence is not vacuous.
+        repo.WriteFile("docs/staged-before-fetch.md", "staged before fetch");
+        Assert.Equal(
+            0,
+            TestGitRepository.RunGit(repo.RootPath, "add", "--", "docs/staged-before-fetch.md"));
+
         IReadOnlyList<string> treeBefore = GitFetchTests.SnapshotWorkingTree(repo.RootPath);
         string statusBefore = GitFetchTests.WorkingTreeStatus(repo.RootPath);
         string stagedBefore = GitFetchTests.StagedNames(repo.RootPath);
+        Assert.NotEmpty(stagedBefore);
 
         using var client = await CreateAuthorizedClientAsync();
         using var response = await client.PostAsJsonAsync(

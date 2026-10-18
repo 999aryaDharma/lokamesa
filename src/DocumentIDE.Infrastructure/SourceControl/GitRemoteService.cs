@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DocumentIDE.Core.SourceControl;
@@ -24,9 +23,14 @@ namespace DocumentIDE.Infrastructure.SourceControl;
 ///
 /// Fetch never modifies working-tree document contents or the index
 /// (spec 13 §14.1); it updates only remote-tracking state. Remote failures are
-/// typed; the SCM-01 runner pins <c>GIT_TERMINAL_PROMPT=0</c> and closes child
-/// stdin, so an authentication prompt fails fast as a typed
-/// <see cref="GitFetchOutcome.AuthenticationRequired"/> instead of hanging.
+/// typed. The SCM-01 runner's protected environment disables interactive
+/// credential prompting for every Git process it spawns
+/// (<c>GIT_TERMINAL_PROMPT=0</c>, emptied <c>GIT_ASKPASS</c>/<c>SSH_ASKPASS</c>
+/// and <c>GCM_INTERACTIVE=never</c>), so a remote that requires credentials
+/// fails promptly and is typed
+/// <see cref="GitFetchOutcome.AuthenticationRequired"/> rather than blocking on
+/// a prompt; the invocation is nevertheless still bounded by the runner's
+/// default process timeout as a backstop.
 /// </summary>
 public sealed class GitRemoteService
 {
@@ -61,26 +65,7 @@ public sealed class GitRemoteService
             return new GitRemoteStateResult(DiscoveryFailure(context), null, context.Failure);
         }
 
-        GitStatusResult status = await _repositories.GetStatusAsync(context.WorktreeRoot!, cancellationToken);
-        if (!status.IsAvailable || status.Snapshot is null)
-        {
-            return new GitRemoteStateResult(MapStatusFailure(status), null, status.Failure);
-        }
-
-        GitStatusSnapshot snapshot = status.Snapshot;
-        GitRemoteState state = new(
-            snapshot.WorktreeRoot,
-            snapshot.BranchName,
-            snapshot.IsDetached,
-            snapshot.HeadCommit,
-            RemoteNameFromUpstream(snapshot.UpstreamReference),
-            snapshot.UpstreamReference,
-            snapshot.HasUpstream ? snapshot.Ahead : null,
-            snapshot.HasUpstream ? snapshot.Behind : null);
-
-        return new GitRemoteStateResult(
-            snapshot.HasUpstream ? GitRemoteOutcome.Available : GitRemoteOutcome.NoUpstream,
-            state);
+        return await ReadRemoteStateAsync(context.WorktreeRoot!, cancellationToken);
     }
 
     /// <summary>
@@ -121,18 +106,42 @@ public sealed class GitRemoteService
 
         string worktreeRoot = context.WorktreeRoot!;
 
-        // No configured upstream: a first-class non-error state, and no fetch
-        // runs (spec 13 §14.2). The state is still re-read so the pane can show
-        // the explicit "no upstream" state.
-        if (context.UpstreamReference is null)
+        // F1 — the fetch gate uses the SAME configured-upstream resolution as
+        // GetRemoteStateAsync (ReadRemoteStateAsync), never
+        // `git rev-parse @{upstream}`. That rev-parse exits 128 when the
+        // configured upstream's remote-tracking ref is absent (the upstream
+        // branch was deleted remotely, or a `fetch --prune` removed the ref),
+        // which would permanently refuse a fetch for a branch that does have an
+        // upstream. The configured upstream is still reported by Git's status
+        // in that case, so the gate must key on it.
+        GitRemoteStateResult upstream = await ReadRemoteStateAsync(worktreeRoot, cancellationToken);
+        if (upstream.Outcome == GitRemoteOutcome.NoUpstream)
         {
-            GitRemoteStateResult noUpstream = await GetRemoteStateAsync(worktreeRoot, cancellationToken);
+            // No configured upstream: a first-class non-error state, and no
+            // fetch runs (spec 13 §14.2). The state is still reported so the
+            // pane can show the explicit "no upstream" state.
             return new GitFetchResult(
                 GitFetchOutcome.NoUpstream,
-                noUpstream.State,
+                upstream.State,
                 null,
                 "The current branch has no configured upstream; nothing was fetched.",
                 "NoUpstream");
+        }
+
+        if (upstream.Outcome != GitRemoteOutcome.Available)
+        {
+            // The upstream could not be read at all (status/failure): nothing
+            // runs, and the failure stays typed rather than being downgraded.
+            return new GitFetchResult(
+                upstream.Outcome switch
+                {
+                    GitRemoteOutcome.NoRepository => GitFetchOutcome.NoRepository,
+                    GitRemoteOutcome.GitUnavailable => GitFetchOutcome.GitUnavailable,
+                    _ => GitFetchOutcome.Failed,
+                },
+                upstream.State,
+                upstream.Failure,
+                upstream.Failure?.ErrorMessage ?? "The remote state could not be read; nothing was fetched.");
         }
 
         // A structured argument list — exactly ["fetch"], never a shell string,
@@ -148,8 +157,90 @@ public sealed class GitRemoteService
             return ClassifyFetchFailure(fetch);
         }
 
-        GitRemoteStateResult state = await GetRemoteStateAsync(worktreeRoot, cancellationToken);
+        GitRemoteStateResult state = await ReadRemoteStateAsync(worktreeRoot, cancellationToken);
         return new GitFetchResult(GitFetchOutcome.Succeeded, state.State, null, null);
+    }
+
+    /// <summary>
+    /// F1 — the single upstream/state resolution shared by the read route
+    /// (<see cref="GetRemoteStateAsync"/>) and the fetch gate
+    /// (<see cref="FetchAsync"/>), so the two can never disagree.
+    ///
+    /// The configured upstream is taken from the same machine-readable status
+    /// projection both routes consume (<c>git status --porcelain=v2 -z --branch</c>
+    /// → <c>branch.upstream</c>), which Git derives from the branch's configured
+    /// upstream (<c>branch.&lt;name&gt;.remote</c> + <c>branch.&lt;name&gt;.merge</c>)
+    /// and reports even when the remote-tracking ref is absent. It is
+    /// deliberately not derived from <c>rev-parse @{upstream}</c> resolvability,
+    /// which fails (exit 128) in exactly that case.
+    /// </summary>
+    private async Task<GitRemoteStateResult> ReadRemoteStateAsync(
+        string worktreeRoot,
+        CancellationToken cancellationToken)
+    {
+        GitStatusResult status = await _repositories.GetStatusAsync(worktreeRoot, cancellationToken);
+        if (!status.IsAvailable || status.Snapshot is null)
+        {
+            return new GitRemoteStateResult(MapStatusFailure(status), null, status.Failure);
+        }
+
+        GitStatusSnapshot snapshot = status.Snapshot;
+
+        // F6 — the remote name comes from the branch's configured remote, not
+        // from guessing at the upstream string. Only read it when an upstream
+        // is actually configured.
+        string? remoteName = snapshot.HasUpstream
+            ? await ReadConfiguredRemoteNameAsync(worktreeRoot, snapshot.BranchName, cancellationToken)
+            : null;
+
+        GitRemoteState state = new(
+            snapshot.WorktreeRoot,
+            snapshot.BranchName,
+            snapshot.IsDetached,
+            snapshot.HeadCommit,
+            remoteName,
+            snapshot.UpstreamReference,
+            snapshot.HasUpstream ? snapshot.Ahead : null,
+            snapshot.HasUpstream ? snapshot.Behind : null);
+
+        return new GitRemoteStateResult(
+            snapshot.HasUpstream ? GitRemoteOutcome.Available : GitRemoteOutcome.NoUpstream,
+            state);
+    }
+
+    /// <summary>
+    /// F6 — resolves the branch's configured remote
+    /// (<c>branch.&lt;name&gt;.remote</c>) from Git configuration. A local-branch
+    /// upstream stores the sentinel <c>.</c> and has no remote at all, and a
+    /// local branch whose own name contains a slash must not be mistaken for a
+    /// remote, so the remote name is never parsed out of the upstream string.
+    /// Returns <c>null</c> for a detached HEAD, an unset value, or the local
+    /// sentinel.
+    /// </summary>
+    private async Task<string?> ReadConfiguredRemoteNameAsync(
+        string worktreeRoot,
+        string? branchName,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(branchName))
+        {
+            return null;
+        }
+
+        GitProcessResult remote = await _runner.RunAsync(
+            new GitProcessRequest(
+                new[] { "config", "--get", $"branch.{branchName}.remote" },
+                worktreeRoot),
+            cancellationToken);
+
+        // An unset key exits non-zero with no output: no upstream remote.
+        if (!remote.IsSuccess)
+        {
+            return null;
+        }
+
+        string value = remote.StandardOutput.Trim();
+        return value.Length == 0 || value == "." ? null : value;
     }
 
     /// <summary>
@@ -158,6 +249,13 @@ public sealed class GitRemoteService
     /// most unambiguous signature to the most heuristic; Git diagnostics are
     /// pinned to <c>LC_ALL=C</c> by the runner, so the markers are locale-stable.
     /// A raw failure is never surfaced as a success.
+    ///
+    /// F5 — the shared signatures (authentication, permissions, rejection) come
+    /// from the SCM-01 <see cref="GitFailureClassifier"/> rather than a duplicate
+    /// marker list; only the genuinely remote-only signatures live in
+    /// <see cref="GitRemoteFailureClassifier"/>. The shared classification is
+    /// re-derived here from the diagnostics so it still works when the failure
+    /// carries no <see cref="GitProcessResult.ErrorKind"/>.
     /// </summary>
     private static GitFetchResult ClassifyFetchFailure(GitProcessResult failure)
     {
@@ -171,8 +269,13 @@ public sealed class GitRemoteService
                 "GitUnavailable");
         }
 
-        if (failure.ErrorKind == GitProcessErrorKind.GitAuthRequired
-            || MatchesAny(failure, AuthenticationMarkers))
+        GitProcessErrorKind kind = GitFailureClassifier.Classify(
+            failure.ExitCode ?? 1,
+            failure.StandardOutput,
+            failure.StandardError);
+
+        if (kind == GitProcessErrorKind.GitAuthRequired
+            || GitRemoteFailureClassifier.IsAuthenticationRequired(failure))
         {
             return Failure(
                 GitFetchOutcome.AuthenticationRequired,
@@ -182,8 +285,7 @@ public sealed class GitRemoteService
                 "AuthenticationRequired");
         }
 
-        if (failure.ErrorKind == GitProcessErrorKind.GitPermissionDenied
-            || MatchesAny(failure, PermissionDeniedMarkers))
+        if (kind == GitProcessErrorKind.GitPermissionDenied)
         {
             return Failure(
                 GitFetchOutcome.PermissionDenied,
@@ -192,8 +294,7 @@ public sealed class GitRemoteService
                 "PermissionDenied");
         }
 
-        if (failure.ErrorKind == GitProcessErrorKind.GitPushRejected
-            || MatchesAny(failure, RejectedMarkers))
+        if (kind == GitProcessErrorKind.GitPushRejected)
         {
             return Failure(
                 GitFetchOutcome.Rejected,
@@ -202,7 +303,7 @@ public sealed class GitRemoteService
                 "Rejected");
         }
 
-        if (MatchesAny(failure, HostUnreachableMarkers))
+        if (GitRemoteFailureClassifier.IsHostUnreachable(failure))
         {
             return Failure(
                 GitFetchOutcome.HostUnreachable,
@@ -224,87 +325,6 @@ public sealed class GitRemoteService
         string message,
         string? errorCode) =>
         new(outcome, null, failure, message, errorCode);
-
-    /// <summary>
-    /// True when any marker appears in the failure's streams. Only Git-provided
-    /// diagnostic text is inspected; no secret is ever copied into a result
-    /// message (the failure's own message stays the runner's generic text).
-    /// </summary>
-    private static bool MatchesAny(GitProcessResult failure, string[] markers) =>
-        markers.Any(marker =>
-            failure.StandardError.Contains(marker, StringComparison.OrdinalIgnoreCase)
-            || failure.StandardOutput.Contains(marker, StringComparison.OrdinalIgnoreCase));
-
-    /// <summary>
-    /// Git's wording when a remote needs credentials no disabled prompt can
-    /// supply (spec 13 §14.4/§18). Matched as a fallback to the SCM-01
-    /// classifier's own <see cref="GitProcessErrorKind.GitAuthRequired"/>.
-    /// </summary>
-    private static readonly string[] AuthenticationMarkers =
-    {
-        "authentication failed",
-        "authentication required",
-        "could not read username",
-        "could not read password",
-        "terminal prompts disabled",
-        "permission denied (publickey",
-        "invalid username or password",
-        "support for password authentication was removed",
-    };
-
-    /// <summary>Git's wording when the operation was denied by permissions (spec 13 §20).</summary>
-    private static readonly string[] PermissionDeniedMarkers =
-    {
-        "permission denied",
-        "access is denied",
-    };
-
-    /// <summary>Git's wording when a remote rejects the request (spec 13 §20).</summary>
-    private static readonly string[] RejectedMarkers =
-    {
-        "remote rejected",
-        "! [rejected]",
-        "[rejected]",
-    };
-
-    /// <summary>
-    /// Git's wording when a remote cannot be reached: DNS/connection failures and
-    /// a remote path that is not a usable repository (spec 13 §20). These
-    /// signatures are the ones the SCM-01 classifier deliberately leaves
-    /// <see cref="GitProcessErrorKind.Unknown"/> because they are remote, not
-    /// local-repository, conditions.
-    /// </summary>
-    private static readonly string[] HostUnreachableMarkers =
-    {
-        "could not resolve host",
-        "could not resolve hostname",
-        "unable to access",
-        "could not read from remote repository",
-        "connection refused",
-        "connection timed out",
-        "network is unreachable",
-        "no route to host",
-        "failed to connect",
-        "the remote end hung up",
-        "does not appear to be a git repository",
-        "repository not found",
-        "operation timed out",
-    };
-
-    /// <summary>
-    /// The remote name is the first path segment of the upstream reference
-    /// (<c>origin/main</c> → <c>origin</c>); <c>null</c> without an upstream.
-    /// </summary>
-    private static string? RemoteNameFromUpstream(string? upstreamReference)
-    {
-        if (string.IsNullOrEmpty(upstreamReference))
-        {
-            return null;
-        }
-
-        int separator = upstreamReference.IndexOf('/');
-        return separator <= 0 ? upstreamReference : upstreamReference[..separator];
-    }
 
     private static GitRemoteOutcome DiscoveryFailure(GitRepositoryContext context) =>
         context.Status switch

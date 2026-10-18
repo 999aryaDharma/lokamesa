@@ -37,10 +37,10 @@ public enum GitRemoteOutcome
 /// <param name="BranchName">Current branch name; <c>null</c> on a detached HEAD.</param>
 /// <param name="IsDetached">True when HEAD is detached (no branch).</param>
 /// <param name="HeadCommit">Current HEAD commit id, or <c>null</c> for an unborn branch.</param>
-/// <param name="RemoteName">Remote of the configured upstream (e.g. <c>origin</c>); <c>null</c> without an upstream.</param>
+/// <param name="RemoteName">Remote of the configured upstream (e.g. <c>origin</c>); <c>null</c> without an upstream or when the upstream is a local branch.</param>
 /// <param name="UpstreamReference">Configured upstream reference (e.g. <c>origin/main</c>); <c>null</c> without one.</param>
-/// <param name="Ahead">Local commits not yet on the upstream; <c>null</c> when there is no upstream.</param>
-/// <param name="Behind">Upstream commits not yet in local history; <c>null</c> when there is no upstream.</param>
+/// <param name="Ahead">Local commits not yet on the upstream; <c>null</c> when there is no upstream or when Git cannot compute the count (the upstream's remote-tracking ref is absent).</param>
+/// <param name="Behind">Upstream commits not yet in local history; <c>null</c> when there is no upstream or when Git cannot compute the count (the upstream's remote-tracking ref is absent).</param>
 public sealed record GitRemoteState(
     string WorktreeRoot,
     string? BranchName,
@@ -51,7 +51,12 @@ public sealed record GitRemoteState(
     int? Ahead,
     int? Behind)
 {
-    /// <summary>True when Git reported a configured upstream branch (spec 13 §14.2).</summary>
+    /// <summary>
+    /// True when Git reported a configured upstream branch (spec 13 §14.2).
+    /// A configured upstream is independent of computable counters:
+    /// <see cref="Ahead"/>/<see cref="Behind"/> are <c>null</c> when there is no
+    /// upstream <i>or</i> when the upstream's remote-tracking ref is absent.
+    /// </summary>
     public bool HasUpstream => !string.IsNullOrEmpty(UpstreamReference);
 }
 
