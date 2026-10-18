@@ -51,7 +51,11 @@ export interface SourceControlScreenProps {
   path: string | null;
   inspectorOpen: boolean;
   onOpenWorktrees: () => void;
-  onOpenDocxDiff: (entry: SourceControlChangeEntry) => void;
+  /**
+   * Screen 06 needs the true worktree root (SCM-19's `path`), which is what
+   * `GET status` reported — never a discovered workspace path.
+   */
+  onOpenDocxDiff: (entry: SourceControlChangeEntry, worktreeRoot: string | null) => void;
   onOpenInWord: (documentId: string) => void;
   onOpenMarkdown: (documentId: string) => void;
   /** Opens the existing FS-01 folder-source attachment flow (never auto-attach). */
@@ -573,7 +577,7 @@ export default function SourceControlScreen({
                 </p>
                 <button
                   type="button"
-                  onClick={() => onOpenDocxDiff(selectedEntry)}
+                  onClick={() => onOpenDocxDiff(selectedEntry, status?.worktreeRoot ?? null)}
                   className="rounded-lg bg-mac-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-mac-accent/90"
                 >
                   Open document diff

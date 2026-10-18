@@ -136,6 +136,8 @@ export default function App() {
    */
   const [repositoryPath, setRepositoryPath] = useState<string | null>(null);
   const [docxDiffEntry, setDocxDiffEntry] = useState<SourceControlChangeEntry | null>(null);
+  /** UI-04: the true worktree root `GET status` reported for the selected change. */
+  const [docxDiffWorktreeRoot, setDocxDiffWorktreeRoot] = useState<string | null>(null);
   const [batchOpen, setBatchOpen] = useState(false);
   const [pdfOpen, setPdfOpen] = useState(false);
   const [markdownDoc, setMarkdownDoc] = useState<{ id: string; title: string } | null>(null);
@@ -394,8 +396,9 @@ export default function App() {
                 path={repositoryPath}
                 inspectorOpen={inspectorOpen}
                 onOpenWorktrees={() => setActiveSurface('worktrees')}
-                onOpenDocxDiff={(entry) => {
+                onOpenDocxDiff={(entry, worktreeRoot) => {
                   setDocxDiffEntry(entry);
+                  setDocxDiffWorktreeRoot(worktreeRoot);
                   setActiveSurface('docx-diff');
                 }}
                 onOpenInWord={(documentId) => void handleOpenInWord(documentId)}
@@ -416,6 +419,7 @@ export default function App() {
             {activeSurface === 'docx-diff' && docxDiffEntry && (
               <DocxDiffScreen
                 entry={docxDiffEntry}
+                worktreeRoot={docxDiffWorktreeRoot}
                 inspectorOpen={inspectorOpen}
                 onBack={() => setActiveSurface('source-control')}
               />

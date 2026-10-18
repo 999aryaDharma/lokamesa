@@ -1,28 +1,45 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { openInWord } from '../files/OpenInWordAction';
 import InspectorCard, { InspectorField } from '../shell/InspectorCard';
 import DocxDiffPanel from './DocxDiffPanel';
+import {
+  docxDiffTargetFor,
+  fetchDocxDiff,
+  toDocxDiffViewState,
+  type DocxDiffViewState,
+} from './docxDiffApi';
 import type { SourceControlChangeEntry } from './sourceControlModels';
 
 /**
- * UI-03 screen 06 — DOCX document-aware diff.
+ * UI-03/UI-04 screen 06 — DOCX document-aware diff.
  *
- * A read-only report around the shipped `DocxDiffPanel`. The design shows a
- * unified text diff for a `.docx`; that is not implementable honestly, so this
- * screen never renders one. The document is reviewed structurally, and deep
- * editing stays in Microsoft Word: the primary action is the existing
- * `openInWord` path.
+ * A read-only report around the shipped `DocxDiffPanel`, driven by the real
+ * SCM-19 `POST /api/source-control/docx-diff` route. The design's change-class
+ * chips map to our change classes; the paragraph before → after blocks, table
+ * cells and formatting summaries are the engine's exact report. Nothing is
+ * inferred client-side:
  *
- * The document-aware comparison itself needs the SCM-05 provider exposed over
- * HTTP. That route is not part of this build, so the panel reports the typed
- * limitation instead of showing a fabricated change list. No page image is
- * claimed (WORD-04 remains unimplemented).
+ *   - `path` is the **true worktree root** from `GET status` (`worktreeRoot`),
+ *     never a discovered workspace path;
+ *   - `BinaryFallback` renders its typed size/SHA summary, never change rows;
+ *   - every typed failure renders its typed state, never a fabricated list;
+ *   - no page image is claimed (WORD-04 remains unimplemented).
+ *
+ * DOCX deep editing stays in Microsoft Word: the primary action is the
+ * existing `openInWord` path and it is unchanged.
  */
 
 export interface DocxDiffScreenProps {
   entry: SourceControlChangeEntry;
+  /** The true worktree root reported by `GET /api/source-control/status`. */
+  worktreeRoot: string | null;
   onBack: () => void;
   inspectorOpen: boolean;
+}
+
+interface DiffLoadState {
+  loading: boolean;
+  view: DocxDiffViewState | null;
 }
 
 function basename(path: string): string {
@@ -36,23 +53,120 @@ function folderOf(path: string): string {
   return index > 0 ? normalized.slice(0, index) : '—';
 }
 
+function errorMessageOf(error: unknown): string {
+  return error instanceof Error ? error.message : 'The document diff request failed.';
+}
+
+interface ChangeClassCounts {
+  text: number;
+  table: number;
+  formatting: number;
+  metadata: number;
+}
+
+/** Derived from the engine's change classes only — no synthesized counts. */
+function countChangeClasses(state: DocxDiffViewState | null): ChangeClassCounts | null {
+  if (!state || state.status !== 'available' || !state.diff) return null;
+  const counts: ChangeClassCounts = { text: 0, table: 0, formatting: 0, metadata: 0 };
+  for (const change of state.diff.changes) {
+    switch (change.kind) {
+      case 'paragraph-added':
+      case 'paragraph-removed':
+      case 'paragraph-text-changed':
+      case 'heading-changed':
+        counts.text += 1;
+        break;
+      case 'table-cell-added':
+      case 'table-cell-removed':
+      case 'table-cell-changed':
+        counts.table += 1;
+        break;
+      case 'formatting-changed':
+        counts.formatting += 1;
+        break;
+      case 'metadata-changed':
+        counts.metadata += 1;
+        break;
+    }
+  }
+  return counts;
+}
+
+function plural(count: number, singular: string, pluralForm: string): string {
+  return `${count} ${count === 1 ? singular : pluralForm}`;
+}
+
 const secondaryButtonClassName =
   'px-2.5 py-1 text-xs font-medium text-mac-text bg-mac-content border border-mac-hairline-strong ' +
   'rounded-lg hover:bg-mac-chip focus:outline-none focus:ring-2 focus:ring-mac-accent/40 ' +
   'disabled:opacity-50 transition-colors';
 
-export default function DocxDiffScreen({ entry, onBack, inspectorOpen }: DocxDiffScreenProps) {
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+const chipClassName =
+  'rounded border border-mac-hairline bg-mac-canvas px-1.5 py-0.5 text-[11px] text-mac-text-2';
+
+export default function DocxDiffScreen({
+  entry,
+  worktreeRoot,
+  onBack,
+  inspectorOpen,
+}: DocxDiffScreenProps) {
+  const [wordError, setWordError] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [load, setLoad] = useState<DiffLoadState>({ loading: true, view: null });
+
+  const target = docxDiffTargetFor(entry);
+  const { path: entryPath, originalPath, conflictKind, indexChange, workingTreeChange, state } =
+    entry;
+
+  useEffect(() => {
+    if (!worktreeRoot) {
+      setRequestError(null);
+      setLoad({ loading: false, view: null });
+      return;
+    }
+
+    let active = true;
+    setRequestError(null);
+    setLoad({ loading: true, view: null });
+
+    void (async () => {
+      try {
+        const payload = await fetchDocxDiff(worktreeRoot, entryPath, target, originalPath);
+        if (!active) return;
+        setLoad({ loading: false, view: toDocxDiffViewState(payload) });
+      } catch (error) {
+        if (!active) return;
+        setLoad({ loading: false, view: null });
+        setRequestError(errorMessageOf(error));
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    conflictKind,
+    entryPath,
+    indexChange,
+    originalPath,
+    state,
+    target,
+    workingTreeChange,
+    worktreeRoot,
+  ]);
+
+  const counts = useMemo(() => countChangeClasses(load.view), [load.view]);
+  const report = load.view?.diff ?? null;
 
   async function handleOpenInWord() {
     if (!entry.documentId) return;
     setOpening(true);
-    setErrorMessage(null);
+    setWordError(null);
     const result = await openInWord(entry.documentId);
     setOpening(false);
     if (!result.success) {
-      setErrorMessage(result.errorMessage);
+      setWordError(result.errorMessage);
     }
   }
 
@@ -76,12 +190,12 @@ export default function DocxDiffScreen({ entry, onBack, inspectorOpen }: DocxDif
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
-          {errorMessage && (
+          {wordError && (
             <div
               role="alert"
               className="mb-2 rounded-lg border border-mac-danger/40 bg-mac-danger/10 p-2 text-xs text-mac-danger"
             >
-              {errorMessage}
+              {wordError}
             </div>
           )}
 
@@ -89,18 +203,64 @@ export default function DocxDiffScreen({ entry, onBack, inspectorOpen }: DocxDif
             <span className="rounded border border-mac-hairline bg-mac-canvas px-1.5 py-0.5 font-mono text-xs text-mac-text-2">
               {entry.statusCharacters}
             </span>
-            <span className="rounded border border-mac-hairline bg-mac-canvas px-1.5 py-0.5 text-xs text-mac-text-2">
-              {entry.state}
-            </span>
-            <span className="rounded border border-mac-hairline bg-mac-canvas px-1.5 py-0.5 text-xs text-mac-text-2">
-              DOCX · OOXML
+            <span className={chipClassName}>{entry.state}</span>
+            <span className={chipClassName}>DOCX · OOXML</span>
+            <span className="ml-auto text-[10px] font-medium uppercase tracking-wide text-mac-text-3">
+              Read-only
             </span>
           </div>
 
-          <DocxDiffPanel
-            status="failed"
-            failureMessage="A document-aware comparison is not available for this change in this build. The document is unchanged by this screen; open it in Word to review the content."
-          />
+          {!worktreeRoot && (
+            <div
+              data-testid="docx-diff-worktree-unknown"
+              className="w-full max-w-3xl rounded-xl border border-mac-hairline bg-mac-canvas p-4 text-xs text-mac-text-2"
+            >
+              The true worktree root is not known for this change, so the document-aware
+              comparison cannot be requested. Reload source control to re-read the Git context.
+              The document is unchanged by this screen.
+            </div>
+          )}
+
+          {worktreeRoot && requestError && (
+            <div
+              role="alert"
+              className="w-full max-w-3xl rounded-xl border border-mac-danger/40 bg-mac-danger/10 p-4 text-sm text-mac-danger"
+            >
+              {requestError}
+            </div>
+          )}
+
+          {worktreeRoot && !requestError && load.loading && (
+            <DocxDiffPanel status="available" isLoading />
+          )}
+
+          {worktreeRoot && !requestError && !load.loading && load.view && (
+            <>
+              {counts && report && (
+                <div
+                  data-testid="docx-diff-class-summary"
+                  className="mb-2 flex flex-wrap items-center gap-1.5"
+                >
+                  <span className={chipClassName}>{plural(counts.text, 'text change', 'text changes')}</span>
+                  <span className={chipClassName}>{plural(counts.table, 'table change', 'table changes')}</span>
+                  <span className={chipClassName}>
+                    {plural(counts.formatting, 'formatting change', 'formatting changes')}
+                  </span>
+                  <span className={chipClassName}>
+                    {plural(counts.metadata, 'metadata change', 'metadata changes')}
+                  </span>
+                  <span className="ml-auto text-[11px] text-mac-text-3">
+                    {report.leftLabel} ↔ {report.rightLabel}
+                  </span>
+                </div>
+              )}
+              <DocxDiffPanel
+                status={load.view.status}
+                diff={load.view.diff}
+                failureMessage={load.view.failureMessage}
+              />
+            </>
+          )}
 
           <p className="mt-3 max-w-3xl text-[11px] text-mac-text-3">
             DOCX deep editing stays in Microsoft Word Desktop. This report is read-only and never
@@ -126,6 +286,50 @@ export default function DocxDiffScreen({ entry, onBack, inspectorOpen }: DocxDif
             <InspectorField label="Change" value={entry.state} />
             <InspectorField label="Index" value={entry.indexChange} />
             <InspectorField label="Working tree" value={entry.workingTreeChange} />
+          </InspectorCard>
+
+          <InspectorCard title="Report summary" testId="docx-inspector-report">
+            {load.loading && <p className="text-[11px] text-mac-text-3">Reading document report…</p>}
+            {!load.loading && !worktreeRoot && (
+              <p className="text-[11px] text-mac-text-3">Worktree root unknown.</p>
+            )}
+            {!load.loading && worktreeRoot && requestError && (
+              <p className="text-[11px] text-mac-text-3">The report could not be read.</p>
+            )}
+            {!load.loading && load.view && !report && (
+              <p className="text-[11px] text-mac-text-3">
+                {load.view.status === 'binary-fallback'
+                  ? 'Binary change only; no document-aware report.'
+                  : 'No document-aware report was produced.'}
+              </p>
+            )}
+            {!load.loading && report && (
+              <>
+                <InspectorField
+                  label="Comparison"
+                  value={`${report.leftLabel} ↔ ${report.rightLabel}`}
+                />
+                <InspectorField label="Changes" value={report.changes.length} />
+                {counts && (
+                  <>
+                    <InspectorField label="Text" value={counts.text} />
+                    <InspectorField label="Table" value={counts.table} />
+                    <InspectorField label="Formatting" value={counts.formatting} />
+                    <InspectorField label="Metadata" value={counts.metadata} />
+                  </>
+                )}
+                {report.binarySummary && (
+                  <InspectorField
+                    label="Binary payload"
+                    value={
+                      report.binarySummary.contentIdentical
+                        ? 'byte-identical'
+                        : `${report.binarySummary.leftSizeBytes} → ${report.binarySummary.rightSizeBytes} bytes`
+                    }
+                  />
+                )}
+              </>
+            )}
           </InspectorCard>
 
           <InspectorCard title="Review" testId="docx-inspector-review">
