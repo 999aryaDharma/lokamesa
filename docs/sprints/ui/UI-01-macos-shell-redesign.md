@@ -180,12 +180,50 @@ Before completion, explicitly confirm:
 
 - `src/DocumentIDE.Web/src/App.tsx` (shell rewrite)
 - `src/DocumentIDE.Web/src/features/shell/*` (new: `Toolbar.tsx`, `Sidebar.tsx`, `Inspector.tsx`, and shared primitives: `SegmentedControl.tsx`, `SheetShell.tsx`, `SourceListRow.tsx`, `InspectorCard.tsx`, `SearchField.tsx`, `DepthStepper.tsx`, `PushButton.tsx` — each with a colocated test)
-- `src/DocumentIDE.Web/src/styles/mac-tokens.css` (or equivalent token source consistent with the project's existing styling approach — inspect current styling mechanism before choosing)
+- `src/DocumentIDE.Web/src/index.css` — add the `mac-*` design tokens as a Tailwind v4 `@theme` block (see "Styling mechanism" below)
 - Restyled, not relocated: every component listed in "In Scope" item 2, plus their colocated tests
 - `docs/sprints/handoffs/UI-01-HANDOFF.md`
 
 If an existing file already provides an equivalent primitive, extend/rename
 it with a documented mapping in the handoff rather than creating a duplicate.
+
+## Styling mechanism (verified by the controller — do not re-invent)
+
+- The app uses **Tailwind v4** via `@tailwindcss/vite`; the only global stylesheet
+  is `src/DocumentIDE.Web/src/index.css`, whose entire content is
+  `@import "tailwindcss";`. Declare the design tokens there in a
+  `@theme { --color-mac-toolbar: #F7F7F8; … }` block so Tailwind generates
+  `bg-mac-toolbar` / `text-mac-text` / `border-mac-hairline` utilities.
+- `src/DocumentIDE.Web/src/App.css` is dead Vite-scaffold CSS (`.counter`,
+  `.hero`, `#center`, …) referenced by nothing in the shipped shell. Do not
+  build on it; do not delete it in this sprint unless it proves to be imported
+  by a live file (verify with a grep first) — if it is dead, note it in the
+  handoff for a separate cleanup.
+- Match the brief's typography: **Inter** for UI, **JetBrains Mono** for diff
+  gutter/code, keeping the product's existing small density (10–15px).
+
+## Shell navigation structure (from the reference screens)
+
+The sidebar's `LIBRARY` section is the app's feature navigation and replaces
+the current flat top-nav buttons. Reference items and their meaning:
+
+| Sidebar row | Meaning in the shipped app |
+| --- | --- |
+| `WORKSPACE` → Canvas view / List view / Graph view | the existing `Canvas \| List \| Graph` view switch (`useViewStore`) |
+| `FOLDER SOURCES` → Documents / Projects / Archive (+ per-source rows) | the existing folder-source data/documents the shell already loads |
+| `LIBRARY` → Source control (badge) | SCM surface (mounted by the SCM reachability lane; restyle only here) |
+| `LIBRARY` → Worktrees | SCM-15/16 worktree UI |
+| `LIBRARY` → Shares (badge) | the existing owner `SharePanel` surface |
+| `LIBRARY` → History | the existing `HistoryPanel` surface |
+| `LIBRARY` → Search | the existing `SearchPanel` surface |
+
+**Gate constraint:** `App.shell.test.tsx` drives these surfaces by
+`getByRole('button', { name: 'Search' })`, `name: 'Shares'`, `name: 'PDF'`,
+and by `getByTestId('pdf-export-panel')` / `getByTestId('share-panel')`
+beyond the earlier state. The redesign must keep every one of those accessible
+names and test ids working (a sidebar row may render as a button with the same
+accessible name; a toolbar icon button may too — but at least one element per
+name must remain reachable). Do not "solve" a failing gate by renaming it away.
 
 ## Acceptance Criteria
 
