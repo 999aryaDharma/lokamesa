@@ -137,7 +137,7 @@ Rules:
 | SCM-17 | Source Control Regression & Release Hardening | DONE | SCM-04, SCM-05, SCM-09, SCM-12, SCM-13, SCM-14, SCM-16, QA-02 | feat/source-control-regression-release-hardening (a07baaf) | docs/sprints/handoffs/SCM-17-HANDOFF.md |
 | SCM-18 | Worktree API Surface | DONE | SCM-15, SCM-16 | feat/worktree-api-surface (a0474c3) | docs/sprints/handoffs/SCM-18-HANDOFF.md |
 | HIST-04 | Operation History Listing API | READY | HIST-01, HIST-02 |  |  |
-| SCM-19 | DOCX Diff API Surface | READY | SCM-05 |  |  |
+| SCM-19 | DOCX Diff API Surface | DONE | SCM-05 | feat/docx-diff-api-surface (merged) | docs/sprints/handoffs/SCM-19-HANDOFF.md |
 | UI-01 | macOS Three-Pane Shell Redesign | DONE | - | feat/ui-01-macos-shell-redesign (0d6893b) | docs/sprints/handoffs/UI-01-HANDOFF.md |
 | UI-02 | Document Preview Content API (DOCX) | DONE | - | feat/ui-02-document-preview-content-api (bbcf67e) | docs/sprints/handoffs/UI-02-HANDOFF.md |
 | UI-03 | macOS Screen Slicing (remaining screens) | DONE | SCM-14, SCM-18 | feat/ui-03-mac-screens-slicing (53e9bd3) | docs/sprints/handoffs/UI-03-HANDOFF.md |
