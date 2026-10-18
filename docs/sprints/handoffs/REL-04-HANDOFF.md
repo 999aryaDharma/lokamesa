@@ -113,7 +113,9 @@ Self-test hooks unchanged:
 ### Full pipeline — `-SkipPackage` (end-to-end)
 
 Command:
-`pwsh -NoProfile -NonInteractive -File scripts/verify-release.ps1 -SkipPackage -OutputDir artifacts/rel04-gate-full`
+`pwsh -NoProfile -NonInteractive -File scripts/verify-release.ps1 -SkipPackage -OutputDir artifacts/rel04-gate-final`
+(the identical `-OutputDir artifacts/rel04-gate-full` invocation was the earlier
+pre-commit working-tree run; see the note below).
 
 Result: **exit 0, verdict `PASSED`** (all gates green; `PackagingVerification`
 correctly `EnvironmentGated` because `-SkipPackage` was passed).
@@ -131,9 +133,13 @@ correctly `EnvironmentGated` because `-SkipPackage` was passed).
 - `WordSuite` → Passed (48 Word tests in IntegrationTests + supporting suites).
 - Report: `artifacts/rel04-gate-full/verification-report.json`.
 
-No previously-green gate flipped (Part 4). The run was executed on the working
-tree atop `ab269c8` before this sprint's commit, so the report pins `ab269c8`
-with `workingTreeDirty: true`; the evidence is the gate results above.
+No previously-green gate flipped (Part 4). The first full run was executed on the
+working tree atop `ab269c8` (`workingTreeDirty: true`, report pinned `ab269c8`);
+the **definitive run was re-executed at the sprint commit `e0e5b4d`
+(`workingTreeDirty: false`)** and again reported `PASSED` with the same
+`MarkdownPreview: 21 test(s) passed, 0 failed`. The verification report pins the
+commit under test; this handoff paragraph is a docs-only edit made after that
+run and changes no verified code.
 
 ### Pre-existing failure observed (flake, not a regression)
 
