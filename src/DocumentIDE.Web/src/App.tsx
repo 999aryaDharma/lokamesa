@@ -1,24 +1,37 @@
 /**
  * Application shell.
  *
+ * UI-01 restructure: the flat top nav became the macOS three-pane shell —
+ * unified toolbar, left source-list sidebar, content, right inspector — with
+ * **zero behaviour change**. Every surface, store and API call below is the
+ * same one the previous shell used; only their placement and skin changed.
+ *
  * Composes the shipped product surfaces and is the single place that wires the
  * previously unreachable subsystems to real data (REL-03 gaps G1/G3/G5/G6/G7):
  *
  *   - G6: on startup the shell loads the workspace's documents and folder
  *     sources through the privileged API and populates the canvas store
  *     (`setObjects`); released folder files are surfaced with `upsertObject`.
- *     Dragging still never moves a physical file.
- *   - G3: the search panel mounts from the tool bar and is backed by the
- *     existing `searchStore` (its `/api/search` contract is unchanged).
- *   - G5: the owner share panel mounts from the tool bar and drives the share
- *     lifecycle API (create / stop / revoke / regenerate / membership).
+ *     Dragging still never moves a physical file. The same load feeds the
+ *     sidebar's `FOLDER SOURCES` rows (real sources, real counts) and the
+ *     canvas folder objects' fan-out.
+ *   - G3: the search panel mounts from the sidebar's `LIBRARY` section and is
+ *     backed by the existing `searchStore` (its `/api/search` contract is
+ *     unchanged).
+ *   - G5: the owner share panel mounts from the sidebar's `LIBRARY` section and
+ *     drives the share lifecycle API (create / stop / revoke / regenerate /
+ *     membership).
  *   - G1: the graph view loads the workspace graph and loads edges with truthful
  *     explicit-vs-inferred semantics.
  *   - G7: double-clicking a Markdown graph node or canvas card opens the
  *     internal Markdown editor overlay (source-first, safe-write via the API).
- *   - G8: the PDF export panel mounts from the tool bar against the live
+ *   - G8: the PDF export panel mounts from the toolbar against the live
  *     privileged PDF route (single / separate / merge), driven by the current
  *     canvas selection and its workspace document paths.
+ *
+ * Reachability rule: exactly one control carries each of the accessible names
+ * the shell tests query (`Search`, `Shares`, `PDF`, `Add folder`,
+ * `Batch operations`), so those queries stay unambiguous.
  *
  * G4 deliberate decision — DOCX Quick Look: the owner DOCX "preview" surface is
  * intentionally open-in-Word, not the WORD-04 high-fidelity `QuickLook`
@@ -42,15 +55,17 @@ import type { FolderPickerFile } from './features/canvas/FolderPicker';
 import type { CanvasObject } from './features/canvas/types';
 import { openInWord } from './features/files/OpenInWordAction';
 import DocumentGraph from './features/graph/DocumentGraph';
-import type { GraphNode } from './features/graph/graphStore';
+import { useGraphStore, type GraphNode } from './features/graph/graphStore';
 import DocumentList from './features/list/DocumentList';
 import MarkdownEditor from './features/markdown/MarkdownEditor';
 import PdfExportPanel from './features/pdf/PdfExportPanel';
 import type { PdfSelectableDocument } from './features/pdf/PdfActions';
 import { SearchPanel } from './features/search/SearchPanel';
 import { SharePanel } from './features/sharing/SharePanel';
+import Inspector from './features/shell/Inspector';
+import Sidebar, { type SidebarFolderSource } from './features/shell/Sidebar';
+import Toolbar from './features/shell/Toolbar';
 import AddFolderSource from './features/workspace/AddFolderSource';
-import ViewSwitcher from './features/workspace/ViewSwitcher';
 import { useViewStore } from './features/workspace/viewStore';
 import { bootstrapWorkspace } from './features/workspace/workspaceBootstrap';
 import { fetchFolderSources, fetchWorkspaceDocuments } from './features/workspace/workspaceApi';
@@ -81,10 +96,19 @@ function useCanvasState() {
   );
 }
 
+function useGraphState() {
+  return useSyncExternalStore(
+    useGraphStore.subscribe,
+    useGraphStore.getState,
+    useGraphStore.getState,
+  );
+}
+
 export default function App() {
   const workspaceId = useMemo(resolveWorkspaceId, []);
   const { activeView, setActiveView, loadPersistedView } = useViewState();
   const { objects, selectedIds, setObjects, upsertObject } = useCanvasState();
+  const graph = useGraphState();
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [sharesOpen, setSharesOpen] = useState(false);
@@ -94,6 +118,10 @@ export default function App() {
   const [markdownDoc, setMarkdownDoc] = useState<{ id: string; title: string } | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [folderFiles, setFolderFiles] = useState<Record<string, FolderPickerFile[]>>({});
+  /** Real folder sources from the same bootstrap, for the sidebar. */
+  const [folderSources, setFolderSources] = useState<SidebarFolderSource[]>([]);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(true);
   /**
    * G8: workspace document id → local source path, from the same bootstrap that
    * populates the canvas. Used to resolve the PDF export source; never a new
@@ -121,6 +149,13 @@ export default function App() {
     });
     documentObjectsRef.current = new Map(result.documentObjects.map((doc) => [doc.id, doc]));
     setFolderFiles(result.folderFiles);
+    setFolderSources(
+      result.folderSources.map((source) => ({
+        id: source.id,
+        title: source.displayName || source.id,
+        documentCount: (result.folderFiles[source.id] ?? []).length,
+      })),
+    );
     setDocumentPaths(
       Object.fromEntries(
         result.documents
@@ -187,141 +222,144 @@ export default function App() {
     [objects, selectedIds],
   );
 
+  /** The same selection the canvas renders, as inspector-ready objects. */
+  const selectedObjects = useMemo(
+    () => objects.filter((object) => selectedIds.has(object.id)),
+    [objects, selectedIds],
+  );
+
   const resolveDocumentPath = useCallback(
     (documentId: string) => documentPaths[documentId],
     [documentPaths],
   );
 
   return (
-    <div className="w-screen h-screen overflow-hidden bg-slate-50 flex flex-col">
-      <nav
-        onKeyDown={(event) => event.stopPropagation()}
-        aria-label="Tools"
-        className="border-b border-slate-200 bg-white p-2 flex items-center gap-3"
-      >
-        <ViewSwitcher activeView={activeView} onViewChange={setActiveView} />
-        <button
-          type="button"
-          aria-pressed={searchOpen}
-          onClick={() => setSearchOpen((open) => !open)}
-        >
-          Search
-        </button>
-        <button
-          type="button"
-          aria-pressed={sharesOpen}
-          onClick={() => setSharesOpen((open) => !open)}
-        >
-          Shares
-        </button>
-        <button
-          type="button"
-          aria-pressed={addFolderOpen}
-          onClick={() => setAddFolderOpen((open) => !open)}
-        >
-          Add folder
-        </button>
-        <button
-          type="button"
-          aria-expanded={batchOpen}
-          onClick={() => setBatchOpen((open) => !open)}
-        >
-          Batch operations
-        </button>
-        <button
-          type="button"
-          aria-pressed={pdfOpen}
-          onClick={() => setPdfOpen((open) => !open)}
-        >
-          PDF
-        </button>
-      </nav>
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-mac-content text-mac-text">
+      <Toolbar
+        activeView={activeView}
+        onViewChange={setActiveView}
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={() => setSidebarOpen((open) => !open)}
+        inspectorOpen={inspectorOpen}
+        onToggleInspector={() => setInspectorOpen((open) => !open)}
+        onSearchSubmit={() => setSearchOpen(true)}
+        onToggleBatch={() => setBatchOpen((open) => !open)}
+        batchOpen={batchOpen}
+        onTogglePdf={() => setPdfOpen((open) => !open)}
+        pdfOpen={pdfOpen}
+      />
 
       {statusMessage && (
         <div
           role="status"
-          className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs text-amber-800 bg-amber-50 border-b border-amber-200"
+          className="flex items-center justify-between gap-2 border-b border-mac-warning/40 bg-mac-warning/10 px-3 py-1.5 text-xs text-mac-text"
         >
           <span>{statusMessage}</span>
           <button
             type="button"
             aria-label="Dismiss message"
             onClick={() => setStatusMessage(null)}
-            className="text-amber-700 hover:text-amber-900"
+            className="text-mac-text-2 hover:text-mac-text"
           >
             &times;
           </button>
         </div>
       )}
 
-      <div className="flex flex-1 min-h-0 relative">
-        {searchOpen && (
-          <SearchPanel
-            onClosePanel={() => setSearchOpen(false)}
-            onSelectDocument={() => setActiveView('canvas')}
-            onInvokeBatchOperation={() => setBatchOpen(true)}
+      <div className="relative flex min-h-0 flex-1">
+        {sidebarOpen && (
+          <Sidebar
+            activeView={activeView}
+            onViewChange={setActiveView}
+            folderSources={folderSources}
+            onAddFolder={() => setAddFolderOpen((open) => !open)}
+            addFolderOpen={addFolderOpen}
+            onToggleSearch={() => setSearchOpen((open) => !open)}
+            searchOpen={searchOpen}
+            onToggleShares={() => setSharesOpen((open) => !open)}
+            sharesOpen={sharesOpen}
           />
         )}
 
-        <div className="flex-1 min-w-0">
-          {activeView === 'canvas' && (
-            <DocumentCanvas
-              workspaceId={workspaceId}
-              folderFiles={folderFiles}
-              onReleaseDocuments={handleReleaseDocuments}
-              onOpenMarkdownDocument={(documentId) => {
-                const object = objects.find((candidate) => candidate.id === documentId);
-                handleOpenMarkdown({ id: documentId, title: object?.title ?? documentId });
-              }}
-            />
-          )}
-          {activeView === 'list' && <DocumentList />}
-          {activeView === 'graph' && (
-            <DocumentGraph
-              workspaceId={workspaceId}
-              onOpenDocument={handleOpenMarkdown}
-              onOpenInWord={(documentId) => void handleOpenInWord(documentId)}
-            />
-          )}
-        </div>
-
-        {addFolderOpen && (
-          <aside
-            aria-label="Add folder source"
-            className="w-96 max-w-full bg-white border-l border-slate-200 overflow-y-auto p-3"
-          >
-            <AddFolderSource
-              workspaceId={workspaceId}
-              onFolderAttached={() => void loadWorkspace()}
-            />
-          </aside>
-        )}
-
-        {sharesOpen && (
-          <SharePanel
-            availableDocuments={shareDocuments}
-            initialSelectedIds={selectedDocumentIds}
-            onClose={() => setSharesOpen(false)}
-          />
-        )}
-
-        {batchOpen && <BatchPreviewPanel />}
-
-        {pdfOpen && (
-          <PdfExportPanel
-            selection={pdfSelection}
-            resolveSourcePath={resolveDocumentPath}
-            onClose={() => setPdfOpen(false)}
-          />
-        )}
-
-        {markdownDoc && (
-          <div className="absolute inset-0 z-40 bg-white" data-testid="markdown-overlay">
-            <MarkdownEditor
-              documentId={markdownDoc.id}
-              onClose={() => setMarkdownDoc(null)}
-            />
+        <main
+          aria-label="Workspace content"
+          className="relative flex min-w-0 flex-1 bg-mac-content"
+        >
+          <div className="min-w-0 flex-1">
+            {activeView === 'canvas' && (
+              <DocumentCanvas
+                workspaceId={workspaceId}
+                folderFiles={folderFiles}
+                onReleaseDocuments={handleReleaseDocuments}
+                onOpenMarkdownDocument={(documentId) => {
+                  const object = objects.find((candidate) => candidate.id === documentId);
+                  handleOpenMarkdown({ id: documentId, title: object?.title ?? documentId });
+                }}
+              />
+            )}
+            {activeView === 'list' && <DocumentList />}
+            {activeView === 'graph' && (
+              <DocumentGraph
+                workspaceId={workspaceId}
+                onOpenDocument={handleOpenMarkdown}
+                onOpenInWord={(documentId) => void handleOpenInWord(documentId)}
+              />
+            )}
           </div>
+
+          {searchOpen && (
+            <SearchPanel
+              onClosePanel={() => setSearchOpen(false)}
+              onSelectDocument={() => setActiveView('canvas')}
+              onInvokeBatchOperation={() => setBatchOpen(true)}
+            />
+          )}
+
+          {addFolderOpen && (
+            <aside
+              aria-label="Add folder source"
+              className="w-96 max-w-full overflow-y-auto border-l border-mac-hairline bg-mac-content p-3"
+            >
+              <AddFolderSource
+                workspaceId={workspaceId}
+                onFolderAttached={() => void loadWorkspace()}
+              />
+            </aside>
+          )}
+
+          {sharesOpen && (
+            <SharePanel
+              availableDocuments={shareDocuments}
+              initialSelectedIds={selectedDocumentIds}
+              onClose={() => setSharesOpen(false)}
+            />
+          )}
+
+          {batchOpen && <BatchPreviewPanel />}
+
+          {pdfOpen && (
+            <PdfExportPanel
+              selection={pdfSelection}
+              resolveSourcePath={resolveDocumentPath}
+              onClose={() => setPdfOpen(false)}
+            />
+          )}
+
+          {markdownDoc && (
+            <div className="absolute inset-0 z-40 bg-mac-content" data-testid="markdown-overlay">
+              <MarkdownEditor documentId={markdownDoc.id} onClose={() => setMarkdownDoc(null)} />
+            </div>
+          )}
+        </main>
+
+        {inspectorOpen && (
+          <Inspector
+            activeView={activeView}
+            objects={objects}
+            selection={selectedObjects}
+            graphNodeCount={graph.nodes.length}
+            graphEdgeCount={graph.edges.length}
+          />
         )}
       </div>
     </div>

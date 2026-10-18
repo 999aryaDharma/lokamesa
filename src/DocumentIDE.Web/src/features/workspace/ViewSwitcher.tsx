@@ -1,10 +1,16 @@
 /**
  * CAN-08: List View & View Switch — ViewSwitcher component
  *
- * Segmented Canvas | List | Graph main-view switch. Controlled component:
- * the active view lives in viewStore and routing is done by the App shell.
+ * Segmented Canvas | List | Graph main-view switch. Controlled component: the
+ * active view lives in viewStore and routing is done by the App shell.
+ *
+ * UI-01: the markup now comes from the shared `SegmentedControl` primitive
+ * (same `role="radiogroup"` / `role="radio"` / `aria-checked` semantics and the
+ * same `view-*-btn` testids), so the toolbar, the search inspector and the
+ * Markdown editor all render one segmented-control idiom.
  */
 import React from 'react';
+import SegmentedControl from '../shell/SegmentedControl';
 import type { MainView } from './viewStore';
 
 export interface ViewSwitcherProps {
@@ -13,43 +19,24 @@ export interface ViewSwitcherProps {
   disabled?: boolean;
 }
 
-const VIEW_OPTIONS: ReadonlyArray<{ view: MainView; label: string }> = [
-  { view: 'canvas', label: 'Canvas' },
-  { view: 'list', label: 'List' },
-  { view: 'graph', label: 'Graph' },
+const VIEW_OPTIONS: ReadonlyArray<{ value: MainView; label: string; testId: string }> = [
+  { value: 'canvas', label: 'Canvas', testId: 'view-canvas-btn' },
+  { value: 'list', label: 'List', testId: 'view-list-btn' },
+  { value: 'graph', label: 'Graph', testId: 'view-graph-btn' },
 ];
 
 export const ViewSwitcher: React.FC<ViewSwitcherProps> = ({
   activeView,
   onViewChange,
   disabled = false,
-}) => {
-  return (
-    <div
-      role="radiogroup"
-      aria-label="Main view switch"
-      className="inline-flex items-center p-0.5 bg-slate-100 rounded-md border border-slate-200 text-xs select-none"
-    >
-      {VIEW_OPTIONS.map(({ view, label }) => (
-        <button
-          key={view}
-          type="button"
-          role="radio"
-          aria-checked={activeView === view}
-          disabled={disabled}
-          onClick={() => onViewChange(view)}
-          data-testid={`view-${view}-btn`}
-          className={`px-2.5 py-1 rounded transition-colors font-medium cursor-pointer ${
-            activeView === view
-              ? 'bg-white text-slate-900 shadow-xs'
-              : 'text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-};
+}) => (
+  <SegmentedControl
+    ariaLabel="Main view switch"
+    value={activeView}
+    options={VIEW_OPTIONS}
+    onChange={onViewChange}
+    disabled={disabled}
+  />
+);
 
 export default ViewSwitcher;
