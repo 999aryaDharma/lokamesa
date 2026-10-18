@@ -1904,6 +1904,177 @@ public sealed class SourceControlController : ControllerBase
             errorCode,
             error = message,
         });
+
+    // =====================================================================
+    // SCM-19 - DOCX diff API surface (spec 13 §9.2/§9.3/§18/§20)
+    //
+    // Bounded append-only region: a thin, typed HTTP surface over the
+    // already-tested SCM-05 document-aware diff provider. It adds no Git
+    // behaviour of its own: the provider validates the worktree-relative
+    // document path before any Git or filesystem access, materializes the
+    // compared versions into temporary read-only artifacts and classifies
+    // them through the existing DOCX infrastructure.
+    //
+    // Strictly read-only: this region never takes the per-worktree mutation
+    // queue, never touches the index, never writes to the worktree and never
+    // opens the document (no Word/COM and no rendered page image). Git
+    // staging stays file-level.
+    //
+    // HTTP 400 is reserved for input rejected before any Git or filesystem
+    // access (blank fields, unknown target). Every inspectable outcome -
+    // NoRepository, GitUnavailable, PathRejected, BinaryFallback, Failed -
+    // stays HTTP 200 with its typed body so screen 06 can render it.
+    //
+    // The provider is injected per action ([FromServices]) so the region stays
+    // append-only and the controller's existing constructor is untouched.
+    // =====================================================================
+
+    /// <summary>
+    /// Produces the read-only document-aware comparison of one DOCX file for
+    /// the requested Git version pair (spec 13 §9.2/§9.3). <c>Path</c> is the
+    /// true worktree root (the <c>WorktreeRoot</c> reported by the context and
+    /// status routes) and <c>DocumentPath</c> is the worktree-relative path
+    /// exactly as Git reported it. The document is only ever read: the compared
+    /// versions are materialized into temporary read-only artifacts that are
+    /// deleted before the response is returned.
+    /// </summary>
+    [HttpPost("docx-diff")]
+    public async Task<IActionResult> GetDocxDiff(
+        [FromBody] SourceControlDocxDiffRequest? request,
+        [FromServices] DocxGitDiffProvider provider,
+        CancellationToken cancellationToken)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.Path))
+        {
+            return DocxDiffInputRejected(
+                "PathRequired",
+                "The 'path' request field (true worktree root) is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.DocumentPath))
+        {
+            return DocxDiffInputRejected(
+                "DocumentPathRequired",
+                "The 'documentPath' request field (worktree-relative document path) is required.");
+        }
+
+        if (!TryParseDocxDiffTarget(request.Target, out GitDiffTarget target))
+        {
+            return DocxDiffInputRejected(
+                "TargetInvalid",
+                "The 'target' request field must be one of: Staged, WorkingTree, Unstaged.");
+        }
+
+        DocxDiffResult result = await provider.GetDocumentDiffAsync(
+            request.Path!,
+            request.DocumentPath!,
+            target,
+            request.OriginalPath,
+            cancellationToken);
+
+        return Ok(ToDocxDiffResponse(result));
+    }
+
+    /// <summary>
+    /// Accepts the engine's version-pair names and their kebab-case spelling,
+    /// case-insensitively. Anything else is input rejected before any Git runs.
+    /// </summary>
+    private static bool TryParseDocxDiffTarget(string? value, out GitDiffTarget target)
+    {
+        target = default;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        string normalized = value.Trim().Replace("-", string.Empty).Replace("_", string.Empty);
+        if (normalized.Equals(nameof(GitDiffTarget.Staged), StringComparison.OrdinalIgnoreCase))
+        {
+            target = GitDiffTarget.Staged;
+            return true;
+        }
+
+        if (normalized.Equals(nameof(GitDiffTarget.WorkingTree), StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals("working tree", StringComparison.OrdinalIgnoreCase))
+        {
+            target = GitDiffTarget.WorkingTree;
+            return true;
+        }
+
+        if (normalized.Equals(nameof(GitDiffTarget.Unstaged), StringComparison.OrdinalIgnoreCase))
+        {
+            target = GitDiffTarget.Unstaged;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Maps the typed engine outcome onto the SCM payload (spec 13 §20):
+    /// <c>IsSuccess</c> is true only for a document-aware report. A binary
+    /// fallback still carries its report and the typed parse failure, but it is
+    /// not a successful document-aware comparison (spec 13 §9.3).
+    /// </summary>
+    private static SourceControlDocxDiffResponse ToDocxDiffResponse(DocxDiffResult result) =>
+        new(
+            result.Status.ToString(),
+            result.Status == DocxDiffStatus.Available,
+            result.Status == DocxDiffStatus.Available ? null : result.Status.ToString(),
+            result.Failure?.ErrorMessage,
+            ToDocxDiffReport(result.Report),
+            ToFailure(result.Failure));
+
+    private static SourceControlDocxDiffReportResponse? ToDocxDiffReport(DocxDiffReport? report) =>
+        report is null
+            ? null
+            : new SourceControlDocxDiffReportResponse(
+                report.Target.ToString(),
+                report.Path,
+                report.WorktreeRoot,
+                report.LeftLabel,
+                report.RightLabel,
+                report.LeftExists,
+                report.RightExists,
+                report.Changes.Count,
+                report.HasChanges,
+                report.Changes.Select(ToDocxDiffChange).ToArray(),
+                ToDocxDiffBinarySummary(report.BinarySummary));
+
+    private static SourceControlDocxChangeResponse ToDocxDiffChange(DocxChange change) =>
+        new(
+            change.Kind.ToString(),
+            change.Origin.ToString(),
+            change.PartName,
+            change.Summary,
+            change.Before,
+            change.After,
+            change.Property,
+            change.OldParagraphIndex,
+            change.NewParagraphIndex,
+            change.RunIndex,
+            change.TableIndex,
+            change.RowIndex,
+            change.CellIndex);
+
+    private static SourceControlDocxBinarySummaryResponse? ToDocxDiffBinarySummary(DocxBinarySummary? summary) =>
+        summary is null
+            ? null
+            : new SourceControlDocxBinarySummaryResponse(
+                summary.LeftExists,
+                summary.RightExists,
+                summary.LeftSizeBytes,
+                summary.RightSizeBytes,
+                summary.LeftSha256,
+                summary.RightSha256,
+                summary.ContentIdentical);
+
+    private static IActionResult DocxDiffInputRejected(string errorCode, string message) =>
+        new BadRequestObjectResult(new
+        {
+            errorCode,
+            error = message,
+        });
 }
 
 /// <summary>
@@ -2229,3 +2400,91 @@ public sealed record SourceControlWorktreeRefreshResponse(
     string? Message,
     IReadOnlyList<SourceControlWorktreeInfoResponse>? Worktrees,
     SourceControlFailureResponse? Failure);
+
+// -------------------------------------------------------------------------
+// SCM-19 - DOCX diff API surface payloads (spec 13 §9.2/§9.3/§20)
+// -------------------------------------------------------------------------
+
+/// <summary>
+/// SCM-19 — request body for the document-aware DOCX diff. <c>Path</c> is the
+/// true worktree root (the <c>WorktreeRoot</c> reported by the context/status
+/// routes); <c>DocumentPath</c> is the worktree-relative path exactly as Git
+/// reported it and is treated as untrusted input. <c>Target</c> selects the
+/// compared version pair (<c>Staged</c>, <c>WorkingTree</c>, <c>Unstaged</c>);
+/// <c>OriginalPath</c> optionally carries the pre-rename path from Git status.
+/// </summary>
+public sealed record SourceControlDocxDiffRequest(
+    string? Path,
+    string? DocumentPath,
+    string? Target,
+    string? OriginalPath = null);
+
+/// <summary>
+/// SCM-19 — typed DOCX diff outcome (spec 13 §9.2/§9.3/§20). <c>Status</c> mirrors
+/// the engine's typed status (<c>Available</c>, <c>BinaryFallback</c>,
+/// <c>NoRepository</c>, <c>GitUnavailable</c>, <c>PathRejected</c>,
+/// <c>Failed</c>). <c>IsSuccess</c> is true only for a document-aware report; a
+/// binary fallback still carries <c>Report</c> and the typed <c>Failure</c> for
+/// inspection. Every status is a typed HTTP 200 outcome; HTTP 400 is reserved
+/// for input rejected before any Git or filesystem access.
+/// </summary>
+public sealed record SourceControlDocxDiffResponse(
+    string Status,
+    bool IsSuccess,
+    string? ErrorCode,
+    string? Message,
+    SourceControlDocxDiffReportResponse? Report,
+    SourceControlFailureResponse? Failure);
+
+/// <summary>
+/// SCM-19 — the document-aware report of one DOCX file between two Git-managed
+/// versions (spec 13 §9.2). <c>ChangeCount</c>/<c>HasChanges</c> are the summary
+/// counts; <c>Changes</c> carries the exact per-change content and
+/// <c>BinarySummary</c> is present only for a binary fallback.
+/// </summary>
+public sealed record SourceControlDocxDiffReportResponse(
+    string Target,
+    string Path,
+    string WorktreeRoot,
+    string LeftLabel,
+    string RightLabel,
+    bool LeftExists,
+    bool RightExists,
+    int ChangeCount,
+    bool HasChanges,
+    IReadOnlyList<SourceControlDocxChangeResponse> Changes,
+    SourceControlDocxBinarySummaryResponse? BinarySummary);
+
+/// <summary>
+/// SCM-19 — one document-aware change. <c>Kind</c> and <c>Origin</c> are the
+/// engine's vocabulary; <c>Before</c>/<c>After</c> carry exact version content
+/// and are rendered as inert text (never HTML-interpreted).
+/// </summary>
+public sealed record SourceControlDocxChangeResponse(
+    string Kind,
+    string Origin,
+    string PartName,
+    string Summary,
+    string? Before,
+    string? After,
+    string? Property,
+    int? OldParagraphIndex,
+    int? NewParagraphIndex,
+    int? RunIndex,
+    int? TableIndex,
+    int? RowIndex,
+    int? CellIndex);
+
+/// <summary>
+/// SCM-19 — binary-change summary for a version pair that cannot be compared as
+/// DOCX documents (spec 13 §9.3). Sizes and digests describe the exact compared
+/// version bytes; no content is faked.
+/// </summary>
+public sealed record SourceControlDocxBinarySummaryResponse(
+    bool LeftExists,
+    bool RightExists,
+    long LeftSizeBytes,
+    long RightSizeBytes,
+    string? LeftSha256,
+    string? RightSha256,
+    bool ContentIdentical);

@@ -86,6 +86,12 @@ public static class SourceControlServiceRegistration
             sp.GetRequiredService<GitRepositoryService>(),
             sp.GetRequiredService<IDocumentRepository>()));
 
+        // SCM-19: document-aware DOCX diff. Read-only like the SCM-05 provider
+        // it wraps: no mutation-queue entry, no index/worktree write and no
+        // document opening (spec 13 §9.2/§9.3).
+        services.TryAddSingleton(sp => new DocxGitDiffProvider(
+            sp.GetRequiredService<IGitProcessRunner>()));
+
         return services;
     }
 }
