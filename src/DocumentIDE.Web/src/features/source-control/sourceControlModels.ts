@@ -296,3 +296,31 @@ export interface SourceControlFetchResult {
   remote: SourceControlRemoteModel | null;
   failure: SourceControlFailure | null;
 }
+
+/** SCM-13 — typed outcome of one explicit push (spec 13 §14.4/§20). */
+export type GitPushOutcome =
+  | 'Succeeded'
+  | 'NoUpstream'
+  | 'NoRepository'
+  | 'GitUnavailable'
+  | 'AuthenticationRequired'
+  | 'Rejected'
+  | 'PermissionDenied'
+  | 'HostUnreachable'
+  | 'Failed';
+
+/**
+ * SCM-13 — typed push result. On success `remote` carries the tracking state
+ * the API re-read from Git after the push; a branch with no configured upstream
+ * is the first-class `NoUpstream` outcome (no Git ran, no guessed default
+ * remote), and every remote failure stays typed in `outcome`/`failure`
+ * (spec 13 §14.2/§14.4/§20). A rejected push leaves local commits unchanged.
+ */
+export interface SourceControlPushResult {
+  outcome: GitPushOutcome;
+  isSuccess: boolean;
+  errorCode: string | null;
+  message: string | null;
+  remote: SourceControlRemoteModel | null;
+  failure: SourceControlFailure | null;
+}

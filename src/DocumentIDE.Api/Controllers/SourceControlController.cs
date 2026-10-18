@@ -292,6 +292,7 @@ public sealed class SourceControlController : ControllerBase
     private readonly GitStageService _stages;
     private readonly GitCommitService _commits;
     private readonly GitRemoteService _remotes;
+    private readonly GitPushService _pushes;
     private readonly IDocumentRepository _documents;
     private readonly IWorkSessionService _workSessions;
 
@@ -300,6 +301,7 @@ public sealed class SourceControlController : ControllerBase
         GitStageService stages,
         GitCommitService commits,
         GitRemoteService remotes,
+        GitPushService pushes,
         IDocumentRepository documents,
         IWorkSessionService workSessions)
     {
@@ -307,6 +309,7 @@ public sealed class SourceControlController : ControllerBase
         _stages = stages ?? throw new ArgumentNullException(nameof(stages));
         _commits = commits ?? throw new ArgumentNullException(nameof(commits));
         _remotes = remotes ?? throw new ArgumentNullException(nameof(remotes));
+        _pushes = pushes ?? throw new ArgumentNullException(nameof(pushes));
         _documents = documents ?? throw new ArgumentNullException(nameof(documents));
         _workSessions = workSessions ?? throw new ArgumentNullException(nameof(workSessions));
     }
@@ -1016,4 +1019,75 @@ public sealed class SourceControlController : ControllerBase
                         correlation.ShortId,
                         correlation.Summary))
                     .ToList());
+
+    // ---------------------------------------------------------------------
+    // SCM-13 — explicit push (spec 13 §14.4/§18/§19/§20)
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Runs one explicit Push (<c>git push</c>, spec 13 §14.4) against the
+    /// resolved worktree and returns the tracking state re-read from Git. The
+    /// push is scoped to the current branch's configured upstream: a branch with
+    /// no configured upstream is the typed <c>NoUpstream</c> outcome and runs no
+    /// Git at all — never a push to a guessed default remote (spec 13
+    /// §14.2/§14.4). Push is always user initiated and carries no
+    /// force/refspec/scope-broadening argument (spec 13 §14.4/§23). Every remote
+    /// failure (rejection, authentication, permission, unreachable host, Git
+    /// missing) stays HTTP 200 with a typed outcome so the pane can render it,
+    /// and a rejected push never rewrites local history. A missing request path
+    /// is a typed 400 and Git never runs.
+    /// </summary>
+    [HttpPost("push")]
+    public async Task<IActionResult> Push(
+        [FromBody] SourceControlPushRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.Path))
+        {
+            return PathRequiredBadRequest("request field");
+        }
+
+        GitPushResult result = await _pushes.PushAsync(request.Path!, cancellationToken);
+        return Ok(ToPushResponse(result));
+    }
+
+    /// <summary>
+    /// Maps a typed push result onto the API contract (spec 13 §14.4/§20):
+    /// success carries the tracking state re-read from Git after the push; a
+    /// branch with no configured upstream carries that explicit state; every
+    /// failure keeps its typed outcome, code and originating failure and stays
+    /// HTTP 200. A push never changes document contents or the index.
+    /// </summary>
+    private static SourceControlPushResponse ToPushResponse(GitPushResult result) =>
+        new(
+            result.Outcome.ToString(),
+            result.IsSuccess,
+            result.ErrorCode,
+            result.Message,
+            ToRemoteResponse(result.Remote),
+            ToFailure(result.Failure));
 }
+
+/// <summary>
+/// SCM-13 — request body for the explicit Push action. <c>Path</c> is the
+/// workspace folder or active-document path used to discover the repository;
+/// the push runs against exactly that resolved true worktree root
+/// (spec 13 §19).
+/// </summary>
+public sealed record SourceControlPushRequest(string? Path);
+
+/// <summary>
+/// SCM-13 — typed Push outcome (spec 13 §14.4/§20). On success <c>Remote</c>
+/// carries the tracking state re-read from Git after the push; a branch with no
+/// configured upstream is the first-class <c>NoUpstream</c> outcome and ran no
+/// Git; remote failures (authentication, rejection, permission, unreachable
+/// host, Git missing) stay typed and inspectable. A rejected push leaves local
+/// commits unchanged, and no failure payload ever carries credential material.
+/// </summary>
+public sealed record SourceControlPushResponse(
+    string Outcome,
+    bool IsSuccess,
+    string? ErrorCode,
+    string? Message,
+    SourceControlRemoteResponse? Remote,
+    SourceControlFailureResponse? Failure);
