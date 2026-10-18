@@ -418,6 +418,28 @@ public sealed class GitProcessSecurityTests
         Assert.Equal(0, SecurityGitRepository.RunGit(repo.RootPath, "fsck", "--no-progress", "--no-dangling"));
     }
 
+    /// <summary>
+    /// R-3 follow-up: a contained <c>.git</c> path is still not a document path.
+    /// <c>.git/config</c> may carry a remote URL with embedded credentials, so
+    /// the diff surface must reject it rather than render it. This is a document
+    /// surface rule, not a containment rule - the path resolves inside the
+    /// worktree, which is exactly why containment alone is not enough.
+    /// </summary>
+    [Fact]
+    public async Task DotGitPath_IsRejectedByTheDiffSurface()
+    {
+        using SecurityGitRepository repo = SecurityGitRepository.Create();
+        var diffs = new GitDiffService(new GitProcessRunner());
+
+        GitDiffResult result = await diffs.GetFileDiffAsync(
+            repo.RootPath,
+            ".git/config",
+            GitDiffTarget.WorkingTree);
+
+        Assert.Equal(GitDiffStatus.PathRejected, result.Status);
+        Assert.Null(result.Diff);
+    }
+
     // =====================================================================
     // 4. Windows path and Unicode repository locations
     // =====================================================================

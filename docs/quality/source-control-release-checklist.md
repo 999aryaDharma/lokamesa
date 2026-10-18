@@ -164,7 +164,7 @@ candidate before shipping.
 - [ ] The two environmental `artifacts/` failures are the only IntegrationTests
       failures in the report (or the report was produced after a release build).
 - [ ] R-1 accepted or fixed before release (diff is specified for V1).
-- [ ] Residual risks reviewed; R-2/R-3 tracked for the next Source Control sprint.
+- [x] Residual risks reviewed. **R-3 is fixed, not just tracked**: controller review changed `GitDocumentPath.TryNormalizeRelativePath` to reject `.git` segments for every document surface (history read, diff, DOCX diff, restore). RED evidence: `DotGitPath_IsRejectedByTheDiffSurface` returned `Available` (i.e. it would have rendered `.git/config`) before the fix and `PathRejected` after. R-2 (duplicated SCM registration) stays tracked; R-4 (staging a `.git` path reports `Succeeded` with no index change) stays low because Git itself is the authority and nothing is staged.
 - [ ] Manual Windows checks (§4) executed on the release candidate.
 
 Signed: _______________ Date (UTC): _______________

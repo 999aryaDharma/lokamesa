@@ -74,6 +74,15 @@ internal static class GitDocumentPath
             {
                 return false;
             }
+
+            // `.git` is repository metadata, never a document path, and it may
+            // carry remote URLs with embedded credentials. Containment alone
+            // accepts it (it resolves inside the worktree), so the segment is
+            // rejected here for every document surface at once.
+            if (segment.Equals(".git", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
         }
 
         normalized = candidate;

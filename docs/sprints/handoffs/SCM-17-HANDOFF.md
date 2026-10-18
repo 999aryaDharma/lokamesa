@@ -236,3 +236,7 @@ Git's transactional commands; that rule governs the Search & Replace pipeline).
 - The SCM lane's next work is the release-checklist follow-ups: wire the diff
   route (R-1), consolidate DI registration (R-2), and reject `.git` segments in
   path validation (R-3/R-4). No downstream sprint was started or modified here.
+
+## Controller review round 1 - R-3 fixed before merge
+
+The controller reviewed the residual risks and treated R-3 as a merge blocker rather than a note: a contained .git/config path was accepted by the document surfaces, and .git/config may carry a remote URL with embedded credentials. Proven RED first: DotGitPath_IsRejectedByTheDiffSurface asserted PathRejected and got **Available** on the pre-fix tree, meaning the diff surface would have rendered the file. Fix: GitDocumentPath.TryNormalizeRelativePath rejects any .git segment (case-insensitive), which covers history read, diff, DOCX diff and restore in one place. After the fix the security suite is **162/162** and the affected SCM integration filters are **175/175**. R-4 (stage reports Succeeded with no index change) remains low and documented; Git ignores its own directory and nothing is staged.
