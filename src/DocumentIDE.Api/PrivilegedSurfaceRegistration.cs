@@ -1,5 +1,6 @@
 using DocumentIDE.Core.Batch;
 using DocumentIDE.Core.Batch.Operations;
+using DocumentIDE.Core.Context;
 using DocumentIDE.Core.Domain.Repositories;
 using DocumentIDE.Core.Filesystem;
 using DocumentIDE.Core.History;
@@ -55,6 +56,11 @@ public static class PrivilegedSurfaceRegistration
         services.TryAddScoped<IMoveCorrelationService, MoveCorrelationService>();
         services.TryAddScoped<IStartupReconciler, StartupReconciler>();
 
+        // UI-05 B — reference-only removal used by the missing-resource card.
+        // The service never writes to the filesystem; it deletes the database
+        // record only.
+        services.TryAddScoped<MissingResourceService>();
+
         // Word (open in Word / PDF render seam), COM concurrency exactly 1.
         services.TryAddScoped<IWordDesktopLauncher, WordDesktopLauncher>();
         services.TryAddSingleton<WordAutomationQueue>();
@@ -69,6 +75,7 @@ public static class PrivilegedSurfaceRegistration
         // Indexing + search (SRCH-05 realtime endpoint).
         services.TryAddScoped<IDocumentMetadataRepository, DocumentMetadataRepository>();
         services.TryAddScoped<IFtsIndex, FtsIndex>();
+        services.TryAddScoped<IIndexedTextReader, FtsIndex>();
         services.TryAddScoped<IMarkdownStructureParser, MarkdownStructureParser>();
         services.TryAddScoped<IDocxStructureParser, DocxStructureParser>();
         services.TryAddScoped<IncrementalIndexCoordinator>();
@@ -91,6 +98,11 @@ public static class PrivilegedSurfaceRegistration
         services.TryAddScoped<OperationHistoryRepository>();
         services.TryAddScoped<IOperationHistoryRepository>(sp => sp.GetRequiredService<OperationHistoryRepository>());
         services.TryAddScoped<IOperationHistoryRecorder>(sp => sp.GetRequiredService<OperationHistoryRepository>());
+
+        // UI-05 A — context pack builder over the existing ContextExportService.
+        // Read-only: Markdown source or the DOCX parser's indexed body, bounded.
+        services.TryAddScoped<ContextExportService>();
+        services.TryAddScoped<ContextPackBuilder>();
         services.TryAddScoped<RecoverySnapshotService>();
         services.TryAddScoped<IExternalEditStateProbe, WordEditStateProbe>();
         services.TryAddScoped<IAtomicFileReplacer, AtomicFileReplacer>();

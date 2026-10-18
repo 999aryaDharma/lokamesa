@@ -32,6 +32,13 @@ export interface ToolbarProps {
   batchOpen?: boolean;
   onTogglePdf?: () => void;
   pdfOpen?: boolean;
+  /**
+   * UI-05: opens the context pack for the current selection. It is omitted only
+   * when the shell has no pack surface; the control is disabled (not hidden) on
+   * an empty selection so its availability stays discoverable.
+   */
+  onOpenContextPack?: () => void;
+  contextPackEnabled?: boolean;
 }
 
 const VIEW_OPTIONS: ReadonlyArray<{ value: MainView; label: string; testId: string }> = [
@@ -55,6 +62,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   batchOpen = false,
   onTogglePdf,
   pdfOpen = false,
+  onOpenContextPack,
+  contextPackEnabled = false,
 }) => (
   <header
     aria-label="Toolbar"
@@ -95,6 +104,19 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       onSubmit={onSearchSubmit}
       className="w-[260px]"
     />
+
+    {onOpenContextPack && (
+      <button
+        type="button"
+        aria-label="Context pack"
+        title="Build a context pack from the selected documents"
+        disabled={!contextPackEnabled}
+        onClick={onOpenContextPack}
+        className={`${ICON_BUTTON_CLASSES} disabled:cursor-not-allowed disabled:opacity-40`}
+      >
+        ⌘
+      </button>
+    )}
 
     {onToggleBatch && (
       <button

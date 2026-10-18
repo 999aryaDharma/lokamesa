@@ -190,6 +190,10 @@ public class WebAppHost : IAsyncDisposable, IDisposable
             // HIST-04: read-only operation-history listing and storage usage
             // for screen 10's Operations tab.
             typeof(HistoryController),
+            // UI-05: context pack + reference-only removal for the missing
+            // resource card.
+            typeof(ContextPackController),
+            typeof(DocumentReferenceController),
         };
 
         protected override bool IsController(TypeInfo typeInfo) => Array.IndexOf(AllowedControllers, typeInfo.AsType()) >= 0;

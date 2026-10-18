@@ -93,6 +93,21 @@ describe('ContextPackDialog', () => {
     expect(handleCopy).toHaveBeenCalledWith(expect.stringContaining('# API Spec'));
   });
 
+  it('does not render an export control when no export callback is supplied', () => {
+    render(
+      <ContextPackDialog
+        isOpen={true}
+        onClose={vi.fn()}
+        sources={sampleSources}
+        onCopy={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /copy context/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /export context\.md/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/exported!/i)).not.toBeInTheDocument();
+  });
+
   it('triggers export to file', async () => {
     const handleExport = vi.fn();
     render(

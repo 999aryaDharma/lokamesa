@@ -9,8 +9,10 @@
  *   - PDF collision          → PdfExportPanel (PdfActions)
  *   - Undo review            → HistoryScreen (proved in HistoryScreen.test.tsx)
  *
- * QuickLook (needs the WORD-04 page pipeline), ContextPackDialog (no data
- * source) and MissingResourceCard (no rendered host) stay unmounted. The
+ * QuickLook (needs the WORD-04 page pipeline) stays unmounted. ContextPackDialog
+ * opens only from a real selection trigger (UI-05) and MissingResourceCard only
+ * for a real unavailable document (UI-05), so this fixture — a PDF overlay with
+ * two available documents, no context trigger — must show neither. The
  * negative assertions below exist so nobody "fixes" this with a stub later.
  */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -192,7 +194,7 @@ describe('UI-03 screen 12 — only overlays with a real source and trigger', () 
     ).toHaveTextContent('2 PDFs generated / 0 skipped / 0 failed');
   });
 
-  it('leaves QuickLook, the context pack and the missing-resource overlay unmounted', async () => {
+  it('leaves QuickLook, the context pack and the missing-resource overlay closed without a real trigger', async () => {
     installFetch();
     render(<App />);
     await waitFor(() =>
@@ -207,12 +209,12 @@ describe('UI-03 screen 12 — only overlays with a real source and trigger', () 
 
     // QuickLook needs the WORD-04 Word → PDF → page-image pipeline; absent.
     expect(screen.queryByTestId('quick-look-dialog')).not.toBeInTheDocument();
-    // Context pack has no data source; absent.
+    // Context pack opens only from a real selection trigger; not opened here.
     expect(
       screen.queryByRole('dialog', { name: 'Context Pack Export & Token Estimate' }),
     ).not.toBeInTheDocument();
     expect(screen.queryByTestId('budget-warning-banner')).not.toBeInTheDocument();
-    // MissingResourceCard has no rendered host in this build; absent.
+    // Both fixture documents are available, so no missing-resource card exists.
     expect(screen.queryByRole('group', { name: /Missing (file|folder):/ })).not.toBeInTheDocument();
     // Undo review is mounted by screen 10 only when a real undo result exists.
     expect(screen.queryByRole('dialog', { name: 'Undo review' })).not.toBeInTheDocument();

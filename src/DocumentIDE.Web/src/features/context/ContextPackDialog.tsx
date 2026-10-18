@@ -132,9 +132,13 @@ export const ContextPackDialog: React.FC<ContextPackDialogProps> = ({
             <PushButton variant="primary" onClick={handleCopyClick}>
               {copied ? 'Copied!' : 'Copy Context'}
             </PushButton>
-            <PushButton onClick={handleExportClick}>
-              {exported ? 'Exported!' : 'Export context.md'}
-            </PushButton>
+            {/* UI-05: only render the export control when a caller can actually
+                honour a file write. Copy-only mounts never claim to export. */}
+            {onExportToFile && (
+              <PushButton onClick={handleExportClick}>
+                {exported ? 'Exported!' : 'Export context.md'}
+              </PushButton>
+            )}
           </div>
         }
       >
