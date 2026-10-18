@@ -1,0 +1,2 @@
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$env:PATH = "C:\Users\User\AppData\Local\Programs\FlyEnv-Data\app\dotnet\10.0.302;" + $env:PATH #FlyEnv-ID-3LacwfFEnrVBg6vytRfG1PLbVapfaQaZ

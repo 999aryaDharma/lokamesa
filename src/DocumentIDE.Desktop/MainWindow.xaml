@@ -1,0 +1,20 @@
+<Window x:Class="DocumentIDE.Desktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        xmlns:local="clr-namespace:DocumentIDE.Desktop"
+        mc:Ignorable="d"
+        Title="Document IDE" Height="768" Width="1024">
+    <Grid>
+        <wv2:WebView2 x:Name="WebView" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+
+        <Border x:Name="ErrorPanel" Visibility="Collapsed" Background="#1E1E2E" Padding="40" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                <TextBlock Text="Initialization Error" FontSize="24" FontWeight="Bold" Foreground="#F38BA8" Margin="0,0,0,16"/>
+                <TextBlock x:Name="ErrorText" Text="WebView2 runtime failed to initialize." FontSize="14" Foreground="#CDD6F4" TextWrapping="Wrap" MaxWidth="600"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

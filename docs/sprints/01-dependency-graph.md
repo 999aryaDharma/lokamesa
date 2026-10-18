@@ -102,6 +102,23 @@ flowchart TD
     REL_01["REL-01 Windows Installer Packaging"]
     REL_02["REL-02 Release Verification Pipeline"]
     REL_03["REL-03 V1 Readiness Gate"]
+    SCM_01["SCM-01 Git Capability & Controlled Process Runner"]
+    SCM_02["SCM-02 Git Repository, Worktree & Status Domain"]
+    SCM_03["SCM-03 Source Control Changes Pane"]
+    SCM_04["SCM-04 Markdown Git Diff"]
+    SCM_05["SCM-05 DOCX Document-Aware Git Diff"]
+    SCM_06["SCM-06 Git Stage & Unstage"]
+    SCM_07["SCM-07 Git Commit & Commit All"]
+    SCM_08["SCM-08 Git Commit History & File History"]
+    SCM_09["SCM-09 Document IDE History ↔ Git Correlation"]
+    SCM_10["SCM-10 Safe Git Discard & Restore"]
+    SCM_11["SCM-11 Git Remote State & Fetch"]
+    SCM_12["SCM-12 Safe Fast-Forward Pull"]
+    SCM_13["SCM-13 Explicit Git Push"]
+    SCM_14["SCM-14 Git Conflict State & Resolution Shell"]
+    SCM_15["SCM-15 Git Worktree Discovery & Open Existing"]
+    SCM_16["SCM-16 Safe Git Worktree Create & Remove"]
+    SCM_17["SCM-17 Source Control Regression & Release Hardening"]
     FND_01 --> FND_02
     FND_01 --> FND_03
     FND_03 --> FND_04
@@ -286,6 +303,50 @@ flowchart TD
     CTX_04 --> REL_03
     AI_04 --> REL_03
     PDF_04 --> REL_03
+    FND_03 --> SCM_01
+    FND_07 --> SCM_01
+    FS_02 --> SCM_01
+    SCM_01 --> SCM_02
+    FS_03 --> SCM_02
+    SCM_02 --> SCM_03
+    FND_07 --> SCM_03
+    SCM_02 --> SCM_04
+    MD_01 --> SCM_04
+    SCM_02 --> SCM_05
+    IDX_02 --> SCM_05
+    DOCX_01 --> SCM_05
+    SCM_02 --> SCM_06
+    SCM_03 --> SCM_06
+    SCM_06 --> SCM_07
+    SCM_05 --> SCM_07
+    SCM_02 --> SCM_08
+    SCM_07 --> SCM_08
+    SCM_07 --> SCM_09
+    HIST_01 --> SCM_09
+    SCM_08 --> SCM_10
+    HIST_01 --> SCM_10
+    FS_07 --> SCM_10
+    SCM_02 --> SCM_11
+    SCM_07 --> SCM_11
+    SCM_11 --> SCM_12
+    SCM_10 --> SCM_12
+    SCM_11 --> SCM_13
+    SCM_07 --> SCM_13
+    SCM_12 --> SCM_14
+    SCM_05 --> SCM_14
+    SCM_01 --> SCM_15
+    FS_03 --> SCM_15
+    FND_07 --> SCM_15
+    SCM_15 --> SCM_16
+    FS_07 --> SCM_16
+    SCM_04 --> SCM_17
+    SCM_05 --> SCM_17
+    SCM_09 --> SCM_17
+    SCM_12 --> SCM_17
+    SCM_13 --> SCM_17
+    SCM_14 --> SCM_17
+    SCM_16 --> SCM_17
+    QA_02 --> SCM_17
 ```
 
 For execution, use `SPRINT-STATUS.md`; the graph is orientation/reference, not the status source of truth.

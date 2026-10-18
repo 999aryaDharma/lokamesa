@@ -142,6 +142,43 @@ These are dependency layers, not Scrum timeboxes. Within one wave, sprints may b
 ## Wave 20
 
 - `REL-03` — V1 Readiness Gate
+## Wave 21
+
+- `SCM-01` — Git Capability & Controlled Process Runner
+## Wave 22
+
+- `SCM-02` — Git Repository, Worktree & Status Domain
+- `SCM-15` — Git Worktree Discovery & Open Existing
+## Wave 23
+
+- `SCM-03` — Source Control Changes Pane
+- `SCM-04` — Markdown Git Diff
+- `SCM-16` — Safe Git Worktree Create & Remove
+## Wave 24
+
+- `SCM-05` — DOCX Document-Aware Git Diff
+- `SCM-06` — Git Stage & Unstage
+## Wave 25
+
+- `SCM-07` — Git Commit & Commit All
+## Wave 26
+
+- `SCM-08` — Git Commit History & File History
+- `SCM-09` — Document IDE History ↔ Git Correlation
+- `SCM-11` — Git Remote State & Fetch
+## Wave 27
+
+- `SCM-10` — Safe Git Discard & Restore
+- `SCM-13` — Explicit Git Push
+## Wave 28
+
+- `SCM-12` — Safe Fast-Forward Pull
+## Wave 29
+
+- `SCM-14` — Git Conflict State & Resolution Shell
+## Wave 30
+
+- `SCM-17` — Source Control Regression & Release Hardening
 
 ## Parallelism rule
 
