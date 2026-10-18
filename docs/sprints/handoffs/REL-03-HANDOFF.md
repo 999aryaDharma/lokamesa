@@ -89,3 +89,13 @@ Integration sprints required before V1 (one per gap, or a consolidated integrati
 - E2E administrative workflow test (G9)
 
 Then re-run `scripts/verify-release.ps1` and re-issue the readiness report for a new REL-03-style gate.
+
+## Final gate run - verdict GO
+
+Run: `pwsh -File scripts/verify-release.ps1` on `integration/parallel-batches` at commit `aba47ecaf45bfb55c77cfd9ff68543ac0d33c3f7`.
+Result: **19/19 gates passed, 0 failed, 0 environment-gated**, `workingTreeDirty=false`, packaging invoked and verified, Word/COM suite executed on this machine. Machine report: `artifacts/release-verify/verification-report.json` (`verdict: PASSED`).
+
+`docs/quality/v1-readiness-report.md` was re-issued against that run: exactly one `**Verdict:** GO` line, all 22 spec-12 completion-gate strings verbatim, zero `FAIL`/`UNVERIFIED` rows, scans recorded (placeholder, skipped-test, offline, spec-drift) and residual risks listed. `V1ReadinessGateTests` 6/6 passes.
+
+Before the run the gate blocked once on two test-isolation defects (a shared `%TEMP%\scm01\outside.md` across two parallel test classes, and a process-wide memory sample running alongside other classes). Both were fixed at the root in `aba47ec` - the repo fixture now gives every repository its own parent, and the memory test runs in a non-parallel collection. The gate was then re-run, not retried until green.
+
