@@ -135,5 +135,6 @@ Rules:
 | SCM-16 | Safe Git Worktree Create & Remove | DONE | SCM-15, FS-07 | feat/safe-git-worktree-create-remove | docs/sprints/handoffs/SCM-16-HANDOFF.md |
 | SCM-17 | Source Control Regression & Release Hardening | BLOCKED | SCM-04, SCM-05, SCM-09, SCM-12, SCM-13, SCM-14, SCM-16, QA-02 |  |  |
 | UI-01 | macOS Three-Pane Shell Redesign | IN_PROGRESS | — | feat/ui-01-macos-shell-redesign |  |
+| UI-02 | Document Preview Content API (DOCX) | READY | — | feat/ui-02-document-preview-content-api |  |
 
 **REL-03 review notes (2026-10-16) — product verdict BLOCKED.** `docs/quality/v1-readiness-report.md` maps all 22 spec-12 completion gates; 16 PASS, 6 FAIL. Blockers: (1) graph view is a placeholder (GR-03 steps 1/3/4/5 unmet, §27.2/§89 not deliverable); (2) batch Apply unreachable (`BatchPreviewPanel.tsx:147` disabled; no apply/undo route); (3) `/api/word/open` 404 in the shipped desktop host (`BatchPreviewHostTests.cs:91`); (4) no `/api/search` endpoint + search UI unmounted; (5) share lifecycle unwired (SHR-11 callback deferral, no create/revoke endpoints); (6) workspace/canvas bootstrap not wired (canvas never populated outside tests); (7) Markdown editor is a stub and unmounted; (8) E2E administrative workflow test missing (spec 11 §20/§27). Integration sprints are required before V1; gap list G1–G9 with file:line evidence is in the report and handoff.

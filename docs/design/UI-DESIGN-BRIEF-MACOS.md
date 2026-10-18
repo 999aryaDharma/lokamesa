@@ -76,7 +76,50 @@ Object frame is `140×122` in both cases (icon area on top, label beneath).
 
 **Implementation note for code:** this is a change of *node shape*, not of behaviour — the
 canvas object model (`CanvasObject.type: 'folder' | 'document'`) already distinguishes the two,
-so no API/contract change is implied.
+so no API/contract change is implied by the shape itself.
+
+### Folder interaction (owner directive, 2026-10-18)
+
+Reference the owner gave: `uselayouts.com` "Folder Interaction" — a folder that opens on click and
+lets its contents fan out with a spring. Reproduced here as a *behaviour* (not copied code):
+
+- **Closed** (default): the folder object as drawn above.
+- **Open** (click): the folder front tilts back (`rotateX ≈ -40°`, origin bottom) and the documents
+  **inside that folder** fan out — three or more pages, rotated `≈ -8° / 0° / +9°` and translated
+  up (`y ≈ -55 … -75`), spring `duration 0.5-0.6`, `bounce 0.12-0.2`, `stiffness 160-190`,
+  `damping 21-24`. Click again closes.
+- **What fans out is real**: the pages are the documents that actually belong to that folder,
+  derived from existing path containment (`groupDocumentsByFolder` / `isWithinFolder`) — not
+  decorative placeholders.
+- **Drag-out = the existing "release" semantic** (CAN-04): it surfaces the referenced document as
+  its own canvas object. It is metadata only — *canvas drag never physically moves a file*.
+- Screen 01 shows the **open** state (frozen) as the interaction reference; the closed state is
+  the same object without the fanned pages.
+
+Animation library: **`motion`** (owner decision — first runtime UI dependency; the repo otherwise
+ships only `react` + `react-dom`).
+
+### Faint page-1 preview on a file object (owner directive, 2026-10-18)
+
+The file object's sheet should show a **faint preview of the document's real content**, not the
+current simulated grey lines.
+
+- Source of truth, by type:
+  - `.md` → the real source, already served by `GET /api/documents/{documentId}/markdown`.
+  - `.docx` → the real extracted structure/text, served by a **new read-only route** built on the
+    existing `DocxStructureParser` (see sprint `UI-02`). Until that route exists, the DOCX sheet
+    falls back to the current low-detail layout.
+- Rendering: faint (low opacity) and clipped to the sheet face so the filename label stays
+  legible; it must read as *content*, not as decoration.
+- **Honest limit:** this is a *content-derived* preview, **not** a rendered page image. A true
+  page-1 raster needs the Word → temp PDF → page-image pipeline, which exists in **no** shipped
+  host (the same missing pipeline that blocks `QuickLook`/WORD-04). That pipeline is a separate
+  later sprint; when it lands it feeds the existing `thumbnailUrl` seam, so the node needs no
+  redesign.
+- Code seam already present: `DocumentNode` accepts `thumbnailUrl` / `thumbnailContent` /
+  `thumbnailState` (`'loading' | 'ready' | 'stale' | 'missing' | 'failed'`) and already has the
+  `LowDetailPaperLayout` fallback + `document-low-detail-fallback` testid. Nothing presently
+  populates them with real data — that is the gap this directive closes.
 
 ## macOS patterns used
 
