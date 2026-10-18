@@ -125,9 +125,9 @@ Rules:
 | SCM-05 | DOCX Document-Aware Git Diff | DONE | SCM-02, IDX-02, DOCX-01 | feat/docx-document-aware-git-diff | docs/sprints/handoffs/SCM-05-HANDOFF.md |
 | SCM-06 | Git Stage & Unstage | DONE | SCM-02, SCM-03 | feat/git-stage-unstage | docs/sprints/handoffs/SCM-06-HANDOFF.md |
 | SCM-07 | Git Commit & Commit All | DONE | SCM-06, SCM-05 | feat/git-commit-commit-all | docs/sprints/handoffs/SCM-07-HANDOFF.md |
-| SCM-08 | Git Commit History & File History | READY | SCM-02, SCM-07 |  |  |
+| SCM-08 | Git Commit History & File History | DONE | SCM-02, SCM-07 | feat/git-commit-history-file-history (c49288f) | docs/sprints/handoffs/SCM-08-HANDOFF.md |
 | SCM-09 | Document IDE History ↔ Git Correlation | DONE | SCM-07, HIST-01 | feat/document-ide-history-git-correlation (e84fd48) | docs/sprints/handoffs/SCM-09-HANDOFF.md |
-| SCM-10 | Safe Git Discard & Restore | BLOCKED | SCM-08, HIST-01, FS-07 |  |  |
+| SCM-10 | Safe Git Discard & Restore | READY | SCM-08, HIST-01, FS-07 |  |  |
 | SCM-11 | Git Remote State & Fetch | DONE | SCM-02, SCM-07 | feat/git-remote-state-fetch (84e82fc) | docs/sprints/handoffs/SCM-11-HANDOFF.md |
 | SCM-12 | Safe Fast-Forward Pull | BLOCKED | SCM-11, SCM-10 |  |  |
 | SCM-13 | Explicit Git Push | DONE | SCM-11, SCM-07 | feat/explicit-git-push (ecb7d02) | docs/sprints/handoffs/SCM-13-HANDOFF.md |
