@@ -134,7 +134,7 @@ Rules:
 | SCM-14 | Git Conflict State & Resolution Shell | DONE | SCM-12, SCM-05 | feat/git-conflict-state-resolution-shell (f12d5c3) | docs/sprints/handoffs/SCM-14-HANDOFF.md |
 | SCM-15 | Git Worktree Discovery & Open Existing | DONE | SCM-01, FS-03, FND-07 | feat/git-worktree-discovery-open-existing | docs/sprints/handoffs/SCM-15-HANDOFF.md |
 | SCM-16 | Safe Git Worktree Create & Remove | DONE | SCM-15, FS-07 | feat/safe-git-worktree-create-remove | docs/sprints/handoffs/SCM-16-HANDOFF.md |
-| SCM-17 | Source Control Regression & Release Hardening | BLOCKED | SCM-04, SCM-05, SCM-09, SCM-12, SCM-13, SCM-14, SCM-16, QA-02 |  |  |
+| SCM-17 | Source Control Regression & Release Hardening | DONE | SCM-04, SCM-05, SCM-09, SCM-12, SCM-13, SCM-14, SCM-16, QA-02 | feat/source-control-regression-release-hardening (a07baaf) | docs/sprints/handoffs/SCM-17-HANDOFF.md |
 | SCM-18 | Worktree API Surface | DONE | SCM-15, SCM-16 | feat/worktree-api-surface (a0474c3) | docs/sprints/handoffs/SCM-18-HANDOFF.md |
 | HIST-04 | Operation History Listing API | READY | HIST-01, HIST-02 |  |  |
 | SCM-19 | DOCX Diff API Surface | READY | SCM-05 |  |  |
