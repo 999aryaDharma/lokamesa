@@ -18,6 +18,11 @@ namespace DocumentIDE.Infrastructure.Markdown
         {
             var html = Markdig.Markdown.ToHtml(markdown ?? string.Empty);
             var sanitizer = new HtmlSanitizer();
+            // REL-04: HtmlSanitizer's default allowed-tag set keeps <form>, so a
+            // share-rendered document could post to an attacker-controlled action
+            // URL (phishing / credential exfiltration). Forms are not part of the
+            // markdown preview surface, so the element and its subtree are removed.
+            sanitizer.AllowedTags.Remove("form");
             return sanitizer.Sanitize(html);
         }
     }
