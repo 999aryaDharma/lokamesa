@@ -117,6 +117,7 @@ Rules:
 | BAT-07 | Regex Advanced Replace | DONE | BAT-06 | fix/bat-07-regex-advanced-replace (f8e220f) | docs/sprints/handoffs/BAT-07-HANDOFF.md |
 | REL-02 | Release Verification Pipeline | DONE | REL-01, QA-01, QA-02, QA-04, QA-05, QA-06, QA-07 | chore/rel-02-release-verification-pipeline | docs/sprints/handoffs/REL-02-HANDOFF.md |
 | REL-03 | V1 Readiness Gate | REVIEW | REL-02, SHR-11, CTX-04, AI-04, PDF-04 | chore/rel-03-v1-readiness-gate | docs/sprints/handoffs/REL-03-HANDOFF.md |
+| REL-04 | Release Gate Integrity & Markdown Preview Sanitizer Coverage | READY | REL-02 | fix/rel-04-release-gate-integrity | docs/sprints/handoffs/REL-04-HANDOFF.md |
 | SCM-01 | Git Capability & Controlled Process Runner | DONE | FND-03, FND-07, FS-02 | feat/git-capability-controlled-process-runner | docs/sprints/handoffs/SCM-01-HANDOFF.md |
 | SCM-02 | Git Repository, Worktree & Status Domain | DONE | SCM-01, FS-03 | feat/git-repository-worktree-status-domain | docs/sprints/handoffs/SCM-02-HANDOFF.md |
 | SCM-03 | Source Control Changes Pane | DONE | SCM-02, FND-07 | feat/source-control-changes-pane | docs/sprints/handoffs/SCM-03-HANDOFF.md |

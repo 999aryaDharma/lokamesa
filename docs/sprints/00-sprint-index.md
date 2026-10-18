@@ -129,6 +129,7 @@ Initial ready queue:
 | `BAT-07` | Regex Advanced Replace | P1 | batch | `BAT-06` | BLOCKED |
 | `REL-02` | Release Verification Pipeline | P0 | release | `REL-01`, `QA-01`, `QA-02`, `QA-04`, `QA-05`, `QA-06`, `QA-07` | BLOCKED |
 | `REL-03` | V1 Readiness Gate | P0 | release | `REL-02`, `SHR-11`, `CTX-04`, `AI-04`, `PDF-04` | BLOCKED |
+| `REL-04` | Release Gate Integrity & Markdown Preview Sanitizer Coverage | P0 | release | `REL-02` | READY |
 
 ## Recommended usage
 
