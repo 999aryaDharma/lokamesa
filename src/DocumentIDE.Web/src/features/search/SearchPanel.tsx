@@ -217,64 +217,90 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
           <div className="p-4 text-center text-xs text-mac-text-3 dark:text-slate-500">
             No matching documents found for &quot;{query}&quot;
           </div>
-        ) : (
-          results.map((result: SearchResult) => {
-            const isSelected = selectedResultIds.has(result.documentId);
-            return (
-              <div
-                key={result.documentId}
-                data-testid={`search-result-${result.documentId}`}
-                aria-selected={isSelected}
-                onClick={() => handleResultClick(result.documentId)}
-                className={`p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
-                  isSelected
-                    ? 'border-mac-accent bg-mac-accent-weak/50 dark:bg-blue-900/20 ring-1 ring-mac-accent'
-                    : 'border-mac-hairline dark:border-slate-800 bg-mac-content dark:bg-slate-800/80 hover:border-mac-hairline-strong dark:hover:border-slate-700 hover:shadow-xs'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-1 mb-1">
-                  <span className="font-medium text-mac-text dark:text-slate-100 truncate flex items-center gap-1">
-                    <span>{result.filename.endsWith('.md') ? '📄' : '📝'}</span>
-                    {result.filename}
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => handleResultClick(result.documentId)}
-                    aria-label={`Select ${result.filename}`}
-                    className="cursor-pointer"
-                  />
+        ) : results.length > 0 ? (
+          /*
+           * A multi-select result list: the listbox owns the selection state
+           * (`aria-selected` on `role="option"`), so no bare `aria-selected`
+           * sits on a role-less div. Rows are focusable and toggle with
+           * Enter/Space, matching the click behaviour.
+           */
+          <div
+            role="listbox"
+            aria-multiselectable="true"
+            aria-label="Search results"
+            className="flex flex-col gap-2"
+          >
+            {results.map((result: SearchResult) => {
+              const isSelected = selectedResultIds.has(result.documentId);
+              return (
+                <div
+                  key={result.documentId}
+                  data-testid={`search-result-${result.documentId}`}
+                  role="option"
+                  aria-selected={isSelected}
+                  tabIndex={0}
+                  onClick={() => handleResultClick(result.documentId)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      handleResultClick(result.documentId);
+                    }
+                  }}
+                  className={`p-2.5 rounded-lg border text-xs cursor-pointer transition-all focus:outline-none focus:ring-1 focus:ring-mac-accent ${
+                    isSelected
+                      ? 'border-mac-accent bg-mac-accent-weak/50 dark:bg-blue-900/20 ring-1 ring-mac-accent'
+                      : 'border-mac-hairline dark:border-slate-800 bg-mac-content dark:bg-slate-800/80 hover:border-mac-hairline-strong dark:hover:border-slate-700 hover:shadow-xs'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-1 mb-1">
+                    <span className="font-medium text-mac-text dark:text-slate-100 truncate flex items-center gap-1">
+                      <span>{result.filename.endsWith('.md') ? '📄' : '📝'}</span>
+                      {result.filename}
+                    </span>
+                    {/* Visual selection affordance; the option owns the state. */}
+                    <span
+                      aria-hidden="true"
+                      data-testid={`search-result-check-${result.documentId}`}
+                      className={`mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border text-[9px] leading-none ${
+                        isSelected
+                          ? 'border-mac-accent bg-mac-accent text-white'
+                          : 'border-mac-hairline-strong bg-mac-content'
+                      }`}
+                    >
+                      {isSelected ? '✓' : ''}
+                    </span>
+                  </div>
+
+                  {result.path && (
+                    <div className="text-[10px] text-mac-text-3 dark:text-slate-500 truncate mb-1">
+                      {result.path}
+                    </div>
+                  )}
+
+                  {/* Match Source Badges */}
+                  {result.matchSources && result.matchSources.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-1.5">
+                      {result.matchSources.map((src) => (
+                        <MatchSourceBadge key={src} source={src} docId={result.documentId} />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Snippets */}
+                  {result.snippets && result.snippets.length > 0 && (
+                    <div className="text-[11px] text-mac-text-2 dark:text-slate-300 bg-mac-canvas dark:bg-slate-900/50 p-1.5 rounded border border-mac-hairline dark:border-slate-800 font-mono italic">
+                      {result.snippets.map((snip, idx) => (
+                        <p key={idx} className="line-clamp-2">
+                          {snip}
+                        </p>
+                      ))}
+                    </div>
+                  )}
                 </div>
-
-                {result.path && (
-                  <div className="text-[10px] text-mac-text-3 dark:text-slate-500 truncate mb-1">
-                    {result.path}
-                  </div>
-                )}
-
-                {/* Match Source Badges */}
-                {result.matchSources && result.matchSources.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mb-1.5">
-                    {result.matchSources.map((src) => (
-                      <MatchSourceBadge key={src} source={src} docId={result.documentId} />
-                    ))}
-                  </div>
-                )}
-
-                {/* Snippets */}
-                {result.snippets && result.snippets.length > 0 && (
-                  <div className="text-[11px] text-mac-text-2 dark:text-slate-300 bg-mac-canvas dark:bg-slate-900/50 p-1.5 rounded border border-mac-hairline dark:border-slate-800 font-mono italic">
-                    {result.snippets.map((snip, idx) => (
-                      <p key={idx} className="line-clamp-2">
-                        {snip}
-                      </p>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })
-        )}
+              );
+            })}
+          </div>
+        ) : null}
       </div>
     </aside>
   );

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import SearchPanel from './SearchPanel.tsx';
 import { useSearchStore, type SearchResult } from './searchStore';
@@ -164,6 +164,40 @@ describe('SearchPanel & Realtime Search UI', () => {
     await waitFor(() => {
       expect(screen.getAllByText(/malformed query syntax/i).length).toBeGreaterThan(0);
     });
+  });
+
+  it('exposes results as a multi-select listbox of options, never a bare aria-selected div', async () => {
+    const mockSearchApi = vi.fn().mockResolvedValue({
+      results: mockResults,
+      totalCount: 2,
+      executionTimeMs: 10,
+    });
+    useSearchStore.getState().setSearchApi(mockSearchApi);
+
+    render(<SearchPanel />);
+
+    fireEvent.change(screen.getByPlaceholderText(/search workspace/i), {
+      target: { value: 'nusa' },
+    });
+
+    const listbox = await screen.findByRole('listbox', { name: 'Search results' });
+    expect(listbox).toHaveAttribute('aria-multiselectable', 'true');
+
+    const options = within(listbox).getAllByRole('option');
+    expect(options).toHaveLength(2);
+    expect(options[0]).toHaveAttribute('aria-selected', 'false');
+
+    fireEvent.click(options[0]);
+    expect(useSearchStore.getState().selectedResultIds.has('doc-1')).toBe(true);
+    expect(
+      screen.getByRole('option', { name: /BA-NUSA-DUA-1\.docx/ }),
+    ).toHaveAttribute('aria-selected', 'true');
+
+    // Keyboard parity: Space on the focused option toggles the same selection.
+    fireEvent.keyDown(screen.getByRole('option', { name: /BA-NUSA-DUA-1\.docx/ }), {
+      key: ' ',
+    });
+    expect(useSearchStore.getState().selectedResultIds.has('doc-1')).toBe(false);
   });
 
   it('Preserves search scope when invoking batch operation', async () => {

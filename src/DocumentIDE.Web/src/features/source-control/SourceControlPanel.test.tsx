@@ -190,11 +190,14 @@ describe('SourceControlPanel', () => {
     );
 
     const row = screen.getByTestId('source-control-entry-contract.docx');
-    expect(row).toHaveAttribute('aria-selected', 'false');
+    // UI-04: a single selected row in a plain list uses the valid
+    // `aria-current` marker; `aria-selected` is not supported on listitem.
+    expect(row).not.toHaveAttribute('aria-current');
+    expect(row).not.toHaveAttribute('aria-selected');
 
     fireEvent.click(row);
 
-    expect(row).toHaveAttribute('aria-selected', 'true');
+    expect(row).toHaveAttribute('aria-current', 'true');
     expect(onSelectionChange).toHaveBeenCalledTimes(1);
     expect(onSelectionChange).toHaveBeenCalledWith(expect.objectContaining({ path: 'contract.docx' }));
   });
@@ -214,12 +217,12 @@ describe('SourceControlPanel', () => {
     );
 
     fireEvent.click(screen.getByTestId('source-control-entry-contract.docx'));
-    expect(screen.getByTestId('source-control-entry-contract.docx')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('source-control-entry-contract.docx')).toHaveAttribute('aria-current', 'true');
 
     rerender(<SourceControlPanel status={refreshed} onSelectionChange={onSelectionChange} />);
 
-    expect(screen.getByTestId('source-control-entry-contract.docx')).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('source-control-entry-proposal.docx')).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByTestId('source-control-entry-contract.docx')).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByTestId('source-control-entry-proposal.docx')).not.toHaveAttribute('aria-current');
   });
 
   it('clears the selection when the selected file is no longer changed', () => {
@@ -240,7 +243,7 @@ describe('SourceControlPanel', () => {
     rerender(<SourceControlPanel status={refreshed} onSelectionChange={onSelectionChange} />);
 
     expect(screen.queryByTestId('source-control-entry-contract.docx')).not.toBeInTheDocument();
-    expect(screen.getByTestId('source-control-entry-proposal.docx')).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByTestId('source-control-entry-proposal.docx')).not.toHaveAttribute('aria-current');
     expect(onSelectionChange).toHaveBeenLastCalledWith(null);
   });
 
@@ -413,7 +416,7 @@ describe('SourceControlPanel', () => {
     // opens the document.
     expect(onSelectionChange).not.toHaveBeenCalled();
     expect(onOpenDocument).not.toHaveBeenCalled();
-    expect(row).toHaveAttribute('aria-selected', 'false');
+    expect(row).not.toHaveAttribute('aria-current');
   });
 
   it('hosts a caller-provided commit box above the change list without owning commit logic', () => {
