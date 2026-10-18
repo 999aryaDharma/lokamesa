@@ -14,6 +14,8 @@ describe('LocateMovedFileDialog Component', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    delete (window as any).__DOCUMENTIDE_API_URL__;
+    delete (window as any).__DOCUMENTIDE_SESSION_TOKEN__;
   });
 
   it('renders nothing when isOpen is false', () => {
@@ -164,6 +166,87 @@ describe('LocateMovedFileDialog Component', () => {
       expect(defaultProps.onRebound).toHaveBeenCalledWith('C:\\Users\\User\\Desktop\\test_document.md');
       expect(defaultProps.onClose).toHaveBeenCalled();
     });
+  });
+
+  it('reaches the loopback API with the host session token (never a relative unauthenticated fetch)', async () => {
+    (window as any).__DOCUMENTIDE_API_URL__ = 'http://127.0.0.1:5311';
+    (window as any).__DOCUMENTIDE_SESSION_TOKEN__ = 'session-token-abc';
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        documentId: 'doc-123',
+        lastKnownPath: defaultProps.lastKnownPath,
+        isAmbiguous: false,
+        candidates: [],
+      }),
+    } as Response);
+
+    render(<LocateMovedFileDialog {...defaultProps} />);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://127.0.0.1:5311/api/documents/doc-123/rebind-candidates');
+    expect(((init?.headers ?? {}) as Record<string, string>)['X-DocumentIDE-Session-Token']).toBe(
+      'session-token-abc',
+    );
+  });
+
+  it('sends the session token on the rebind mutation too', async () => {
+    (window as any).__DOCUMENTIDE_API_URL__ = 'http://127.0.0.1:5311';
+    (window as any).__DOCUMENTIDE_SESSION_TOKEN__ = 'session-token-abc';
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (String(url).endsWith('/rebind-candidates')) {
+        return {
+          ok: true,
+          json: async () => ({
+            documentId: 'doc-123',
+            lastKnownPath: defaultProps.lastKnownPath,
+            isAmbiguous: false,
+            candidates: [
+              {
+                targetPath: 'C:\\Users\\User\\Desktop\\test_document.md',
+                filename: 'test_document.md',
+                sizeBytes: 150,
+                modifiedAt: '2026-08-10T12:00:00Z',
+                contentFingerprint: 'hash123',
+                matchScore: 100,
+                exactFingerprintMatch: true,
+                sameFilenameMatch: true,
+                matchReason: 'Exact match',
+                isAmbiguous: false,
+              },
+            ],
+          }),
+        } as Response;
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          documentId: 'doc-123',
+          previousPath: defaultProps.lastKnownPath,
+          newPath: 'C:\\Users\\User\\Desktop\\test_document.md',
+          availabilityStatus: 'available',
+          success: true,
+        }),
+      } as Response;
+    });
+
+    render(<LocateMovedFileDialog {...defaultProps} />);
+    fireEvent.click(await screen.findByRole('button', { name: /confirm rebind/i }));
+
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/rebind'))).toBe(true),
+    );
+    const rebindCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/rebind'))!;
+    expect(String(rebindCall[0])).toBe('http://127.0.0.1:5311/api/documents/doc-123/rebind');
+    expect(
+      ((rebindCall[1]?.headers ?? {}) as Record<string, string>)[
+        'X-DocumentIDE-Session-Token'
+      ],
+    ).toBe('session-token-abc');
   });
 
   it('calls onClose when cancel button is clicked', async () => {

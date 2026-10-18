@@ -20,6 +20,7 @@ export interface WorkspaceDocumentDto {
   filename: string;
   extension?: string;
   currentPath?: string;
+  lastKnownPath?: string;
   documentType?: string;
   availabilityStatus?: string;
   indexStatus?: string;

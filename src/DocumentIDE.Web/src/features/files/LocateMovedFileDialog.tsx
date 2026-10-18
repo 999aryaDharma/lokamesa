@@ -1,24 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import {
+  fetchRebindCandidates,
+  rebindDocument,
+  type RebindCandidateDto,
+} from './missingResourceApi';
 
-export interface RebindCandidateDto {
-  targetPath: string;
-  filename: string;
-  sizeBytes: number;
-  modifiedAt: string;
-  contentFingerprint: string;
-  matchScore: number;
-  exactFingerprintMatch: boolean;
-  sameFilenameMatch: boolean;
-  matchReason: string;
-  isAmbiguous: boolean;
-}
-
-export interface RebindCandidateListDto {
-  documentId: string;
-  lastKnownPath: string;
-  isAmbiguous: boolean;
-  candidates: RebindCandidateDto[];
-}
+export type { RebindCandidateDto, RebindCandidateListDto } from './missingResourceApi';
 
 export interface LocateMovedFileDialogProps {
   isOpen: boolean;
@@ -52,11 +39,7 @@ export const LocateMovedFileDialog: React.FC<LocateMovedFileDialogProps> = ({
       setIsLoading(true);
       setErrorMessage(null);
       try {
-        const response = await fetch(`/api/documents/${documentId}/rebind-candidates`);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch candidates (Status: ${response.status})`);
-        }
-        const data: RebindCandidateListDto = await response.json();
+        const data = await fetchRebindCandidates(documentId);
         setCandidates(data.candidates || []);
         setIsAmbiguous(data.isAmbiguous || false);
         if (data.candidates && data.candidates.length > 0) {
@@ -86,21 +69,7 @@ export const LocateMovedFileDialog: React.FC<LocateMovedFileDialogProps> = ({
     setErrorMessage(null);
 
     try {
-      const response = await fetch(`/api/documents/${documentId}/rebind`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          targetPath: activePath,
-          forceRebind: true,
-        }),
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || 'Failed to rebind document path.');
-      }
+      await rebindDocument(documentId, activePath);
 
       if (onRebound) {
         onRebound(activePath);

@@ -60,6 +60,15 @@ import DocumentCanvas from './features/canvas/DocumentCanvas';
 import { useCanvasStore } from './features/canvas/canvasStore';
 import type { FolderPickerFile } from './features/canvas/FolderPicker';
 import type { CanvasObject } from './features/canvas/types';
+import { ContextPackDialog, type ContextSourceItem } from './features/context/ContextPackDialog';
+import { fetchContextPack, toContextSources } from './features/context/contextPackApi';
+import LocateMovedFileDialog from './features/files/LocateMovedFileDialog';
+import MissingResourcesPanel from './features/files/MissingResourcesPanel';
+import { removeDocumentReference } from './features/files/missingResourceApi';
+import {
+  missingDocumentsFrom,
+  type MissingResourceDocument,
+} from './features/files/missingResourceModel';
 import { openInWord } from './features/files/OpenInWordAction';
 import DocumentGraph from './features/graph/DocumentGraph';
 import { useGraphStore, type GraphNode } from './features/graph/graphStore';
@@ -81,7 +90,11 @@ import WorktreesScreen from './features/source-control/WorktreesScreen';
 import AddFolderSource from './features/workspace/AddFolderSource';
 import { useViewStore } from './features/workspace/viewStore';
 import { bootstrapWorkspace } from './features/workspace/workspaceBootstrap';
-import { fetchFolderSources, fetchWorkspaceDocuments } from './features/workspace/workspaceApi';
+import {
+  fetchFolderSources,
+  fetchWorkspaceDocuments,
+  type WorkspaceDocumentDto,
+} from './features/workspace/workspaceApi';
 
 interface ShellGlobals {
   __DOCUMENTIDE_WORKSPACE_ID__?: string;
@@ -120,7 +133,7 @@ function useGraphState() {
 export default function App() {
   const workspaceId = useMemo(resolveWorkspaceId, []);
   const { activeView, setActiveView, loadPersistedView } = useViewState();
-  const { objects, selectedIds, setObjects, upsertObject } = useCanvasState();
+  const { objects, selectedIds, setObjects, upsertObject, clearSelection } = useCanvasState();
   const graph = useGraphState();
 
   const [activeSurface, setActiveSurface] = useState<ShellSurface>('workspace');
@@ -153,6 +166,12 @@ export default function App() {
    * local-path surface (the DTO already carries it for the owner app only).
    */
   const [documentPaths, setDocumentPaths] = useState<Record<string, string>>({});
+  /** UI-05 B: the live workspace documents, including availability + last-known path. */
+  const [workspaceDocuments, setWorkspaceDocuments] = useState<WorkspaceDocumentDto[]>([]);
+  /** UI-05 A: the real pack sources returned for the current selection. */
+  const [contextSources, setContextSources] = useState<ContextSourceItem[] | null>(null);
+  /** UI-05 B: the document whose locate dialog is open. */
+  const [locateDocument, setLocateDocument] = useState<MissingResourceDocument | null>(null);
 
   /**
    * Document objects produced by the bootstrap, keyed by DocumentId. Folder
@@ -188,6 +207,7 @@ export default function App() {
           .map((doc) => [doc.id, doc.currentPath as string]),
       ),
     );
+    setWorkspaceDocuments(result.documents);
     const primaryFolder = result.folderSources.find((source) => Boolean(source.canonicalPath));
     const primaryDocument = result.documents.find((doc) => Boolean(doc.currentPath));
     setRepositoryPath(primaryFolder?.canonicalPath ?? primaryDocument?.currentPath ?? null);
@@ -232,6 +252,77 @@ export default function App() {
     [objects],
   );
   const selectedDocumentIds = useMemo(() => Array.from(selectedIds), [selectedIds]);
+
+  /**
+   * UI-05 A: the ordered document selection that feeds the context pack. The
+   * explicit order is the canvas object order the user sees, and folders are
+   * excluded (the pack route takes document ids only).
+   */
+  const selectedPackDocumentIds = useMemo(
+    () =>
+      objects
+        .filter((object) => object.type === 'document' && selectedIds.has(object.id))
+        .map((object) => object.id),
+    [objects, selectedIds],
+  );
+
+  /** UI-05 B: documents the workspace itself reports as unavailable. */
+  const missingDocuments = useMemo(
+    () => missingDocumentsFrom(workspaceDocuments),
+    [workspaceDocuments],
+  );
+
+  const handleOpenContextPack = useCallback(async () => {
+    if (selectedPackDocumentIds.length === 0) return;
+
+    setStatusMessage(null);
+    try {
+      const pack = await fetchContextPack(selectedPackDocumentIds);
+      setContextSources(toContextSources(pack));
+    } catch (error) {
+      // A typed refusal is surfaced as-is; no empty dialog is opened.
+      setStatusMessage(
+        error instanceof Error ? error.message : 'Failed to build the context pack.',
+      );
+    }
+  }, [selectedPackDocumentIds]);
+
+  const handleLocateMissing = useCallback(
+    (documentId: string) => {
+      const document = workspaceDocuments.find((candidate) => candidate.id === documentId);
+      if (!document) return;
+
+      setLocateDocument({
+        id: document.id,
+        filename: document.filename,
+        currentPath: document.currentPath,
+        lastKnownPath: document.lastKnownPath,
+      });
+    },
+    [workspaceDocuments],
+  );
+
+  const handleRemoveReference = useCallback(
+    async (documentId: string) => {
+      setStatusMessage(null);
+      try {
+        await removeDocumentReference(documentId);
+        if (selectedIds.has(documentId)) clearSelection();
+        await loadWorkspace();
+        setStatusMessage('Removed the reference. The file on disk was not changed.');
+      } catch (error) {
+        setStatusMessage(
+          error instanceof Error ? error.message : 'Failed to remove the document reference.',
+        );
+      }
+    },
+    [clearSelection, loadWorkspace, selectedIds],
+  );
+
+  const handleRebound = useCallback(async () => {
+    setLocateDocument(null);
+    await loadWorkspace();
+  }, [loadWorkspace]);
 
   /**
    * G8: the PDF export selection is the current canvas selection, mapped to the
@@ -326,6 +417,8 @@ export default function App() {
         batchOpen={batchOpen}
         onTogglePdf={() => setPdfOpen((open) => !open)}
         pdfOpen={pdfOpen}
+        onOpenContextPack={() => void handleOpenContextPack()}
+        contextPackEnabled={selectedPackDocumentIds.length > 0}
       />
 
       {statusMessage && (
@@ -454,6 +547,16 @@ export default function App() {
             )}
           </div>
 
+          {/* UI-05 B: real missing documents from `availabilityStatus`, over the
+              workspace surface where documents are already rendered. */}
+          {activeSurface === 'workspace' && missingDocuments.length > 0 && (
+            <MissingResourcesPanel
+              documents={missingDocuments}
+              onLocate={handleLocateMissing}
+              onRemove={(documentId) => void handleRemoveReference(documentId)}
+            />
+          )}
+
           {searchOpen && (
             <SearchPanel
               onClosePanel={() => setSearchOpen(false)}
@@ -497,6 +600,32 @@ export default function App() {
             <div className="absolute inset-0 z-40 bg-mac-content" data-testid="markdown-overlay">
               <MarkdownEditor documentId={markdownDoc.id} onClose={() => setMarkdownDoc(null)} />
             </div>
+          )}
+
+          {/* UI-05 A: copy-only context pack. No export callback is supplied,
+              so the dialog renders no export control at all. */}
+          {contextSources && (
+            <ContextPackDialog
+              isOpen
+              onClose={() => setContextSources(null)}
+              sources={contextSources}
+            />
+          )}
+
+          {/* UI-05 B: the locate flow, now using the authenticated loopback client. */}
+          {locateDocument && (
+            <LocateMovedFileDialog
+              isOpen
+              documentId={locateDocument.id}
+              filename={locateDocument.filename}
+              lastKnownPath={
+                locateDocument.lastKnownPath ||
+                locateDocument.currentPath ||
+                locateDocument.filename
+              }
+              onClose={() => setLocateDocument(null)}
+              onRebound={() => void handleRebound()}
+            />
           )}
         </main>
 
