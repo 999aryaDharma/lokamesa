@@ -10,7 +10,7 @@ using Microsoft.Data.Sqlite;
 
 namespace DocumentIDE.Infrastructure.Search;
 
-public class FtsIndex : IFtsIndex
+public class FtsIndex : IFtsIndex, IIndexedTextReader
 {
     private const string IndexVersionValue = "1.0.0";
     private readonly AppDb _appDb;
@@ -18,6 +18,26 @@ public class FtsIndex : IFtsIndex
     public FtsIndex(AppDb appDb)
     {
         _appDb = appDb ?? throw new ArgumentNullException(nameof(appDb));
+    }
+
+    /// <summary>
+    /// UI-05 — the indexed searchable body (the DOCX parser's
+    /// <c>SearchableBody</c> when this row was produced by a DOCX parse).
+    /// Read-only; <c>null</c> means the index has no text for the document.
+    /// </summary>
+    public async Task<string?> GetIndexedBodyAsync(string documentId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(documentId)) return null;
+
+        using var connection = _appDb.CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT body FROM search_content WHERE document_id = @documentId LIMIT 1;";
+        cmd.Parameters.AddWithValue("@documentId", documentId);
+
+        var value = await cmd.ExecuteScalarAsync(cancellationToken);
+        return value is null or DBNull ? null : value as string;
     }
 
     public async Task IndexDocumentAsync(FtsIndexEntry entry, CancellationToken cancellationToken = default)
