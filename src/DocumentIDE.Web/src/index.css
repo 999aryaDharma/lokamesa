@@ -1,1 +1,47 @@
 @import "tailwindcss";
+
+/*
+ * UI-01 — macOS three-pane shell design tokens.
+ *
+ * Values are taken verbatim from docs/design/UI-DESIGN-BRIEF-MACOS.md
+ * ("Tokens added for this series"). Declaring them in a Tailwind v4 `@theme`
+ * block makes them first-class utilities: `bg-mac-toolbar`, `text-mac-text`,
+ * `border-mac-hairline-strong`, `ring-mac-accent`, ...
+ *
+ * Typography: the brief specifies Inter (stand-in for SF Pro, which is not
+ * licensable as a web font) and JetBrains Mono for diff/code surfaces. No web
+ * font is fetched — the app must keep working offline — so both are declared
+ * with graceful system fallbacks.
+ */
+@theme {
+  /* Surfaces */
+  --color-mac-toolbar: #f7f7f8;
+  --color-mac-sidebar: #f0f0f2;
+  --color-mac-inspector: #f5f5f7;
+  --color-mac-content: #ffffff;
+  --color-mac-fill-2: #ffffff;
+  --color-mac-canvas: #fbfbfd;
+
+  /* Separators */
+  --color-mac-hairline: #00000014;
+  --color-mac-hairline-strong: #d9d9de;
+
+  /* Text */
+  --color-mac-text: #1d1d1f;
+  --color-mac-text-2: #6e6e73;
+  --color-mac-text-3: #8e8e93;
+
+  /* Accent + state */
+  --color-mac-accent: #007aff;
+  --color-mac-accent-weak: #e7f0ff;
+  --color-mac-chip: #e6e6e9;
+  --color-mac-success: #34c759;
+  --color-mac-warning: #ff9f0a;
+  --color-mac-danger: #ff3b30;
+
+  /* Typography */
+  --font-sans: Inter, "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo,
+    Consolas, monospace;
+}
