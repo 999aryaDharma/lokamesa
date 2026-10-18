@@ -173,6 +173,44 @@ function installFetch(
     if (url.includes('/api/source-control/status')) {
       return jsonResponse(scmStatusPayload());
     }
+    if (url.includes('/api/source-control/docx-diff')) {
+      return jsonResponse({
+        status: 'Available',
+        isSuccess: true,
+        errorCode: null,
+        message: null,
+        report: {
+          target: 'Staged',
+          path: 'Report.docx',
+          worktreeRoot: 'C:/Docs',
+          leftLabel: 'HEAD',
+          rightLabel: 'index',
+          leftExists: true,
+          rightExists: true,
+          changeCount: 1,
+          hasChanges: true,
+          changes: [
+            {
+              kind: 'ParagraphTextChanged',
+              origin: 'Body',
+              partName: 'word/document.xml',
+              summary: 'Paragraph text changed: "30 days" -> "60 days"',
+              before: 'Either party may terminate with 30 days written notice.',
+              after: 'Either party may terminate with 60 days written notice.',
+              property: null,
+              oldParagraphIndex: 12,
+              newParagraphIndex: 12,
+              runIndex: null,
+              tableIndex: null,
+              rowIndex: null,
+              cellIndex: null,
+            },
+          ],
+          binarySummary: null,
+        },
+        failure: null,
+      });
+    }
     if (url.includes('/api/source-control/remote')) {
       return jsonResponse({
         status: 'Available',
@@ -440,6 +478,20 @@ describe('App shell reachability', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open document diff' }));
 
     expect(await screen.findByTestId('docx-diff-screen')).toBeInTheDocument();
+
+    // UI-04: screen 06 now carries the real SCM-19 report for the selected
+    // change (the route's `path` is the true worktree root `GET status` gave).
+    expect(await screen.findByTestId('docx-diff-change-0')).toBeInTheDocument();
+    expect(screen.getByTestId('docx-diff-after-0')).toHaveTextContent('60 days written notice');
+    const diffCall = fetchMock.mock.calls.find(([input]) =>
+      String(input).endsWith('/api/source-control/docx-diff'),
+    )!;
+    expect(JSON.parse(String(diffCall[1]?.body))).toEqual({
+      path: 'C:/Docs',
+      documentPath: 'Report.docx',
+      target: 'Staged',
+      originalPath: null,
+    });
 
     fireEvent.click(screen.getByRole('button', { name: 'Open in Word' }));
     await waitFor(() =>

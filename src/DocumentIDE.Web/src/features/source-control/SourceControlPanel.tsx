@@ -263,7 +263,10 @@ function ChangeSection({
             <li
               key={entry.path}
               data-testid={`source-control-entry-${entry.path}`}
-              aria-selected={isSelected}
+              // A single selected row inside a plain list: `aria-current` is
+              // the valid current-item marker. `aria-selected` is only valid
+              // on roles like option/row inside a selectable widget.
+              aria-current={isSelected ? 'true' : undefined}
               onClick={() => onSelect(entry)}
               onDoubleClick={() => onOpen(entry)}
               className={`flex items-center gap-2 px-2 py-1 rounded-lg cursor-pointer transition-colors ${

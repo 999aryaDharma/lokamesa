@@ -295,6 +295,7 @@ describe('SourceControlScreen (design 05)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open document diff' }));
     expect(onOpenDocxDiff).toHaveBeenCalledWith(
       expect.objectContaining({ path: 'docs/Report.docx' }),
+      'C:\\docs',
     );
   });
 
