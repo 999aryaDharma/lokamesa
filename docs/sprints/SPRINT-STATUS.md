@@ -127,9 +127,9 @@ Rules:
 | SCM-08 | Git Commit History & File History | READY | SCM-02, SCM-07 |  |  |
 | SCM-09 | Document IDE History ↔ Git Correlation | DONE | SCM-07, HIST-01 | feat/document-ide-history-git-correlation (e84fd48) | docs/sprints/handoffs/SCM-09-HANDOFF.md |
 | SCM-10 | Safe Git Discard & Restore | BLOCKED | SCM-08, HIST-01, FS-07 |  |  |
-| SCM-11 | Git Remote State & Fetch | READY | SCM-02, SCM-07 |  |  |
+| SCM-11 | Git Remote State & Fetch | DONE | SCM-02, SCM-07 | feat/git-remote-state-fetch (84e82fc) | docs/sprints/handoffs/SCM-11-HANDOFF.md |
 | SCM-12 | Safe Fast-Forward Pull | BLOCKED | SCM-11, SCM-10 |  |  |
-| SCM-13 | Explicit Git Push | BLOCKED | SCM-11, SCM-07 |  |  |
+| SCM-13 | Explicit Git Push | READY | SCM-11, SCM-07 |  |  |
 | SCM-14 | Git Conflict State & Resolution Shell | BLOCKED | SCM-12, SCM-05 |  |  |
 | SCM-15 | Git Worktree Discovery & Open Existing | DONE | SCM-01, FS-03, FND-07 | feat/git-worktree-discovery-open-existing | docs/sprints/handoffs/SCM-15-HANDOFF.md |
 | SCM-16 | Safe Git Worktree Create & Remove | DONE | SCM-15, FS-07 | feat/safe-git-worktree-create-remove | docs/sprints/handoffs/SCM-16-HANDOFF.md |
