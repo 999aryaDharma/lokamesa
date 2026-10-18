@@ -140,6 +140,27 @@ function Get-TrxSummaries {
     return $summaries
 }
 
+function Assert-TrxEvidence {
+    param([string]$Suite, [array]$Rows, [string]$Dir = $resultsPath)
+    # REL-04: single implementation of the release-gate evidence rule. A named
+    # gate may only pass on trx evidence that actually executed tests, and none
+    # failed. This matters because `dotnet test` exits 0 and writes a trx with
+    # total=0 when a project contains no tests — exit code alone is green-by-skipping.
+    $evidence = @($Rows | Where-Object { $null -ne $_ })
+    if ($evidence.Count -eq 0) {
+        throw "No trx evidence found for *$Suite* in $Dir."
+    }
+    $bad = @($evidence | Where-Object { $_.failed -gt 0 })
+    if ($bad.Count -gt 0) {
+        throw "${Suite}: $($bad[0].failed) failing test(s) of $($bad[0].total)."
+    }
+    $tot = ($evidence | Measure-Object -Property total -Sum).Sum
+    if ($tot -le 0) {
+        throw "${Suite}: trx evidence executed 0 tests; a suite that runs no tests cannot pass its release gate."
+    }
+    "${Suite}: $tot test(s) passed, 0 failed"
+}
+
 function Get-RepoCommit {
     $commit = (& git rev-parse HEAD).Trim()
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($commit)) {
@@ -268,25 +289,31 @@ $trxGateMap = [ordered]@{
 foreach ($key in $trxGateMap.Keys) {
     Invoke-ReleaseGate -Name $trxGateMap[$key] -Body {
         $rows = Get-TrxSummaries -Dir $resultsPath | Where-Object { $_.assemblies -like "*$key*" }
-        if ($rows.Count -eq 0) { throw "No trx evidence found for *$key* in $resultsPath." }
-        $bad = @($rows | Where-Object { $_.failed -gt 0 })
-        if ($bad.Count -gt 0) {
-            throw "${key}: $($bad[0].failed) failing test(s) of $($bad[0].total)."
-        }
-        $tot = ($rows | Measure-Object -Property total -Sum).Sum
-        "${key}: $tot test(s) passed, 0 failed"
+        Assert-TrxEvidence -Suite $key -Rows $rows
     }
 }
 
 # ---- Gate: MarkdownPreview suite (test project not in the solution) ----
-# tests/DocumentIDE.MarkdownPreview.Tests has no sln entry, so `dotnet test`
-# on the solution never executes it. The release gate runs it explicitly —
-# leaving it out would be green-by-skipping.
+# tests/DocumentIDE.MarkdownPreview.Tests has no sln entry, so `dotnet test` on
+# the solution never executes it; this gate runs its csproj explicitly. A zero
+# exit code is NOT sufficient evidence: `dotnet test` on a project with no tests
+# prints "No test is available", writes a total=0 trx, and still exits 0. The
+# gate therefore reads the trx this run wrote and fails unless tests actually
+# executed and none failed (Assert-TrxEvidence) — no green-by-skipping.
+#
+# Dedicated results dir: a zero-test trx carries no UnitTest/@storage, so it
+# cannot be attributed to this assembly by name. Reading exactly the trx this
+# run wrote is what distinguishes "0 tests executed" from "no evidence at all".
+$markdownPreviewResultsPath = Join-Path $resultsPath "markdownpreview"
 Invoke-ReleaseGate -Name "MarkdownPreview" -Body {
+    if (Test-Path $markdownPreviewResultsPath) {
+        Remove-Item -Path $markdownPreviewResultsPath -Recurse -Force
+    }
     & dotnet test tests/DocumentIDE.MarkdownPreview.Tests/DocumentIDE.MarkdownPreview.Tests.csproj `
-        --nologo --results-directory $resultsPath --logger "trx" 2>&1 | Out-String | Write-Host
+        --nologo --results-directory $markdownPreviewResultsPath --logger "trx" 2>&1 | Out-String | Write-Host
     Assert-LastExit "dotnet test MarkdownPreview.Tests"
-    "MarkdownPreview suite passed"
+    $rows = Get-TrxSummaries -Dir $markdownPreviewResultsPath
+    Assert-TrxEvidence -Suite "MarkdownPreview" -Rows $rows -Dir $markdownPreviewResultsPath
 }
 
 # ---- Gates: frontend (typecheck, lint, tests, build) ----
