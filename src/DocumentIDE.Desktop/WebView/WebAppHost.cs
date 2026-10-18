@@ -169,6 +169,8 @@ public class WebAppHost : IAsyncDisposable, IDisposable
             typeof(ReconciliationController),
             typeof(GraphController),
             typeof(MarkdownDocumentController),
+            // UI-02: read-only DOCX preview content for the canvas file object.
+            typeof(DocumentPreviewController),
         };
 
         protected override bool IsController(TypeInfo typeInfo) => Array.IndexOf(AllowedControllers, typeInfo.AsType()) >= 0;

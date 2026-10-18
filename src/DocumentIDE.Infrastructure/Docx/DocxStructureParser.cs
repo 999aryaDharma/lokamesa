@@ -19,9 +19,9 @@ namespace DocumentIDE.Infrastructure.Docx
     /// deterministic document-lens metadata shape (<see cref="DocumentMetadata"/>).
     ///
     /// Read-only: the package is opened with <see cref="ZipArchiveMode.Read"/> on a
-    /// read-shared file handle and is never opened for update. Text-indexing
-    /// payloads (searchable body / table / header / footer text) are out of scope
-    /// for DOCX-04 and remain unset here.
+    /// read-shared file handle and is never opened for update. The searchable body
+    /// and headings text payloads carry the document's own words (IDX-02 + the
+    /// UI-02 preview route); table / header / footer text payloads remain unset.
     ///
     /// Extraction definitions:
     /// <list type="bullet">
@@ -97,6 +97,9 @@ namespace DocumentIDE.Infrastructure.Docx
                 ParserVersion = "1.0.0"
             };
 
+            string? bodyText = null;
+            string? headingsText = null;
+
             using (var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false))
             {
@@ -106,13 +109,13 @@ namespace DocumentIDE.Infrastructure.Docx
                 var stylesXml = LoadXmlPart(archive, "word/styles.xml");
                 var appXml = LoadXmlPart(archive, "docProps/app.xml");
 
-                ExtractMetadata(documentXml, stylesXml, appXml, archive, metadata);
+                (bodyText, headingsText) = ExtractMetadata(documentXml, stylesXml, appXml, archive, metadata);
             }
 
-            return new DocxParseResult(metadata, SearchableBody: Path.GetFileName(filePath));
+            return new DocxParseResult(metadata, SearchableBody: bodyText, HeadingsText: headingsText);
         }
 
-        private static void ExtractMetadata(
+        private static (string? BodyText, string? HeadingsText) ExtractMetadata(
             XDocument documentXml,
             XDocument? stylesXml,
             XDocument? appXml,
@@ -153,6 +156,14 @@ namespace DocumentIDE.Infrastructure.Docx
                 ? JsonSerializer.Serialize(headings)
                 : null;
 
+            // IDX-02 body/heading text payloads consumed by the search index and by
+            // the UI-02 read-only preview route: the document's own words, never
+            // synthesized. Read-only extraction from the already-loaded document part.
+            var headingsText = headings.Count > 0
+                ? string.Join("\n", headings.Select(h => h.Text))
+                : null;
+            var bodyText = ExtractBodyText(contentScope);
+
             var (primaryFont, primarySizePoints) = ComputePrimaryFormatting(contentScope, stylesXml);
             metadata.PrimaryFont = primaryFont;
             metadata.PrimaryFontSize = primarySizePoints;
@@ -161,7 +172,32 @@ namespace DocumentIDE.Infrastructure.Docx
 
             metadata.HeaderPresent = HasPart(archive, "word/header");
             metadata.FooterPresent = HasPart(archive, "word/footer");
+
+            return (bodyText, headingsText);
         }
+
+        /// <summary>
+        /// Extracts the body paragraph text in document order (each paragraph's
+        /// concatenated <c>w:t</c> runs), newline separated, for the searchable
+        /// body payload. Returns <c>null</c> when the body carries no text.
+        /// </summary>
+        private static string? ExtractBodyText(XElement? scope)
+        {
+            if (scope == null) return null;
+
+            var paragraphs = new List<string>();
+            foreach (var paragraph in scope.Descendants(WNs + "p"))
+            {
+                string text = ExtractParagraphText(paragraph);
+                if (text.Length == 0) continue;
+                paragraphs.Add(text);
+            }
+
+            return paragraphs.Count == 0 ? null : string.Join("\n", paragraphs);
+        }
+
+        private static string ExtractParagraphText(XElement paragraph)
+            => string.Concat(paragraph.Descendants(WNs + "t").Select(t => t.Value)).Trim();
 
         private static int CountPictureElements(XElement? scope)
         {
@@ -180,7 +216,7 @@ namespace DocumentIDE.Infrastructure.Docx
                 int level = GetHeadingLevel(paragraph);
                 if (level == 0) continue;
 
-                string text = string.Concat(paragraph.Descendants(WNs + "t").Select(t => t.Value)).Trim();
+                string text = ExtractParagraphText(paragraph);
                 if (text.Length == 0) continue;
 
                 headings.Add(new DocumentLensHeading(level, text));
