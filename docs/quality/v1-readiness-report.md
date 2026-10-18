@@ -2,7 +2,22 @@
 
 **Verdict:** GO
 
-**Gate run:** `pwsh -File scripts/verify-release.ps1` · commit `aba47ecaf45bfb55c77cfd9ff68543ac0d33c3f7` · branch `integration/parallel-batches` · `workingTreeDirty=false` · **19/19 gates passed, 0 failed, 0 environment-gated** · packaged artifacts verified · machine report at `artifacts/release-verify/verification-report.json` (`verdict: PASSED`).
+**Gate run:** `pwsh -File scripts/verify-release.ps1` · commit `08766d49960d4b09a437f7efec43eaeb8a4db7d2` · branch `integration/parallel-batches` · `workingTreeDirty=false` · **19/19 gates passed, 0 failed, 0 environment-gated** · packaged artifacts verified · machine report at `artifacts/release-verify/verification-report.json` (`verdict: PASSED`).
+
+**Two defects were found and fixed after an earlier green run, and are part of the evidence above.**
+
+1. The installer carried only the two apphosts plus an empty `wwwroot` folder — measured from the MSI
+   `File` table, 2 rows / 0.31 MB against a 175.4 MB self-contained publish — so the installed product
+   could not start. It passed because the packaging test only asserted that the `.msi` existed. The
+   manifest now harvests the whole publish output (589 files / 175.4 MB, MSI 63.4 MB) and the packaging
+   test reads the MSI `File` table to require the runtime assemblies and web assets (`>100` entries,
+   `>100 MB`). RED: rebuilt from the previous manifest the test fails; from the corrected manifest it
+   passes.
+2. `BatchPreviewHostTests` intermittently reported a completed preview with zero occurrences and blocked
+   the gate twice. It passes in isolation, so the cause is contention among in-process host fixtures
+   (shared default-database fallback, port allocation, static caches, filesystem). All ten `*HostTests`
+   classes now share a non-parallel `HostFixtures` collection; non-host tests keep their parallelism.
+   Evidence: two consecutive full-suite runs 1065/1065 and the affected test 10/10 in isolation.
 
 ## 1. How this gate was performed
 
