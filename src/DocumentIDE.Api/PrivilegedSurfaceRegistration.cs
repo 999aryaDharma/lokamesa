@@ -8,6 +8,7 @@ using DocumentIDE.Core.Markdown;
 using DocumentIDE.Core.Pdf;
 using DocumentIDE.Core.Search;
 using DocumentIDE.Core.Sharing;
+using DocumentIDE.Core.SourceControl;
 using DocumentIDE.Core.Word;
 using DocumentIDE.Infrastructure.Batch;
 using DocumentIDE.Infrastructure.Docx;
@@ -78,6 +79,9 @@ public static class PrivilegedSurfaceRegistration
         services.TryAddSingleton<JsonlHistoryStore>();
         services.TryAddSingleton<IBatchApplyHistoryRecorder>(sp => sp.GetRequiredService<JsonlHistoryStore>());
         services.TryAddSingleton<IUndoHistoryRecorder>(sp => sp.GetRequiredService<JsonlHistoryStore>());
+        // SCM-10 — discard/restore operations are recorded in the same Document
+        // IDE History store (spec 13 §15.2 step 8), not a parallel one.
+        services.TryAddSingleton<IGitRestoreHistoryRecorder>(sp => sp.GetRequiredService<JsonlHistoryStore>());
         services.TryAddScoped<RecoverySnapshotService>();
         services.TryAddScoped<IExternalEditStateProbe, WordEditStateProbe>();
         services.TryAddScoped<IAtomicFileReplacer, AtomicFileReplacer>();

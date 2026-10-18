@@ -1,6 +1,7 @@
 using DocumentIDE.Infrastructure.Word;
 using DocumentIDE.Api;
 using DocumentIDE.Api.Security;
+using DocumentIDE.Core.Batch;
 using DocumentIDE.Core.Domain.Repositories;
 using DocumentIDE.Core.Filesystem;
 using DocumentIDE.Core.History;
@@ -123,6 +124,19 @@ builder.Services.AddSingleton(sp => new GitPushService(
 builder.Services.AddSingleton(sp => new GitHistoryService(
     sp.GetRequiredService<IGitProcessRunner>(),
     sp.GetRequiredService<GitRepositoryService>()));
+
+// SCM-10: safe discard/restore. Scoped because the HIST-01 recovery snapshot
+// service, the document repository and the reindex seam are scoped. Every
+// mutation is file-scoped, requires the reviewed confirmation token, writes a
+// recovery snapshot before Git runs, refuses conflicted/untracked paths, and
+// records the operation in Document IDE History (spec 13 §15/§19/§21/§23).
+builder.Services.AddScoped(sp => new GitRestoreService(
+    sp.GetRequiredService<IGitProcessRunner>(),
+    sp.GetRequiredService<GitRepositoryService>(),
+    sp.GetRequiredService<RecoverySnapshotService>(),
+    sp.GetRequiredService<IGitRestoreHistoryRecorder>(),
+    sp.GetRequiredService<IBatchApplyReindexTrigger>(),
+    sp.GetRequiredService<IDocumentRepository>()));
 
 builder.Services.AddScoped<PdfExportService>();
 builder.Services.AddScoped<BatchPdfExportService>();
