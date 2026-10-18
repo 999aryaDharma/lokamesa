@@ -55,6 +55,12 @@ public enum GitCommitOutcome
 
     /// <summary>Git ran and failed for a reason this service does not classify further; inspect <see cref="GitCommitResult.Failure"/>.</summary>
     Failed = 9,
+
+    /// <summary>
+    /// The repository has unresolved conflicts, so the commit was refused before
+    /// Git ran (spec 13 §21). No commit was created and the index is unchanged.
+    /// </summary>
+    ConflictedWorktree = 10,
 }
 
 /// <summary>
@@ -93,6 +99,10 @@ public sealed record GitCommitInfo(
 /// committed, as Git reported them (spec 13 §11.2 steps 2–4). <c>null</c> for
 /// the plain Commit flow, which never stages anything itself.
 /// </param>
+/// <param name="ConflictedPaths">
+/// For <see cref="GitCommitOutcome.ConflictedWorktree"/>: the unmerged paths
+/// that blocked the commit (spec 13 §21). <c>null</c> otherwise.
+/// </param>
 public sealed record GitCommitResult(
     GitCommitOutcome Outcome,
     GitCommitFlow Flow,
@@ -101,7 +111,8 @@ public sealed record GitCommitResult(
     GitProcessResult? Failure,
     string? Message,
     string? ErrorCode = null,
-    IReadOnlyList<string>? StagedPaths = null)
+    IReadOnlyList<string>? StagedPaths = null,
+    IReadOnlyList<string>? ConflictedPaths = null)
 {
     /// <summary>True only when the commit was created in the repository.</summary>
     public bool IsSuccess => Outcome == GitCommitOutcome.Succeeded;

@@ -155,7 +155,8 @@ public sealed record SourceControlCommitResponse(
     SourceControlCommitInfoResponse? Commit,
     IReadOnlyList<string>? StagedPaths,
     SourceControlStatusResponse? Status,
-    SourceControlFailureResponse? Failure);
+    SourceControlFailureResponse? Failure,
+    IReadOnlyList<string>? ConflictedPaths = null);
 
 // -------------------------------------------------------------------------
 // SCM-08 — Git commit/file history and document-version payloads (spec 13
@@ -361,6 +362,7 @@ public sealed class SourceControlController : ControllerBase
     private readonly GitRestoreService _restores;
     private readonly IDocumentRepository _documents;
     private readonly IWorkSessionService _workSessions;
+    private readonly GitConflictService _conflicts;
 
     public SourceControlController(
         GitRepositoryService repositories,
@@ -372,7 +374,8 @@ public sealed class SourceControlController : ControllerBase
         GitRestoreService restores,
         IDocumentRepository documents,
         IWorkSessionService workSessions,
-        GitPullService pulls)
+        GitPullService pulls,
+        GitConflictService conflicts)
     {
         _repositories = repositories ?? throw new ArgumentNullException(nameof(repositories));
         _stages = stages ?? throw new ArgumentNullException(nameof(stages));
@@ -384,6 +387,7 @@ public sealed class SourceControlController : ControllerBase
         _documents = documents ?? throw new ArgumentNullException(nameof(documents));
         _workSessions = workSessions ?? throw new ArgumentNullException(nameof(workSessions));
         _pulls = pulls ?? throw new ArgumentNullException(nameof(pulls));
+        _conflicts = conflicts ?? throw new ArgumentNullException(nameof(conflicts));
     }
 
     /// <summary>
@@ -593,7 +597,8 @@ public sealed class SourceControlController : ControllerBase
                     null,
                     result.StagedPaths,
                     null,
-                    ToFailure(result.Failure)));
+                    ToFailure(result.Failure),
+                    result.ConflictedPaths));
         }
     }
 
@@ -1539,6 +1544,115 @@ public sealed class SourceControlController : ControllerBase
             status,
             ToFailure(result.Failure ?? (refreshed is { IsAvailable: false } ? refreshed.Failure : null)));
     }
+
+    // ---------------------------------------------------------------------
+    // SCM-14 — Git conflict state & resolution shell
+    // (spec 13 §20/§21/§23)
+    //
+    // Bounded append-only region: this surface observes and routes. It never
+    // merges, parses or writes conflicted content — a DOCX conflict is resolved
+    // by a human through Word and the existing guarded host. The manual-open
+    // action is a registered document id only; no new arbitrary-path opener and
+    // no worktree path is added to the conflict payload.
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Reads the worktree's real unmerged state (spec 13 §21): the conflict
+    /// kinds Git reported, the unsafe actions that are refused typed, and the
+    /// existing manual-open action for each registered document. A path outside
+    /// Git, a vanished worktree, a locked index, an unreadable status and a
+    /// missing Git executable all stay typed HTTP 200 states so the pane can
+    /// render them; a missing request path is a typed 400 and nothing runs.
+    /// </summary>
+    [HttpGet("conflicts")]
+    public async Task<IActionResult> GetConflicts(
+        [FromQuery] string? path,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return PathRequiredBadRequest("query parameter");
+        }
+
+        GitConflictStateResult result = await _conflicts.GetStateAsync(path, cancellationToken);
+        return Ok(ToConflictResponse(result));
+    }
+
+    /// <summary>
+    /// Maps a typed conflict state onto the privileged API contract
+    /// (spec 13 §20/§21). The entry carries only the worktree-relative path and
+    /// a registered document id; the blocked-action list names each refused
+    /// action and why, so the pane never has to infer safety from a disabled
+    /// button. No local filesystem path is added by this surface.
+    /// </summary>
+    private static SourceControlConflictResponse ToConflictResponse(GitConflictStateResult result)
+    {
+        if (result.State is not GitConflictState state)
+        {
+            return new SourceControlConflictResponse(
+                result.Status.ToString(),
+                false,
+                false,
+                null,
+                null,
+                false,
+                null,
+                Array.Empty<SourceControlConflictEntryResponse>(),
+                Array.Empty<SourceControlBlockedActionResponse>(),
+                result.Message,
+                ToFailure(result.Failure));
+        }
+
+        SourceControlConflictEntryResponse[] conflicts = state.Conflicts
+            .Select(conflict => new SourceControlConflictEntryResponse(
+                conflict.Path,
+                conflict.Kind.ToString(),
+                conflict.StatusCharacters,
+                conflict.IsDocx,
+                conflict.OpenAction.ToString(),
+                conflict.DocumentId))
+            .ToArray();
+
+        SourceControlBlockedActionResponse[] blocked = conflicts.Length == 0
+            ? Array.Empty<SourceControlBlockedActionResponse>()
+            : new[]
+            {
+                ToBlockedAction(state, GitConflictAction.Commit),
+                ToBlockedAction(state, GitConflictAction.CommitAll),
+                ToBlockedAction(state, GitConflictAction.Pull),
+                ToBlockedAction(state, GitConflictAction.Discard),
+                ToBlockedAction(state, GitConflictAction.Restore),
+            };
+
+        return new SourceControlConflictResponse(
+            result.Status.ToString(),
+            true,
+            conflicts.Length > 0,
+            state.WorktreeRoot,
+            state.BranchName,
+            state.IsDetached,
+            state.HeadCommit,
+            conflicts,
+            blocked,
+            result.Message,
+            ToFailure(result.Failure));
+    }
+
+    private static SourceControlBlockedActionResponse ToBlockedAction(
+        GitConflictState state,
+        GitConflictAction action)
+    {
+        GitConflictActionDecision decision = GitConflictService.EvaluateAction(state, action);
+        return new SourceControlBlockedActionResponse(
+            action switch
+            {
+                GitConflictAction.CommitAll => "Commit All",
+                _ => action.ToString(),
+            },
+            decision.ErrorCode ?? "ConflictedWorktree",
+            decision.Message,
+            decision.ConflictedPaths);
+    }
 }
 
 /// <summary>
@@ -1678,4 +1792,57 @@ public sealed record SourceControlPullResponse(
     bool HistoryRecorded,
     SourceControlRemoteResponse? Remote,
     SourceControlStatusResponse? Status,
+    SourceControlFailureResponse? Failure);
+
+// -------------------------------------------------------------------------
+// SCM-14 — Git conflict state & resolution shell payloads (spec 13 §20/§21)
+// -------------------------------------------------------------------------
+
+/// <summary>
+/// SCM-14 — one real unmerged entry (spec 13 §21). <c>Path</c> is the
+/// worktree-relative path exactly as Git reported it. <c>OpenAction</c> is
+/// <c>OpenInWord</c> (the existing guarded Word open route),
+/// <c>OpenDocument</c> (the existing document-open seam) or <c>None</c> when the
+/// path is not a registered document. Only <c>DocumentId</c> identifies the
+/// open target — this payload adds no local filesystem path.
+/// </summary>
+public sealed record SourceControlConflictEntryResponse(
+    string Path,
+    string ConflictKind,
+    string StatusCharacters,
+    bool IsDocx,
+    string OpenAction,
+    string? DocumentId);
+
+/// <summary>
+/// SCM-14 — one unsafe action refused while the repository is unmerged
+/// (spec 13 §21), naming the action, the typed reason and the exact paths
+/// behind it.
+/// </summary>
+public sealed record SourceControlBlockedActionResponse(
+    string Action,
+    string ErrorCode,
+    string Message,
+    IReadOnlyList<string> AffectedPaths);
+
+/// <summary>
+/// SCM-14 — typed conflict summary (spec 13 §21). <c>Status</c> distinguishes
+/// <c>Available</c> (conflicts present), <c>NoConflicts</c> (Git read
+/// successfully, none present) and every typed inability to observe Git safely
+/// (<c>NoRepository</c>, <c>GitUnavailable</c>, <c>WorktreeMissing</c>,
+/// <c>IndexLocked</c>, <c>Unreadable</c>, <c>Failed</c>). <c>BlockedActions</c>
+/// is empty only when nothing is conflicted. No field carries credential
+/// material.
+/// </summary>
+public sealed record SourceControlConflictResponse(
+    string Status,
+    bool HasRepository,
+    bool HasConflicts,
+    string? WorktreeRoot,
+    string? BranchName,
+    bool IsDetached,
+    string? HeadCommit,
+    IReadOnlyList<SourceControlConflictEntryResponse> Conflicts,
+    IReadOnlyList<SourceControlBlockedActionResponse> BlockedActions,
+    string? Message,
     SourceControlFailureResponse? Failure);

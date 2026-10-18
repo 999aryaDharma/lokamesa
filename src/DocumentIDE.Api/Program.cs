@@ -153,6 +153,16 @@ builder.Services.AddScoped(sp => new GitRestoreService(
     sp.GetRequiredService<IBatchApplyReindexTrigger>(),
     sp.GetRequiredService<IDocumentRepository>()));
 
+// SCM-14: Git conflict state and resolution shell. Read-only: it derives the
+// real unmerged state from the SCM-02 status snapshot, reports the unsafe
+// actions that are refused typed, and offers the existing document-open seam
+// for registered documents. It never merges, parses or writes conflicted
+// content; a DOCX conflict is resolved by a human through the guarded Word host
+// (spec 13 §20/§21/§23). Scoped because the document repository is scoped.
+builder.Services.AddScoped(sp => new GitConflictService(
+    sp.GetRequiredService<GitRepositoryService>(),
+    sp.GetRequiredService<IDocumentRepository>()));
+
 builder.Services.AddScoped<PdfExportService>();
 builder.Services.AddScoped<BatchPdfExportService>();
 builder.Services.AddScoped<PdfMergeService>();

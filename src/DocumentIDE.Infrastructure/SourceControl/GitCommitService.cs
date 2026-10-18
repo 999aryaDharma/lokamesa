@@ -156,6 +156,30 @@ public sealed class GitCommitService
 
         string worktreeRoot = context.WorktreeRoot!;
 
+        // Conflict preflight (spec 13 §21, SCM-14): an unmerged index refuses
+        // both flows before anything runs — especially before Commit All stages
+        // anything, so a blocked commit can never leave the index mutated.
+        GitStatusResult preflight = await _repositories.GetStatusAsync(worktreeRoot, cancellationToken);
+        if (preflight.IsAvailable && preflight.Snapshot is not null)
+        {
+            IReadOnlyList<GitStatusEntry> conflicts = GitConflictService.FindConflicts(preflight.Snapshot);
+            if (conflicts.Count > 0)
+            {
+                return new GitCommitResult(
+                    GitCommitOutcome.ConflictedWorktree,
+                    flow,
+                    null,
+                    preflight,
+                    null,
+                    "The repository has unresolved conflicts; nothing was committed. " +
+                    "Resolve the conflicts first. " +
+                    $"Affected paths: {string.Join(", ", conflicts.Select(entry => entry.Path))}.",
+                    "ConflictedWorktree",
+                    null,
+                    conflicts.Select(entry => entry.Path).ToArray());
+            }
+        }
+
         // Commit All is the only flow that stages: it stages every eligible
         // change through the SCM-06 pipeline, keeps the paths Git reported as
         // staged for the response, and only then commits (spec 13 §11.2).
