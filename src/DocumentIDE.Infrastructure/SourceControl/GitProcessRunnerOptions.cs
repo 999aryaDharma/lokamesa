@@ -14,11 +14,32 @@ public sealed class GitProcessRunnerOptions
     /// interactive credentials, a pager, or an editor, and stderr signatures
     /// must not depend on the host UI locale. These keys always win over any
     /// request-level environment override; a caller cannot disable them.
+    ///
+    /// F4 — <c>GIT_TERMINAL_PROMPT=0</c> alone does <b>not</b> stop an
+    /// interactive credential <i>helper</i> (e.g. Git Credential Manager, which
+    /// is installed by default on Windows): the helper can still raise a GUI
+    /// prompt and block the process. The policy therefore also disables the
+    /// askpass fallback (<c>GIT_ASKPASS</c>/<c>SSH_ASKPASS</c> set-but-empty
+    /// stop Git consulting <c>GIT_ASKPASS</c>/<c>core.askPass</c>/<c>SSH_ASKPASS</c>)
+    /// and tells Git Credential Manager never to prompt
+    /// (<c>GCM_INTERACTIVE=never</c>). The configured credential <i>helper</i> is
+    /// deliberately left enabled — cached credentials still work — but a remote
+    /// that still requires interaction fails promptly and can be typed as
+    /// authentication-required instead of blocking until the process timeout.
+    ///
+    /// <c>credential.interactive=false</c> would be the equivalent Git-level
+    /// switch, but it can only be delivered through the <c>GIT_CONFIG_*</c>
+    /// environment protocol, and that namespace is reserved for caller-supplied
+    /// invocation config (see <see cref="ResolveEnvironmentVariables"/>); the
+    /// policy therefore does not consume it (F4).
     /// </summary>
     public static readonly IReadOnlyDictionary<string, string> ProtectedEnvironment =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["GIT_TERMINAL_PROMPT"] = "0",
+            ["GIT_ASKPASS"] = string.Empty,
+            ["SSH_ASKPASS"] = string.Empty,
+            ["GCM_INTERACTIVE"] = "never",
             ["GIT_PAGER"] = "cat",
             ["LC_ALL"] = "C",
             ["GIT_EDITOR"] = ":",

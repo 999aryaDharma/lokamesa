@@ -227,3 +227,72 @@ export interface SourceControlCorrelationResult {
   message: string | null;
   session: WorkSessionModel | null;
 }
+
+/** SCM-11 — typed status of a worktree's remote/tracking state (spec 13 §14.2).
+ * `NoUpstream` is a first-class, non-error state: the counters are unknown, not
+ * zero. Counters can also be unknown while `hasUpstream` is true (see below). */
+export type GitRemoteStatus =
+  | 'Available'
+  | 'NoUpstream'
+  | 'NoRepository'
+  | 'GitUnavailable'
+  | 'Failed';
+
+/** SCM-11 — typed outcome of one explicit fetch (spec 13 §14.1/§20). */
+export type GitFetchOutcome =
+  | 'Succeeded'
+  | 'NoUpstream'
+  | 'NoRepository'
+  | 'GitUnavailable'
+  | 'AuthenticationRequired'
+  | 'HostUnreachable'
+  | 'Rejected'
+  | 'PermissionDenied'
+  | 'Failed';
+
+/**
+ * SCM-11 — remote/tracking state of one worktree (spec 13 §14.1/§14.2).
+ *
+ * `hasUpstream:false` is the explicit `NoUpstream` state (no configured
+ * upstream) and `ahead`/`behind` are null there — the pane renders the explicit
+ * "no upstream" state instead of a fake 0/0.
+ *
+ * A configured upstream (`hasUpstream:true`) can *also* have null
+ * `ahead`/`behind`: Git cannot compute them when the upstream's remote-tracking
+ * ref is absent (the upstream branch was deleted remotely, or a `fetch --prune`
+ * removed the ref). The pane must treat that as an explicit "tracking info
+ * unavailable" state, not 0/0 — `hasUpstream` and counters-available are
+ * independent (F1/F2).
+ */
+export interface SourceControlRemoteModel {
+  status: GitRemoteStatus;
+  hasRepository: boolean;
+  worktreeRoot: string | null;
+  branchName: string | null;
+  isDetached: boolean;
+  headCommit: string | null;
+  /** Remote of the configured upstream (e.g. `origin`); null without one or when the upstream is a local branch. */
+  remoteName: string | null;
+  /** Configured upstream reference (e.g. `origin/main`); null without one. */
+  upstreamReference: string | null;
+  hasUpstream: boolean;
+  /** Local commits not yet upstream; null without an upstream or when Git cannot compute the count. */
+  ahead: number | null;
+  /** Upstream commits not yet local; null without an upstream or when Git cannot compute the count. */
+  behind: number | null;
+  failure: SourceControlFailure | null;
+}
+
+/**
+ * SCM-11 — typed fetch result. On success `remote` carries the tracking state
+ * the API re-read from Git after the fetch; remote failures stay typed in
+ * `outcome`/`failure` (spec 13 §14.1/§20).
+ */
+export interface SourceControlFetchResult {
+  outcome: GitFetchOutcome;
+  isSuccess: boolean;
+  errorCode: string | null;
+  message: string | null;
+  remote: SourceControlRemoteModel | null;
+  failure: SourceControlFailure | null;
+}
