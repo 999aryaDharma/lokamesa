@@ -127,8 +127,8 @@ export interface CommitCorrelationPanelProps {
   onOpenDocument?: (documentId: string) => void;
 }
 
-const sectionClassName = 'p-2 border border-slate-200 rounded-lg space-y-1';
-const headingClassName = 'text-xs font-semibold uppercase tracking-wide text-slate-500';
+const sectionClassName = 'p-2 border border-mac-hairline rounded-lg space-y-1';
+const headingClassName = 'text-xs font-semibold uppercase tracking-wide text-mac-text-3';
 
 /** Display name for a changed document: its recorded path, else its id. */
 function documentName(document: WorkSessionDocumentModel): string {
@@ -149,14 +149,14 @@ export default function CommitCorrelationPanel({
     if (!outcome) {
       return (
         <div data-testid="commit-correlation-panel" className="space-y-2">
-          <p className="text-sm text-slate-500">No Document IDE work session is selected.</p>
+          <p className="text-sm text-mac-text-3">No Document IDE work session is selected.</p>
         </div>
       );
     }
 
     return (
       <div data-testid="commit-correlation-panel" className="space-y-2">
-        <div role="alert" className="p-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg">
+        <div role="alert" className="p-2 text-xs text-mac-danger bg-mac-danger/10 border border-mac-danger/40 rounded-lg">
           <span className="font-medium">{outcome}</span>
           {message ? `: ${message}` : null}
         </div>
@@ -168,14 +168,14 @@ export default function CommitCorrelationPanel({
 
   return (
     <div data-testid="commit-correlation-panel" className="space-y-3">
-      <div className="text-sm text-slate-700">
+      <div className="text-sm text-mac-text">
         <span className="font-medium">{session.label ?? 'Work session'}</span>
-        <span className="ml-2 text-xs text-slate-400">{session.id}</span>
+        <span className="ml-2 text-xs text-mac-text-3">{session.id}</span>
       </div>
 
       {/* Read-only Git context recorded at session start; absent when Git is not
           available, in which case Document IDE History is unaffected. */}
-      <div data-testid="correlation-git-context" className="text-xs text-slate-500">
+      <div data-testid="correlation-git-context" className="text-xs text-mac-text-3">
         {hasGitContext
           ? `Git repository context: ${session.repositoryRoot ?? session.worktreeRoot}`
           : 'No Git repository context; Document IDE History is unaffected.'}
@@ -185,17 +185,17 @@ export default function CommitCorrelationPanel({
       <section data-testid="correlation-document-ide-history" className={sectionClassName}>
         <h3 className={headingClassName}>Document IDE History</h3>
         {session.changedDocuments.length === 0 ? (
-          <p className="text-xs text-slate-500">This session has not changed any documents.</p>
+          <p className="text-xs text-mac-text-3">This session has not changed any documents.</p>
         ) : (
           <ul className="space-y-1">
             {session.changedDocuments.map((document) => (
-              <li key={document.documentId} className="flex items-center justify-between gap-2 text-sm text-slate-700">
+              <li key={document.documentId} className="flex items-center justify-between gap-2 text-sm text-mac-text">
                 <span className="truncate">{documentName(document)}</span>
                 {onOpenDocument && (
                   <button
                     type="button"
                     onClick={() => onOpenDocument(document.documentId)}
-                    className="px-2 py-0.5 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    className="px-2 py-0.5 text-xs font-medium text-mac-text bg-mac-content border border-mac-hairline-strong rounded hover:bg-mac-chip focus:outline-none focus:ring-2 focus:ring-slate-400"
                   >
                     Open {documentName(document)}
                   </button>
@@ -210,14 +210,14 @@ export default function CommitCorrelationPanel({
       <section data-testid="correlation-git-history" className={sectionClassName}>
         <h3 className={headingClassName}>Git History</h3>
         {session.commitCorrelations.length === 0 ? (
-          <p className="text-xs text-slate-500">No Git commits are correlated with this session.</p>
+          <p className="text-xs text-mac-text-3">No Git commits are correlated with this session.</p>
         ) : (
           <ul className="space-y-1">
             {session.commitCorrelations.map((commit) => (
-              <li key={commit.commitId} className="text-sm text-slate-700">
+              <li key={commit.commitId} className="text-sm text-mac-text">
                 <code className="font-mono text-xs">{commit.commitId}</code>
-                <span className="ml-2 font-mono text-xs text-slate-500">{commitLabel(commit)}</span>
-                {commit.summary && <span className="ml-2 text-xs text-slate-600">{commit.summary}</span>}
+                <span className="ml-2 font-mono text-xs text-mac-text-3">{commitLabel(commit)}</span>
+                {commit.summary && <span className="ml-2 text-xs text-mac-text-2">{commit.summary}</span>}
               </li>
             ))}
           </ul>

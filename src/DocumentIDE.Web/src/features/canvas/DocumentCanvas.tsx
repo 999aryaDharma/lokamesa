@@ -155,7 +155,7 @@ interface ZoomToolbarProps {
 function ZoomToolbar({ zoom, onZoomIn, onZoomOut, onReset }: ZoomToolbarProps) {
   return (
     <div
-      className="absolute bottom-4 right-4 z-10 flex items-center gap-1 bg-white/90 backdrop-blur-sm border border-slate-200 rounded-lg shadow-sm px-2 py-1.5"
+      className="absolute bottom-4 right-4 z-10 flex items-center gap-1 bg-mac-content/90 backdrop-blur-sm border border-mac-hairline rounded-lg shadow-sm px-2 py-1.5"
       aria-label="Zoom controls"
     >
       <button
@@ -163,7 +163,7 @@ function ZoomToolbar({ zoom, onZoomIn, onZoomOut, onReset }: ZoomToolbarProps) {
         aria-label="Zoom out"
         onClick={onZoomOut}
         disabled={zoom <= ZOOM_MIN}
-        className="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 disabled:opacity-40 text-slate-600 text-base font-medium transition-colors"
+        className="w-7 h-7 flex items-center justify-center rounded hover:bg-mac-chip disabled:opacity-40 text-mac-text-2 text-base font-medium transition-colors"
       >
         −
       </button>
@@ -171,7 +171,7 @@ function ZoomToolbar({ zoom, onZoomIn, onZoomOut, onReset }: ZoomToolbarProps) {
         type="button"
         aria-label={`Zoom level ${Math.round(zoom * 100)}%. Click to reset.`}
         onClick={onReset}
-        className="min-w-[3.5rem] text-center text-xs font-mono text-slate-700 hover:bg-slate-100 rounded px-1 py-0.5 transition-colors"
+        className="min-w-[3.5rem] text-center text-xs font-mono text-mac-text hover:bg-mac-chip rounded px-1 py-0.5 transition-colors"
       >
         {Math.round(zoom * 100)}%
       </button>
@@ -180,7 +180,7 @@ function ZoomToolbar({ zoom, onZoomIn, onZoomOut, onReset }: ZoomToolbarProps) {
         aria-label="Zoom in"
         onClick={onZoomIn}
         disabled={zoom >= ZOOM_MAX}
-        className="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 disabled:opacity-40 text-slate-600 text-base font-medium transition-colors"
+        className="w-7 h-7 flex items-center justify-center rounded hover:bg-mac-chip disabled:opacity-40 text-mac-text-2 text-base font-medium transition-colors"
       >
         +
       </button>
@@ -609,10 +609,10 @@ export default function DocumentCanvas({
             aria-label="Empty canvas"
           >
             <div className="text-5xl mb-4 opacity-20" aria-hidden="true">📂</div>
-            <p className="text-slate-400 text-sm font-medium opacity-60 select-none">
+            <p className="text-mac-text-3 text-sm font-medium opacity-60 select-none">
               Your workspace canvas is empty
             </p>
-            <p className="text-slate-300 text-xs mt-1 opacity-50 select-none">
+            <p className="text-mac-text-3 text-xs mt-1 opacity-50 select-none">
               Attach a folder source to get started
             </p>
           </div>

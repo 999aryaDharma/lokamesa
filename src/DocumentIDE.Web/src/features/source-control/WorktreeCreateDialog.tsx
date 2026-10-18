@@ -91,7 +91,7 @@ export default function WorktreeCreateDialog({
     return (
       <div
         data-testid="worktree-dialog-git-unavailable"
-        className="w-full max-w-xl p-4 text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-xl"
+        className="w-full max-w-xl p-4 text-sm text-mac-text-2 bg-mac-canvas border border-mac-hairline rounded-xl"
       >
         Git is not available on this machine. Install Git to create or remove worktrees.
       </div>
@@ -102,7 +102,7 @@ export default function WorktreeCreateDialog({
     return (
       <div
         data-testid="worktree-dialog-no-repository"
-        className="w-full max-w-xl p-4 text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-xl"
+        className="w-full max-w-xl p-4 text-sm text-mac-text-2 bg-mac-canvas border border-mac-hairline rounded-xl"
       >
         This folder is not inside a Git repository.
       </div>
@@ -125,12 +125,12 @@ export default function WorktreeCreateDialog({
   }
 
   return (
-    <div className="w-full max-w-xl p-4 bg-white rounded-xl border border-slate-200 shadow-sm space-y-4">
+    <div className="w-full max-w-xl p-4 bg-mac-content rounded-xl border border-mac-hairline shadow-sm space-y-4">
       <section aria-labelledby="worktree-create-heading" className="space-y-3">
-        <h3 id="worktree-create-heading" className="text-sm font-semibold text-slate-700">
+        <h3 id="worktree-create-heading" className="text-sm font-semibold text-mac-text">
           Create Worktree
         </h3>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-mac-text-3">
           Created from an existing branch, tag, or commit. No branch is ever created: existing
           branches are checked out, tags and commits become detached worktrees.
         </p>
@@ -138,7 +138,7 @@ export default function WorktreeCreateDialog({
         {errorMessage && (
           <div
             role="alert"
-            className="p-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg"
+            className="p-3 text-sm text-mac-danger bg-mac-danger/10 border border-mac-danger/40 rounded-lg"
           >
             {errorMessage}
           </div>
@@ -146,7 +146,7 @@ export default function WorktreeCreateDialog({
 
         <form className="space-y-3" onSubmit={handleCreate}>
           <div className="space-y-1">
-            <label htmlFor="worktree-target-path" className="block text-xs font-medium text-slate-600">
+            <label htmlFor="worktree-target-path" className="block text-xs font-medium text-mac-text-2">
               Target path
             </label>
             <input
@@ -156,12 +156,12 @@ export default function WorktreeCreateDialog({
               disabled={busy}
               placeholder="C:\projects\app-wt-feature"
               onChange={(event) => setTargetPath(event.target.value)}
-              className="w-full px-3 py-1.5 text-sm font-mono text-slate-800 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+              className="w-full px-3 py-1.5 text-sm font-mono text-mac-text border border-mac-hairline-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-mac-accent disabled:opacity-50"
             />
           </div>
 
           <div className="space-y-1">
-            <label htmlFor="worktree-ref" className="block text-xs font-medium text-slate-600">
+            <label htmlFor="worktree-ref" className="block text-xs font-medium text-mac-text-2">
               Existing ref (branch, tag, or commit)
             </label>
             <input
@@ -171,14 +171,14 @@ export default function WorktreeCreateDialog({
               disabled={busy}
               placeholder="feature-x"
               onChange={(event) => setRef(event.target.value)}
-              className="w-full px-3 py-1.5 text-sm font-mono text-slate-800 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+              className="w-full px-3 py-1.5 text-sm font-mono text-mac-text border border-mac-hairline-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-mac-accent disabled:opacity-50"
             />
           </div>
 
           <button
             type="submit"
             disabled={!canCreate}
-            className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
+            className="px-3 py-1.5 text-sm font-medium text-white bg-mac-accent rounded-lg hover:bg-mac-accent focus:outline-none focus:ring-2 focus:ring-mac-accent disabled:opacity-50 transition-colors"
           >
             {busy ? 'Working...' : 'Create worktree'}
           </button>
@@ -186,11 +186,11 @@ export default function WorktreeCreateDialog({
       </section>
 
       {removableWorktrees && removableWorktrees.length > 0 && (
-        <section aria-labelledby="worktree-remove-heading" className="space-y-3 border-t border-slate-200 pt-3">
-          <h3 id="worktree-remove-heading" className="text-sm font-semibold text-slate-700">
+        <section aria-labelledby="worktree-remove-heading" className="space-y-3 border-t border-mac-hairline pt-3">
+          <h3 id="worktree-remove-heading" className="text-sm font-semibold text-mac-text">
             Remove Worktree
           </h3>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-mac-text-3">
             Removal deletes the worktree directory and its Git registration. Dirty worktrees
             cannot be removed; there is no force option.
           </p>
@@ -203,17 +203,17 @@ export default function WorktreeCreateDialog({
               return (
                 <li
                   key={worktree.path}
-                  className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2"
+                  className="p-3 bg-mac-canvas border border-mac-hairline rounded-lg space-y-2"
                 >
                   <div className="flex flex-col min-w-0">
-                    <span className="text-sm font-mono text-slate-800 truncate">{worktree.path}</span>
-                    <span className="text-xs font-medium text-slate-600">{branchLabel(worktree)}</span>
+                    <span className="text-sm font-mono text-mac-text truncate">{worktree.path}</span>
+                    <span className="text-xs font-medium text-mac-text-2">{branchLabel(worktree)}</span>
                   </div>
 
                   {blockedReason ? (
                     <span
                       data-testid={`worktree-remove-blocked-${worktree.path}`}
-                      className="inline-block text-xs px-2 py-0.5 rounded bg-amber-50 text-amber-700 font-medium border border-amber-200"
+                      className="inline-block text-xs px-2 py-0.5 rounded bg-mac-warning/10 text-mac-warning font-medium border border-mac-warning/40"
                     >
                       {blockedReason}
                     </span>
@@ -222,7 +222,7 @@ export default function WorktreeCreateDialog({
                       data-testid={`worktree-remove-confirm-${worktree.path}`}
                       className="space-y-2"
                     >
-                      <p className="text-xs text-red-700">
+                      <p className="text-xs text-mac-danger">
                         Remove worktree at {worktree.path}? This deletes the worktree directory and
                         its Git registration. This action cannot be undone.
                       </p>
@@ -231,7 +231,7 @@ export default function WorktreeCreateDialog({
                           type="button"
                           disabled={busy}
                           onClick={() => confirmRemoval(worktree.path)}
-                          className="px-3 py-1.5 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 transition-colors"
+                          className="px-3 py-1.5 text-sm font-medium text-white bg-mac-danger rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 transition-colors"
                         >
                           Confirm remove
                         </button>
@@ -239,7 +239,7 @@ export default function WorktreeCreateDialog({
                           type="button"
                           disabled={busy}
                           onClick={() => setConfirmingPath(null)}
-                          className="px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-50 transition-colors"
+                          className="px-3 py-1.5 text-sm font-medium text-mac-text bg-mac-content border border-mac-hairline-strong rounded-lg hover:bg-mac-chip focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-50 transition-colors"
                         >
                           Cancel
                         </button>
@@ -251,7 +251,7 @@ export default function WorktreeCreateDialog({
                       aria-label={`Remove worktree ${worktree.path}`}
                       disabled={busy}
                       onClick={() => setConfirmingPath(worktree.path)}
-                      className="px-3 py-1.5 text-sm font-medium text-red-700 bg-white border border-red-300 rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400 disabled:opacity-50 transition-colors"
+                      className="px-3 py-1.5 text-sm font-medium text-mac-danger bg-mac-content border border-mac-danger/60 rounded-lg hover:bg-mac-danger/10 focus:outline-none focus:ring-2 focus:ring-red-400 disabled:opacity-50 transition-colors"
                     >
                       Remove
                     </button>
@@ -267,11 +267,11 @@ export default function WorktreeCreateDialog({
                 type="button"
                 disabled={busy}
                 onClick={() => onRefreshWorktrees()}
-                className="px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-50 transition-colors"
+                className="px-3 py-1.5 text-sm font-medium text-mac-text bg-mac-content border border-mac-hairline-strong rounded-lg hover:bg-mac-chip focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-50 transition-colors"
               >
                 Refresh worktrees
               </button>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-mac-text-3">
                 Clears stale Git metadata for worktrees whose directories are gone. Valid and
                 locked worktrees are never touched.
               </p>

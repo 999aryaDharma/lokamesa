@@ -114,21 +114,21 @@ const FolderPicker = ({
       role="dialog"
       aria-label={`Folder picker: ${folderName}`}
       data-testid="folder-picker"
-      className="w-72 rounded-lg border border-slate-200 bg-white shadow-xl flex flex-col overflow-hidden"
+      className="w-72 rounded-lg border border-mac-hairline bg-mac-content shadow-xl flex flex-col overflow-hidden"
       onKeyDown={(e) => {
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="px-3 py-2 border-b border-slate-100 flex flex-col gap-2">
+      <div className="px-3 py-2 border-b border-mac-hairline flex flex-col gap-2">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-semibold text-slate-800 truncate block" title={folderName}>
+          <span className="text-sm font-semibold text-mac-text truncate block" title={folderName}>
             {folderName}
           </span>
           <button
             type="button"
             aria-label="Close folder picker"
             onClick={onClose}
-            className="shrink-0 w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600 text-sm leading-none"
+            className="shrink-0 w-5 h-5 flex items-center justify-center rounded text-mac-text-3 hover:bg-mac-chip hover:text-mac-text-2 text-sm leading-none"
           >
             ×
           </button>
@@ -139,19 +139,19 @@ const FolderPicker = ({
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search files…"
           aria-label="Search files in folder"
-          className="w-full rounded border border-slate-200 px-2 py-1 text-xs text-slate-700 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none"
+          className="w-full rounded border border-mac-hairline px-2 py-1 text-xs text-mac-text placeholder:text-mac-text-3 focus:border-mac-accent focus:outline-none"
         />
       </div>
 
       <ul className="max-h-64 overflow-y-auto py-1">
         {visibleFiles.length === 0 ? (
-          <li className="px-3 py-3 text-sm text-slate-400">
+          <li className="px-3 py-3 text-sm text-mac-text-3">
             {supportedFiles.length === 0 ? 'No supported files found.' : 'No files match your search.'}
           </li>
         ) : (
           visibleFiles.map((file) => (
             <li key={file.documentId}>
-              <label className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 cursor-pointer hover:bg-slate-50">
+              <label className="flex items-center gap-2 px-3 py-1.5 text-sm text-mac-text cursor-pointer hover:bg-mac-canvas">
                 <input
                   type="checkbox"
                   checked={selectedIds.has(file.documentId)}
@@ -168,19 +168,19 @@ const FolderPicker = ({
         )}
       </ul>
 
-      <div className="px-3 py-2 border-t border-slate-100 flex items-center justify-end gap-2">
+      <div className="px-3 py-2 border-t border-mac-hairline flex items-center justify-end gap-2">
         <button
           type="button"
           disabled={selectedDocumentIds.length === 0}
           onClick={() => onOpenSelected(selectedDocumentIds)}
-          className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="rounded bg-mac-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-mac-accent disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Open selected
         </button>
         <button
           type="button"
           onClick={onOpenAll}
-          className="rounded border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+          className="rounded border border-mac-hairline-strong px-3 py-1.5 text-xs font-medium text-mac-text hover:bg-mac-chip"
         >
           Open all
         </button>

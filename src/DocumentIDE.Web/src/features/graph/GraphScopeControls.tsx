@@ -1,4 +1,6 @@
 import React from 'react';
+import DepthStepper from '../shell/DepthStepper';
+import PushButton from '../shell/PushButton';
 
 export interface SemanticEdge {
   source: string;
@@ -41,6 +43,17 @@ export interface GraphScopeControlsProps {
   onChangeTopK: (k: number) => void;
 }
 
+/**
+ * GR-05 scope bar.
+ *
+ * UI-01 restyle: the raw inline-styled bar became the macOS scope bar (hairline
+ * rule, `$mac-canvas` fill, a secondary push button and a labelled stepper).
+ * The controls themselves are unchanged — bounded/full toggle and top-K — and
+ * so is the `graph-scope-controls` testid and the "Graph bounded" message.
+ * The scope *segments* shown in screen 03 (Workspace / Folder / Selection) are
+ * deliberately not rendered here: the graph store has no per-scope source, and
+ * inventing segments that do nothing would be dishonest.
+ */
 export const GraphScopeControls: React.FC<GraphScopeControlsProps> = ({
   totalNodes,
   isBounded,
@@ -52,32 +65,25 @@ export const GraphScopeControls: React.FC<GraphScopeControlsProps> = ({
   return (
     <div
       data-testid="graph-scope-controls"
-      className="graph-scope-controls"
-      style={{ padding: '8px', background: '#f5f5f5', borderRadius: '4px' }}
+      className="flex flex-wrap items-center gap-3 border-b border-mac-hairline bg-mac-canvas px-3 py-2 text-xs text-mac-text-2"
     >
-      {isBounded && (
-        <span style={{ marginRight: '12px', color: '#666' }}>
-          Graph bounded ({totalNodes} total nodes).
-        </span>
-      )}
-      <button
+      {isBounded && <span>Graph bounded ({totalNodes} total nodes).</span>}
+
+      <PushButton
+        size="sm"
+        variant="secondary"
         onClick={() => onToggleFullGraph(!isFullGraphExplicit)}
-        style={{ marginRight: '12px', padding: '4px 8px' }}
       >
         {isFullGraphExplicit ? 'Switch to Bounded View' : 'Show Full Graph'}
-      </button>
+      </PushButton>
 
-      <label style={{ fontSize: '12px' }}>
-        Top-K Semantic Edges:{' '}
-        <input
-          type="number"
-          min={1}
-          max={20}
-          value={topK}
-          onChange={(e) => onChangeTopK(Number(e.target.value) || 5)}
-          style={{ width: '50px', marginLeft: '4px' }}
-        />
-      </label>
+      <DepthStepper
+        label="Top-K edges"
+        value={topK}
+        min={1}
+        max={20}
+        onChange={onChangeTopK}
+      />
     </div>
   );
 };

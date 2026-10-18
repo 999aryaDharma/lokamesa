@@ -34,6 +34,16 @@ export const NODE_ICON_COLORS: Record<NodeIconKind, string> = {
   unknown: '#8E8E93',
 };
 
+/**
+ * Raw icon paths, for callers that must draw inside an SVG of their own (the
+ * graph node draws its type glyph inside the node circle rather than embedding
+ * an `<svg>`).
+ */
+export const NODE_ICON_PATHS: Record<'folder' | 'file', readonly string[]> = {
+  folder: ['M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z'],
+  file: ['M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z', 'M14 2v6h6'],
+};
+
 const FOLDER_PATH =
   'M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z';
 const FILE_BODY_PATH = 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z';

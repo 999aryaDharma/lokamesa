@@ -21,6 +21,7 @@
  * touches the canvas store and never moves physical files.
  */
 import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { NODE_ICON_COLORS, NODE_ICON_PATHS, documentIconKind } from '../shell/NodeIcon';
 import { fetchWorkspaceGraph } from './graphApi';
 import { computeBoundedGraph, computeLayoutAsync } from './graphLayoutWorker';
 import { filterSemanticEdgesTopK, GraphScopeControls } from './GraphScopeControls';
@@ -209,7 +210,7 @@ export const DocumentGraph: React.FC<DocumentGraphProps> = ({
   return (
     <div
       data-testid="graph-view"
-      className="relative w-full h-full overflow-auto bg-white"
+      className="relative w-full h-full overflow-auto bg-mac-content"
       aria-label="Knowledge graph"
     >
       <GraphScopeControls
@@ -221,12 +222,18 @@ export const DocumentGraph: React.FC<DocumentGraphProps> = ({
         onChangeTopK={handleChangeTopK}
       />
 
-      <div className="px-2 pb-1 text-[11px] text-slate-500" data-testid="graph-legend">
+      <div className="px-3 pb-1 text-[11px] text-mac-text-3" data-testid="graph-legend">
         <span className="mr-3">
-          <span aria-hidden="true">━</span> Solid = explicit relation
+          <span aria-hidden="true" className="text-mac-accent">
+            ━
+          </span>{' '}
+          Solid = explicit relation
         </span>
         <span>
-          <span aria-hidden="true">┄</span> Dashed = inferred / semantic suggestion
+          <span aria-hidden="true" className="text-mac-success">
+            ┄
+          </span>{' '}
+          Dashed = inferred / semantic suggestion
         </span>
       </div>
 
@@ -269,10 +276,17 @@ export const DocumentGraph: React.FC<DocumentGraphProps> = ({
             const point = layout.get(node.id) ?? { x: 0, y: 0 };
             const c = center(point);
             const selected = node.id === selectedId;
+            // UI-01 (owner directive): the node carries its folder/file type as
+            // a glyph drawn inside the node circle, so two nodes are never the
+            // same look-alike dot.
+            const kind = documentIconKind(node.title, node.docType);
+            const accent = NODE_ICON_COLORS[kind];
+            const glyph = kind === 'folder' ? NODE_ICON_PATHS.folder : NODE_ICON_PATHS.file;
             return (
               <g
                 key={node.id}
                 data-testid={`graph-node-${node.id}`}
+                data-kind={kind}
                 role="button"
                 tabIndex={0}
                 aria-label={`${isMarkdownNode(node) ? 'Markdown' : 'Document'}: ${node.title}`}
@@ -291,15 +305,28 @@ export const DocumentGraph: React.FC<DocumentGraphProps> = ({
                   cx={c.x}
                   cy={c.y}
                   r={NODE_RADIUS}
-                  fill={selected ? '#3b82f6' : '#e2e8f0'}
-                  stroke={selected ? '#1d4ed8' : '#94a3b8'}
-                  strokeWidth={2}
+                  fill={selected ? 'var(--color-mac-accent-weak)' : 'var(--color-mac-content)'}
+                  stroke={accent}
+                  strokeWidth={selected ? 2.5 : 1.8}
                 />
+                <g
+                  aria-hidden="true"
+                  transform={`translate(${c.x - 8}, ${c.y - 8}) scale(0.6667)`}
+                  fill="none"
+                  stroke={accent}
+                  strokeWidth={1.8}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  {glyph.map((d) => (
+                    <path key={d} d={d} />
+                  ))}
+                </g>
                 <text
                   x={c.x}
                   y={c.y + NODE_RADIUS + 14}
                   textAnchor="middle"
-                  className="fill-slate-700"
+                  className="fill-mac-text"
                   style={{ fontSize: '11px' }}
                 >
                   {node.title}
@@ -311,7 +338,7 @@ export const DocumentGraph: React.FC<DocumentGraphProps> = ({
       </svg>
 
       {sourceNodes.length === 0 && (
-        <p className="p-4 text-center text-xs text-slate-400" data-testid="graph-empty">
+        <p className="p-4 text-center text-xs text-mac-text-3" data-testid="graph-empty">
           No relations yet. Add Markdown links or wikilinks to build the graph.
         </p>
       )}

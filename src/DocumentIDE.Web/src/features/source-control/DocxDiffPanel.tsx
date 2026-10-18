@@ -106,7 +106,7 @@ const removedKinds: ReadonlySet<DocxChangeKindView> = new Set([
 ]);
 
 function panelClass(extra: string): string {
-  return `w-full max-w-3xl p-4 text-sm bg-white border border-slate-200 rounded-xl shadow-sm ${extra}`;
+  return `w-full max-w-3xl p-4 text-sm bg-mac-content border border-mac-hairline rounded-xl shadow-sm ${extra}`;
 }
 
 function changeRowClass(kind: DocxChangeKindView): string {
@@ -114,9 +114,9 @@ function changeRowClass(kind: DocxChangeKindView): string {
     return 'bg-emerald-50';
   }
   if (removedKinds.has(kind)) {
-    return 'bg-red-50';
+    return 'bg-mac-danger/10';
   }
-  return 'bg-amber-50';
+  return 'bg-mac-warning/10';
 }
 
 /** Builds the change location line from whatever index fields the backend set. */
@@ -182,7 +182,7 @@ export default function DocxDiffPanel({
 }: DocxDiffPanelProps) {
   if (isLoading) {
     return (
-      <div data-testid="docx-diff-loading" className={panelClass('text-slate-500')}>
+      <div data-testid="docx-diff-loading" className={panelClass('text-mac-text-3')}>
         Loading document changes...
       </div>
     );
@@ -190,7 +190,7 @@ export default function DocxDiffPanel({
 
   if (status === 'git-unavailable') {
     return (
-      <div data-testid="docx-diff-git-unavailable" className={panelClass('text-slate-600')}>
+      <div data-testid="docx-diff-git-unavailable" className={panelClass('text-mac-text-2')}>
         Git is not available on this machine. Install Git to review document changes.
       </div>
     );
@@ -198,7 +198,7 @@ export default function DocxDiffPanel({
 
   if (status === 'no-repository') {
     return (
-      <div data-testid="docx-diff-no-repository" className={panelClass('text-slate-600')}>
+      <div data-testid="docx-diff-no-repository" className={panelClass('text-mac-text-2')}>
         This folder is not inside a Git repository.
       </div>
     );
@@ -206,7 +206,7 @@ export default function DocxDiffPanel({
 
   if (status !== 'available' && status !== 'binary-fallback') {
     return (
-      <div role="alert" className={panelClass('text-red-700 bg-red-50 border-red-200')}>
+      <div role="alert" className={panelClass('text-mac-danger bg-mac-danger/10 border-mac-danger/40')}>
         {failureMessage ??
           (status === 'path-rejected'
             ? 'The requested path was rejected because it is not a worktree-relative document path.'
@@ -217,7 +217,7 @@ export default function DocxDiffPanel({
 
   if (!diff) {
     return (
-      <div role="alert" className={panelClass('text-red-700 bg-red-50 border-red-200')}>
+      <div role="alert" className={panelClass('text-mac-danger bg-mac-danger/10 border-mac-danger/40')}>
         {failureMessage ?? 'No document diff data was provided.'}
       </div>
     );
@@ -226,8 +226,8 @@ export default function DocxDiffPanel({
   if (status === 'binary-fallback') {
     const summary = diff.binarySummary;
     return (
-      <div data-testid="docx-diff-binary" className={panelClass('text-slate-600 space-y-2')}>
-        <p className="font-medium text-slate-700">Binary change</p>
+      <div data-testid="docx-diff-binary" className={panelClass('text-mac-text-2 space-y-2')}>
+        <p className="font-medium text-mac-text">Binary change</p>
         <p>
           {diff.path} differs between {diff.leftLabel} and {diff.rightLabel}; at least one
           version is not a parseable DOCX document, so no document-aware comparison is shown.
@@ -235,7 +235,7 @@ export default function DocxDiffPanel({
         {summary && (
           <div
             data-testid="docx-diff-binary-summary"
-            className="font-mono text-xs text-slate-700 space-y-1"
+            className="font-mono text-xs text-mac-text space-y-1"
           >
             {summary.contentIdentical ? (
               <p>
@@ -251,7 +251,7 @@ export default function DocxDiffPanel({
           </div>
         )}
         {failureMessage && (
-          <p data-testid="docx-diff-binary-reason" className="text-xs text-slate-500">
+          <p data-testid="docx-diff-binary-reason" className="text-xs text-mac-text-3">
             {failureMessage}
           </p>
         )}
@@ -261,7 +261,7 @@ export default function DocxDiffPanel({
 
   if (diff.changes.length === 0) {
     return (
-      <div data-testid="docx-diff-empty" className={panelClass('text-slate-500')}>
+      <div data-testid="docx-diff-empty" className={panelClass('text-mac-text-3')}>
         No document changes between {diff.leftLabel} and {diff.rightLabel} for {diff.path}.
       </div>
     );
@@ -269,14 +269,14 @@ export default function DocxDiffPanel({
 
   return (
     <div data-testid="docx-diff" className="w-full max-w-3xl space-y-2">
-      <div data-testid="docx-diff-target" className="text-sm font-medium text-slate-700">
+      <div data-testid="docx-diff-target" className="text-sm font-medium text-mac-text">
         {diff.leftLabel} ↔ {diff.rightLabel}
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+      <div className="bg-mac-content border border-mac-hairline rounded-xl shadow-sm overflow-hidden">
         <div
           data-testid="docx-diff-file-header"
-          className="px-3 py-2 bg-slate-50 border-b border-slate-200 font-mono text-xs text-slate-700"
+          className="px-3 py-2 bg-mac-canvas border-b border-mac-hairline font-mono text-xs text-mac-text"
         >
           <div>
             {describeVersion(diff.leftExists, diff.leftLabel, diff.path)} →{' '}
@@ -286,12 +286,12 @@ export default function DocxDiffPanel({
 
         <div
           data-testid="docx-diff-summary"
-          className="px-3 py-2 text-xs text-slate-500 border-b border-slate-100"
+          className="px-3 py-2 text-xs text-mac-text-3 border-b border-mac-hairline"
         >
           {changeCountLabel(diff.changes.length)}
         </div>
 
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-mac-hairline">
           {diff.changes.map((change, index) => {
             const location = locationOf(change);
             return (
@@ -302,19 +302,19 @@ export default function DocxDiffPanel({
               >
                 <div
                   data-testid={`docx-diff-kind-${index}`}
-                  className="font-medium text-slate-800"
+                  className="font-medium text-mac-text"
                 >
                   {changeKindLabel[change.kind]}
                 </div>
                 {location && (
                   <div
                     data-testid={`docx-diff-location-${index}`}
-                    className="text-xs text-slate-500"
+                    className="text-xs text-mac-text-3"
                   >
                     {location}
                   </div>
                 )}
-                <div data-testid={`docx-diff-text-${index}`} className="text-xs text-slate-600">
+                <div data-testid={`docx-diff-text-${index}`} className="text-xs text-mac-text-2">
                   {change.summary}
                 </div>
                 {change.before !== null && (

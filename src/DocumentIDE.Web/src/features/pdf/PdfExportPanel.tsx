@@ -415,16 +415,16 @@ export function PdfExportPanel({
     <section
       data-testid="pdf-export-panel"
       aria-label="PDF export"
-      className="w-96 max-w-full shrink-0 overflow-auto border-l border-slate-200 bg-white p-4"
+      className="w-96 max-w-full shrink-0 overflow-auto border-l border-mac-hairline bg-mac-content p-4"
     >
       <header className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-800">PDF export</h2>
+        <h2 className="text-sm font-semibold text-mac-text">PDF export</h2>
         {onClose && (
           <button
             type="button"
             aria-label="Close PDF export"
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 text-lg leading-none"
+            className="text-mac-text-3 hover:text-mac-text-2 text-lg leading-none"
           >
             &times;
           </button>
@@ -432,36 +432,36 @@ export function PdfExportPanel({
       </header>
 
       {showSeparate && (
-        <label className="block mt-2 text-xs text-slate-600">
+        <label className="block mt-2 text-xs text-mac-text-2">
           Output folder
           <input
             type="text"
             value={effectiveOutputDirectory}
             onChange={(event) => setOutputDirectory(event.target.value)}
-            className="block w-full border border-slate-300 rounded px-2 py-1 text-sm"
+            className="block w-full border border-mac-hairline-strong rounded px-2 py-1 text-sm"
           />
         </label>
       )}
 
       {showMerge && (
-        <label className="block mt-2 text-xs text-slate-600">
+        <label className="block mt-2 text-xs text-mac-text-2">
           Merged PDF file
           <input
             type="text"
             value={effectiveMergeOutputPath}
             onChange={(event) => setMergeOutputPath(event.target.value)}
-            className="block w-full border border-slate-300 rounded px-2 py-1 text-sm"
+            className="block w-full border border-mac-hairline-strong rounded px-2 py-1 text-sm"
           />
         </label>
       )}
 
       {(showSeparate || showMerge) && (
-        <label className="block mt-2 text-xs text-slate-600">
+        <label className="block mt-2 text-xs text-mac-text-2">
           If a PDF already exists
           <select
             value={collisionPolicy}
             onChange={(event) => setCollisionPolicy(event.target.value as CollisionPolicy)}
-            className="block w-full border border-slate-300 rounded px-2 py-1 text-sm"
+            className="block w-full border border-mac-hairline-strong rounded px-2 py-1 text-sm"
           >
             <option value="fail">Stop and report</option>
             <option value="rename">Create a renamed copy</option>
@@ -493,12 +493,12 @@ export function PdfExportPanel({
       {busy && <p role="status">Generating PDFs…</p>}
       {summary && <p role="status">{summary}</p>}
       {error && (
-        <p role="alert" className="text-xs text-red-700">
+        <p role="alert" className="text-xs text-mac-danger">
           {error}
         </p>
       )}
       {exportable.length > 0 && (
-        <p className="mt-2 text-[11px] text-slate-400" data-testid="pdf-export-hint">
+        <p className="mt-2 text-[11px] text-mac-text-3" data-testid="pdf-export-hint">
           PDF is generated from DOCX only; existing files are never overwritten without an explicit choice.
         </p>
       )}

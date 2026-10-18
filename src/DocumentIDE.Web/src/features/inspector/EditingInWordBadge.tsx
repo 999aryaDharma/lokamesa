@@ -35,7 +35,7 @@ export const EditingInWordBadge: React.FC<EditingInWordBadgeProps> = ({
       role="status"
       data-testid="editing-in-word-badge"
       title={summary ?? undefined}
-      className="editing-in-word-badge rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-2 py-1 text-xs text-amber-800 dark:text-amber-300"
+      className="editing-in-word-badge rounded-md bg-mac-warning/10 dark:bg-amber-900/20 border border-mac-warning/40 dark:border-amber-800 px-2 py-1 text-xs text-amber-800 dark:text-amber-300"
     >
       <span className="font-semibold">Editing in Word</span>
       <span data-testid="editing-in-word-confidence"> ({confidenceLabel})</span>

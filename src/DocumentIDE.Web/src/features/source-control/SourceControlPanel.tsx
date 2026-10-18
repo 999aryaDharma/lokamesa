@@ -112,7 +112,7 @@ export default function SourceControlPanel({
     return (
       <div
         data-testid={isLoading ? 'source-control-loading' : 'source-control-no-status'}
-        className="w-full max-w-xl p-4 text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-xl"
+        className="w-full max-w-xl p-4 text-sm text-mac-text-2 bg-mac-canvas border border-mac-hairline rounded-xl"
       >
         {isLoading ? 'Loading source control status...' : 'No source control status available yet.'}
       </div>
@@ -126,13 +126,13 @@ export default function SourceControlPanel({
   }
 
   return (
-    <div className="w-full max-w-xl p-4 bg-white rounded-xl border border-slate-200 shadow-sm space-y-3">
-      <h3 className="text-sm font-semibold text-slate-700">Source Control</h3>
+    <div className="w-full max-w-xl p-4 bg-mac-content rounded-xl border border-mac-hairline shadow-sm space-y-3">
+      <h3 className="text-sm font-semibold text-mac-text">Source Control</h3>
 
       {errorMessage && (
         <div
           role="alert"
-          className="p-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg"
+          className="p-3 text-sm text-mac-danger bg-mac-danger/10 border border-mac-danger/40 rounded-lg"
         >
           {errorMessage}
         </div>
@@ -142,13 +142,13 @@ export default function SourceControlPanel({
       <div className="flex items-center gap-3 flex-wrap">
         <span
           data-testid="source-control-branch"
-          className="text-sm font-medium text-slate-700"
+          className="text-sm font-medium text-mac-text"
         >
           {branchLabel(status)}
         </span>
         <span
           data-testid="source-control-ahead-behind"
-          className="text-xs font-mono text-slate-500"
+          className="text-xs font-mono text-mac-text-3"
         >
           {aheadBehindLabel(status)}
         </span>
@@ -157,7 +157,7 @@ export default function SourceControlPanel({
       {renderCommitBox && <div data-testid="source-control-commit-host">{renderCommitBox()}</div>}
 
       {entries.length === 0 ? (
-        <div data-testid="source-control-clean" className="text-sm text-slate-500">
+        <div data-testid="source-control-clean" className="text-sm text-mac-text-3">
           Working tree clean - no changes.
         </div>
       ) : (
@@ -190,7 +190,7 @@ function RepositoryUnavailable({
     return (
       <div
         data-testid="source-control-git-unavailable"
-        className="w-full max-w-xl p-4 text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-xl"
+        className="w-full max-w-xl p-4 text-sm text-mac-text-2 bg-mac-canvas border border-mac-hairline rounded-xl"
       >
         Git is not available on this machine. Install Git to see source control status.
       </div>
@@ -201,7 +201,7 @@ function RepositoryUnavailable({
     return (
       <div
         data-testid="source-control-no-repository"
-        className="w-full max-w-xl p-4 text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-xl"
+        className="w-full max-w-xl p-4 text-sm text-mac-text-2 bg-mac-canvas border border-mac-hairline rounded-xl"
       >
         This folder is not inside a Git repository.
       </div>
@@ -209,12 +209,12 @@ function RepositoryUnavailable({
   }
 
   return (
-    <div className="w-full max-w-xl p-4 bg-white rounded-xl border border-slate-200 shadow-sm space-y-3">
-      <h3 className="text-sm font-semibold text-slate-700">Source Control</h3>
+    <div className="w-full max-w-xl p-4 bg-mac-content rounded-xl border border-mac-hairline shadow-sm space-y-3">
+      <h3 className="text-sm font-semibold text-mac-text">Source Control</h3>
       {errorMessage && (
         <div
           role="alert"
-          className="p-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg"
+          className="p-3 text-sm text-mac-danger bg-mac-danger/10 border border-mac-danger/40 rounded-lg"
         >
           {errorMessage}
         </div>
@@ -222,7 +222,7 @@ function RepositoryUnavailable({
       <div
         role="alert"
         data-testid="source-control-failure"
-        className="p-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg"
+        className="p-3 text-sm text-mac-danger bg-mac-danger/10 border border-mac-danger/40 rounded-lg"
       >
         <p className="font-medium">Source control status could not be determined.</p>
         {status.failure && (
@@ -253,7 +253,7 @@ function ChangeSection({
 }) {
   return (
     <section data-testid={`source-control-section-${definition.key}`}>
-      <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+      <h4 className="text-xs font-semibold uppercase tracking-wide text-mac-text-3">
         {definition.title} ({entries.length})
       </h4>
       <ul className="mt-1 space-y-1">
@@ -268,14 +268,14 @@ function ChangeSection({
               onDoubleClick={() => onOpen(entry)}
               className={`flex items-center gap-2 px-2 py-1 rounded-lg cursor-pointer transition-colors ${
                 isSelected
-                  ? 'bg-blue-50 border border-blue-300'
-                  : 'border border-transparent hover:bg-slate-50'
+                  ? 'bg-mac-accent-weak border border-blue-300'
+                  : 'border border-transparent hover:bg-mac-canvas'
               }`}
             >
-              <span className="shrink-0 text-xs font-mono text-slate-500 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5">
+              <span className="shrink-0 text-xs font-mono text-mac-text-3 bg-mac-chip border border-mac-hairline rounded px-1.5 py-0.5">
                 {entry.statusCharacters}
               </span>
-              <span className="text-sm font-mono text-slate-800 truncate">{entry.path}</span>
+              <span className="text-sm font-mono text-mac-text truncate">{entry.path}</span>
               {renderChangeActions && (
                 // Hosted actions are not row interactions: stop both the
                 // selection click and the open double-click from bubbling.

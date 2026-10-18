@@ -136,7 +136,7 @@ export default function BatchPreviewPanel() {
     setSaved(false); setDirty(true);
     setPreview(p => p && { ...p, files: p.files.map(f => f.documentId !== documentId ? f : occurrenceId ? { ...f, occurrences: f.occurrences.map(o => o.id === occurrenceId ? { ...o, selected: !o.selected } : o) } : { ...f, selected: !f.selected }) });
   }
-  return <section aria-label="Batch operations" className="w-full max-w-xl shrink-0 overflow-auto border-l border-slate-200 bg-white p-4" onKeyDown={e => e.stopPropagation()}>
+  return <section aria-label="Batch operations" className="w-full max-w-xl shrink-0 overflow-auto border-l border-mac-hairline bg-mac-content p-4" onKeyDown={e => e.stopPropagation()}>
     <h2>Batch operations</h2>
     <form onSubmit={e => { e.preventDefault(); void start(); }} className="grid gap-3">
       <label>Workspace<select required value={workspaceId} onChange={e => setWorkspaceId(e.target.value)}><option value="">Choose workspace</option>{workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></label>
