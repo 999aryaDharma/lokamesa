@@ -79,3 +79,50 @@ export function fetchFolderSources(
     fetchImpl,
   );
 }
+
+export interface AttachFolderSourceResult {
+  folderSource: WorkspaceFolderSourceDto;
+  supportedFileCount: number;
+}
+
+/**
+ * Attach a local folder source (FS-01).
+ *
+ * This must go through the injected API base and session token, exactly like
+ * the bootstrap calls above. A relative `/api/...` path resolves against the
+ * WebView's `https://appassets.html2sav` origin in the packaged app and fails
+ * with "Failed to fetch" (it only works behind the dev-server proxy).
+ */
+export async function attachFolderSource(
+  workspaceId: string,
+  folderPath: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<AttachFolderSourceResult> {
+  const { base, token } = apiBase();
+  const response = await fetchImpl(
+    `${base}/api/workspaces/${encodeURIComponent(workspaceId)}/folder-sources`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-DocumentIDE-Session-Token': token,
+      },
+      body: JSON.stringify({ folderPath }),
+    },
+  );
+
+  if (!response.ok) {
+    let message = `Failed to attach folder source (${response.status}).`;
+    try {
+      const body = (await response.json()) as { error?: string };
+      if (body?.error) {
+        message = body.error;
+      }
+    } catch {
+      // Keep the status-based message when the body is not JSON.
+    }
+    throw new Error(message);
+  }
+
+  return (await response.json()) as AttachFolderSourceResult;
+}

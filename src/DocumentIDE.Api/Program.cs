@@ -216,6 +216,11 @@ using (var scope = app.Services.CreateScope())
     var appDb = scope.ServiceProvider.GetRequiredService<AppDb>();
     await appDb.InitializeAsync();
 
+    // The shell injects the "default" workspace id; it must exist before any
+    // folder-source or document write can reference it.
+    await WorkspaceBootstrap.EnsureDefaultAsync(
+        scope.ServiceProvider.GetRequiredService<IWorkspaceRepository>());
+
     // QA-07: repair state a crashed previous process left behind (plans stuck in
     // Executing, orphan ~apply-*.tmp artifacts) before serving any request. Safe
     // no-op on an empty database.

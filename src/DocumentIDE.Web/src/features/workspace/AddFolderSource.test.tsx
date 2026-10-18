@@ -5,6 +5,10 @@ import AddFolderSource from './AddFolderSource';
 describe('AddFolderSource Component', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    // The packaged app injects these globals; without them every request would
+    // resolve against the WebView asset origin and fail.
+    (window as unknown as { __DOCUMENTIDE_API_URL__?: string }).__DOCUMENTIDE_API_URL__ = 'http://127.0.0.1:5311';
+    (window as unknown as { __DOCUMENTIDE_SESSION_TOKEN__?: string }).__DOCUMENTIDE_SESSION_TOKEN__ = 'session-abc';
     // Default fetch mock returning empty list for useEffect mount
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url) => {
       return {
@@ -58,6 +62,8 @@ describe('AddFolderSource Component', () => {
       } as Response;
     });
 
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+
     render(<AddFolderSource workspaceId="test-ws" />);
 
     const input = screen.getByPlaceholderText(/enter local folder path/i);
@@ -72,6 +78,12 @@ describe('AddFolderSource Component', () => {
       expect(screen.getByText(/5 supported files/i)).toBeInTheDocument();
       expect(screen.getByText('available')).toBeInTheDocument();
     });
+
+    const postCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(postCall?.[0]).toBe('http://127.0.0.1:5311/api/workspaces/test-ws/folder-sources');
+    expect(
+      (postCall?.[1]?.headers as Record<string, string>)['X-DocumentIDE-Session-Token'],
+    ).toBe('session-abc');
   });
 
   it('displays error message when API call fails', async () => {

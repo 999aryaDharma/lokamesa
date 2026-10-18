@@ -14,7 +14,7 @@ public class LocalSessionBridge
     /// falls back to <c>default</c> when it is absent, so the same value is used
     /// here as the default.
     /// </summary>
-    public string WorkspaceId { get; set; } = "default";
+    public string WorkspaceId { get; set; } = DocumentIDE.Infrastructure.Persistence.WorkspaceBootstrap.DefaultWorkspaceId;
 
     public LocalSessionBridge(string sessionToken, int apiPort = 0)
     {
@@ -56,13 +56,19 @@ public class LocalSessionBridge
     }
 
     /// <summary>
-    /// Injects session token header on outgoing WebView2 requests targeting privileged loopback endpoints.
+    /// Registers the pre-load script and awaits its completion.
+    ///
+    /// This MUST be awaited before the WebView navigates: navigating earlier
+    /// lets the SPA boot without <c>__DOCUMENTIDE_API_URL__</c>, so every fetch
+    /// resolves against the asset origin and the UI reports "Failed to fetch".
     /// </summary>
-    public void AttachToWebView(CoreWebView2 webView2, string apiUrl)
+    public async Task AttachToWebViewAsync(CoreWebView2 webView2, string apiUrl)
     {
         if (webView2 == null) throw new ArgumentNullException(nameof(webView2));
 
-        webView2.AddScriptToExecuteOnDocumentCreatedAsync(BuildInjectionScript(apiUrl));
+        await PrepareAsync(
+            script => webView2.AddScriptToExecuteOnDocumentCreatedAsync(script),
+            apiUrl).ConfigureAwait(true);
 
         webView2.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
         webView2.WebResourceRequested += (sender, args) =>
@@ -75,5 +81,16 @@ public class LocalSessionBridge
                 }
             }
         };
+    }
+
+    /// <summary>
+    /// Testable core of <see cref="AttachToWebViewAsync"/>: it completes only
+    /// after the supplied registration operation has completed.
+    /// </summary>
+    public async Task PrepareAsync(Func<string, Task> addScriptAsync, string apiUrl)
+    {
+        if (addScriptAsync == null) throw new ArgumentNullException(nameof(addScriptAsync));
+
+        await addScriptAsync(BuildInjectionScript(apiUrl)).ConfigureAwait(false);
     }
 }

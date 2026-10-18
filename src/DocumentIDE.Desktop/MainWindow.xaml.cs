@@ -24,7 +24,17 @@ public partial class MainWindow : Window
         {
             _appHost = await WebAppHost.StartAsync();
 
-            var env = await CoreWebView2Environment.CreateAsync();
+            // WebView2 must not use its default profile location (next to the
+            // executable): the app lives in Program Files, which a standard user
+            // cannot write, and CreateAsync then fails with E_ACCESSDENIED before
+            // any UI loads.
+            string userDataFolder = WebViewUserDataFolder.Resolve();
+            Directory.CreateDirectory(userDataFolder);
+
+            var env = await CoreWebView2Environment.CreateAsync(
+                browserExecutableFolder: null,
+                userDataFolder: userDataFolder,
+                options: null);
             await WebView.EnsureCoreWebView2Async(env);
 
             string wwwrootPath = Path.Combine(AppContext.BaseDirectory, "wwwroot");
@@ -37,7 +47,10 @@ public partial class MainWindow : Window
                 }
                 else
                 {
-                    Directory.CreateDirectory(wwwrootPath);
+                    // Never create an empty wwwroot under Program Files: it would
+                    // either fail with E_ACCESSDENIED or produce a blank window.
+                    throw new DirectoryNotFoundException(
+                        $"The web assets were not found at '{wwwrootPath}'. Reinstall the application.");
                 }
             }
 
@@ -47,7 +60,10 @@ public partial class MainWindow : Window
                 CoreWebView2HostResourceAccessKind.Allow);
 
             _sessionBridge = new LocalSessionBridge(_appHost.SessionToken, _appHost.Port);
-            _sessionBridge.AttachToWebView(WebView.CoreWebView2, _appHost.ApiUrl);
+            // Await the pre-load script before navigating: otherwise the SPA can
+            // boot without __DOCUMENTIDE_API_URL__ and every API call fails with
+            // "Failed to fetch" (the packaged origin has no /api route).
+            await _sessionBridge.AttachToWebViewAsync(WebView.CoreWebView2, _appHost.ApiUrl);
 
             WebView.NavigationStarting += (s, args) =>
             {

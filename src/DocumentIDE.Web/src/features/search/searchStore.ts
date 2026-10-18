@@ -70,7 +70,16 @@ type Listener = () => void;
 
 const defaultSearchApi: SearchApiFn = async (query: string): Promise<SearchExecutionResult> => {
   const encoded = encodeURIComponent(query);
-  const response = await fetch(`/api/search?q=${encoded}`);
+  // The packaged app serves the page from https://appassets.html2sav, so a
+  // relative /api path never reaches the loopback API. Use the injected base
+  // and session token, like every other shipped client.
+  const globals = window as Window & {
+    __DOCUMENTIDE_API_URL__?: string;
+    __DOCUMENTIDE_SESSION_TOKEN__?: string;
+  };
+  const response = await fetch(`${globals.__DOCUMENTIDE_API_URL__ || ''}/api/search?q=${encoded}`, {
+    headers: { 'X-DocumentIDE-Session-Token': globals.__DOCUMENTIDE_SESSION_TOKEN__ || '' },
+  });
   if (!response.ok) {
     if (response.status === 400) {
       throw new Error('Malformed query syntax');

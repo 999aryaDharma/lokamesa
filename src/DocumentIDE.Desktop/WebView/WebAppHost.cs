@@ -91,6 +91,15 @@ public class WebAppHost : IAsyncDisposable, IDisposable
         var app = builder.Build();
         await app.Services.GetRequiredService<AppDb>().InitializeAsync();
 
+        using (var scope = app.Services.CreateScope())
+        {
+            // On a fresh database the shell's "default" workspace did not exist,
+            // so attaching a folder violated the folder_sources FK and surfaced
+            // as a 500 ("Failed to fetch" in the UI).
+            await WorkspaceBootstrap.EnsureDefaultAsync(
+                scope.ServiceProvider.GetRequiredService<IWorkspaceRepository>());
+        }
+
         // QA-07: repair state a crashed previous process left behind (plans stuck in
         // Executing, orphan ~apply-*.tmp artifacts) before serving any request. Safe
         // no-op on an empty database.

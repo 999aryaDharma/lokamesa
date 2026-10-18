@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { attachFolderSource, fetchFolderSources } from './workspaceApi';
 
 export interface FolderSource {
   id: string;
@@ -40,20 +41,23 @@ export default function AddFolderSource({
     let isMounted = true;
     async function loadFolderSources() {
       try {
-        const response = await fetch(`/api/workspaces/${workspaceId}/folder-sources`);
-        if (response.ok) {
-          const data: FolderSource[] = await response.json();
-          if (isMounted) {
-            setAttachedSources(
-              data.map((fs) => ({
-                folderSource: fs,
-                supportedFileCount: 0, // Loaded from list endpoint
-              }))
-            );
-          }
+        const data = await fetchFolderSources(workspaceId);
+        if (isMounted) {
+          setAttachedSources(
+            data.map((fs) => ({
+              folderSource: {
+                id: fs.id,
+                workspaceId: fs.workspaceId ?? workspaceId,
+                canonicalPath: fs.canonicalPath,
+                displayName: fs.displayName ?? fs.canonicalPath,
+                availabilityStatus: fs.availabilityStatus ?? 'unknown',
+              },
+              supportedFileCount: 0, // Loaded from list endpoint
+            }))
+          );
         }
       } catch {
-        // API server may not be reachable in isolated unit tests
+        // The shell's own bootstrap surfaces unreachable-API errors; this list is secondary.
       }
     }
     loadFolderSources();
@@ -75,24 +79,17 @@ export default function AddFolderSource({
     setIsLoading(true);
 
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/folder-sources`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ folderPath: trimmedPath }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setErrorMessage(data.error || 'Failed to attach folder source');
-        return;
-      }
+      const result = await attachFolderSource(workspaceId, trimmedPath);
 
       const card: AttachedFolderCard = {
-        folderSource: data.folderSource,
-        supportedFileCount: data.supportedFileCount,
+        folderSource: {
+          id: result.folderSource.id,
+          workspaceId: result.folderSource.workspaceId ?? workspaceId,
+          canonicalPath: result.folderSource.canonicalPath,
+          displayName: result.folderSource.displayName ?? result.folderSource.canonicalPath,
+          availabilityStatus: result.folderSource.availabilityStatus ?? 'unknown',
+        },
+        supportedFileCount: result.supportedFileCount,
       };
 
       setAttachedSources((prev) => [...prev, card]);
