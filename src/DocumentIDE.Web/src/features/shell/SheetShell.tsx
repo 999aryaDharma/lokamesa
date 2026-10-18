@@ -23,6 +23,15 @@ export interface SheetShellProps {
   widthClass?: string;
   className?: string;
   testId?: string;
+  /**
+   * Render over the full-screen scrim (default — the reference's modal idiom).
+   *
+   * Set `false` for a surface that is **not modal today** (the merge-order sheet
+   * lives inline inside the mounted PDF panel): the same sheet *panel* chrome is
+   * reused, but without the scrim and without `aria-modal`, because turning an
+   * inline surface into a modal one is a behaviour change.
+   */
+  scrim?: boolean;
 }
 
 export const SheetShell: React.FC<SheetShellProps> = ({
@@ -34,15 +43,12 @@ export const SheetShell: React.FC<SheetShellProps> = ({
   widthClass = 'max-w-[720px]',
   className = '',
   testId,
-}) => (
-  <div
-    data-testid="sheet-scrim"
-    className="absolute inset-0 z-40 flex items-center justify-center bg-black/20 p-6"
-    onClick={onClose ? (event) => event.target === event.currentTarget && onClose() : undefined}
-  >
+  scrim = true,
+}) => {
+  const panel = (
     <div
       role="dialog"
-      aria-modal="true"
+      aria-modal={scrim ? 'true' : undefined}
       aria-label={title}
       data-testid={testId}
       className={[
@@ -80,7 +86,19 @@ export const SheetShell: React.FC<SheetShellProps> = ({
         </footer>
       )}
     </div>
-  </div>
-);
+  );
+
+  if (!scrim) return panel;
+
+  return (
+    <div
+      data-testid="sheet-scrim"
+      className="absolute inset-0 z-40 flex items-center justify-center bg-black/20 p-6"
+      onClick={onClose ? (event) => event.target === event.currentTarget && onClose() : undefined}
+    >
+      {panel}
+    </div>
+  );
+};
 
 export default SheetShell;

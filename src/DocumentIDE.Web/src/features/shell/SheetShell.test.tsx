@@ -49,4 +49,32 @@ describe('SheetShell', () => {
     );
     expect(screen.queryByRole('button', { name: /Close/ })).not.toBeInTheDocument();
   });
+
+  it('can render the same sheet panel inline, without a scrim and without claiming modality', () => {
+    // Surfaces that are NOT modal today (the merge-order dialog lives inline
+    // inside the mounted PDF panel) reuse the sheet chrome without the scrim:
+    // adding a scrim there would make them modal, i.e. change shipped behaviour.
+    render(
+      <SheetShell title="Merge document order" scrim={false}>
+        <p>Body</p>
+      </SheetShell>,
+    );
+
+    expect(screen.queryByTestId('sheet-scrim')).not.toBeInTheDocument();
+    const panel = screen.getByRole('dialog', { name: 'Merge document order' });
+    expect(panel).not.toHaveAttribute('aria-modal');
+  });
+
+  it('defaults to the modal scrim form (no regression for existing callers)', () => {
+    render(
+      <SheetShell title="Batch operations" onClose={() => {}}>
+        <p>Body</p>
+      </SheetShell>,
+    );
+    expect(screen.getByTestId('sheet-scrim')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Batch operations' })).toHaveAttribute(
+      'aria-modal',
+      'true',
+    );
+  });
 });
