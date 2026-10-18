@@ -26,7 +26,8 @@ public class MigrationRunner
             new Migration_008_FtsIndex(),
             new Migration_009_EmbeddingStore(),
             new Migration_010_Collections(),
-            new Migration_011_WorkSessions()
+            new Migration_011_WorkSessions(),
+            new Migration_012_OperationHistory()
         }.OrderBy(m => m.Version).ToList();
     }
 

@@ -64,6 +64,7 @@ import { openInWord } from './features/files/OpenInWordAction';
 import DocumentGraph from './features/graph/DocumentGraph';
 import { useGraphStore, type GraphNode } from './features/graph/graphStore';
 import HistoryScreen from './features/history/HistoryScreen';
+import { operationHistorySource } from './features/history/historyApi';
 import DocumentList from './features/list/DocumentList';
 import MarkdownEditor from './features/markdown/MarkdownEditor';
 import PdfExportPanel from './features/pdf/PdfExportPanel';
@@ -441,10 +442,10 @@ export default function App() {
                 onAttachFolder={() => handleAttachFolder('')}
                 onOpenDocument={handleOpenHistoryDocument}
                 documentName={resolveDocumentName}
-                // No `source` on purpose: this build has no privileged route
-                // that lists Document IDE operations or storage usage, so the
-                // Operations tab renders a typed unavailable state instead of
-                // an empty or sample list. See the UI-03 handoff.
+                // HIST-04: the real read-only listing + storage routes. Rows,
+                // outcome chips and the meter only ever come from that payload;
+                // a failed read falls back to the typed unavailable state.
+                source={operationHistorySource}
               />
             )}
           </div>

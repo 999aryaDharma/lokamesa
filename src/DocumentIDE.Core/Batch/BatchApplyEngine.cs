@@ -107,6 +107,7 @@ public sealed class BatchApplyEngine
     private readonly IAtomicFileReplacer _replacer;
     private readonly IBatchApplyHistoryRecorder _history;
     private readonly IBatchApplyReindexTrigger _reindex;
+    private readonly IOperationHistoryRecorder? _operationHistory;
 
     public BatchApplyEngine(
         IBatchPlanRepository plans,
@@ -115,7 +116,8 @@ public sealed class BatchApplyEngine
         IExternalEditStateProbe externalEditProbe,
         IAtomicFileReplacer replacer,
         IBatchApplyHistoryRecorder historyRecorder,
-        IBatchApplyReindexTrigger reindexTrigger)
+        IBatchApplyReindexTrigger reindexTrigger,
+        IOperationHistoryRecorder? operationHistory = null)
     {
         _plans = plans ?? throw new ArgumentNullException(nameof(plans));
         _documents = documents ?? throw new ArgumentNullException(nameof(documents));
@@ -124,6 +126,7 @@ public sealed class BatchApplyEngine
         _replacer = replacer ?? throw new ArgumentNullException(nameof(replacer));
         _history = historyRecorder ?? throw new ArgumentNullException(nameof(historyRecorder));
         _reindex = reindexTrigger ?? throw new ArgumentNullException(nameof(reindexTrigger));
+        _operationHistory = operationHistory;
     }
 
     public async Task<BatchApplyResult> ApplyAsync(
@@ -137,6 +140,7 @@ public sealed class BatchApplyEngine
 
         var plan = await _plans.GetByIdAsync(planId) ?? throw new InvalidOperationException("UnknownPlan");
         var now = DateTimeOffset.UtcNow;
+        var startedAt = now;
         if (!plan.CanApply(now, out var reason))
             throw new InvalidOperationException(reason);
 
@@ -197,7 +201,9 @@ public sealed class BatchApplyEngine
 
                     plan.MarkFailed();
                     await _plans.UpdateStatusAsync(plan.Id, BatchPlanStatus.Failed);
-                    return new(plan.Id, null, BatchApplyResultStatus.Blocked, outcomes);
+                    var blockedResult = new BatchApplyResult(plan.Id, null, BatchApplyResultStatus.Blocked, outcomes);
+                    await RecordOperationAsync(plan, startedAt, snapshotId: null, blockedResult);
+                    return blockedResult;
                 }
             }
 
@@ -293,12 +299,61 @@ public sealed class BatchApplyEngine
         {
             plan.MarkFailed();
             await _plans.UpdateStatusAsync(plan.Id, BatchPlanStatus.Failed);
-            return new(plan.Id, snapshotId, BatchApplyResultStatus.Canceled, outcomes);
+            var canceledResult = new BatchApplyResult(plan.Id, snapshotId, BatchApplyResultStatus.Canceled, outcomes);
+            await RecordOperationAsync(plan, startedAt, snapshotId, canceledResult);
+            return canceledResult;
         }
 
         plan.MarkCompleted();
         await _plans.UpdateStatusAsync(plan.Id, BatchPlanStatus.Completed);
-        return new(plan.Id, snapshotId, BatchApplyResultStatus.Completed, outcomes);
+        var result = new BatchApplyResult(plan.Id, snapshotId, BatchApplyResultStatus.Completed, outcomes);
+        await RecordOperationAsync(plan, startedAt, snapshotId, result);
+        return result;
+    }
+
+    /// <summary>
+    /// HIST-04 — records the one operation row for this apply. This observes the
+    /// existing result; it does not re-run, re-derive or retry any mutation. A
+    /// failed write surfaces as a typed <see cref="InvalidOperationException"/>,
+    /// matching the per-file history recorder's behaviour.
+    /// </summary>
+    private async Task RecordOperationAsync(
+        BatchOperationPlan plan,
+        DateTimeOffset startedAt,
+        string? snapshotId,
+        BatchApplyResult result)
+    {
+        if (_operationHistory is null) return;
+
+        var succeeded = result.Files.Count(file => file.Outcome == BatchApplyFileOutcome.Success);
+        var outcome = result.Status == BatchApplyResultStatus.Completed && succeeded > 0
+            ? OperationOutcome.Applied
+            : OperationOutcome.Failed;
+
+        var record = new OperationHistoryRecord(
+            OperationId: plan.Id,
+            Kind: OperationKinds.Describe(plan.OperationType),
+            PlanId: plan.Id,
+            StartedUtc: startedAt,
+            CompletedUtc: DateTimeOffset.UtcNow,
+            Outcome: outcome,
+            AffectedFileCount: result.Files.Count,
+            Files: result.Files
+                .Select(file => new OperationHistoryFileOutcome(file.DocumentId, file.Outcome, file.ReasonCode, file.Detail))
+                .ToArray(),
+            Undo: null,
+            SnapshotId: snapshotId);
+
+        try
+        {
+            // CancellationToken.None is deliberate: a canceled apply still has a
+            // real Failed outcome and its audit row must not be lost to the token.
+            await _operationHistory.RecordAppliedAsync(record, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Operation history record failed for operation '{plan.Id}'.", ex);
+        }
     }
 
     private async Task<FileCheckResult> CheckFileAsync(BatchOperationPlanFile file, List<HeldLock> heldLocks, CancellationToken cancellationToken)

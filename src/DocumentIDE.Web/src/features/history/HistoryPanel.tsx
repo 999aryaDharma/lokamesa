@@ -2,7 +2,7 @@ import PushButton from '../shell/PushButton';
 
 export type BatchFileOutcomeView = 'Success' | 'Skipped' | 'Failure';
 export type UndoFileOutcomeView = 'Restored' | 'AlreadyRestored' | 'Conflict' | 'Failure' | 'Skipped';
-export type OperationStatusView = 'Completed' | 'Partial' | 'Blocked' | 'Canceled';
+export type OperationStatusView = 'Completed' | 'Partial' | 'Blocked' | 'Canceled' | 'Applied' | 'Undone' | 'Failed';
 
 export interface OperationFileOutcomeView {
   documentId: string;
@@ -52,6 +52,11 @@ const statusLabels: Record<OperationStatusView, string> = {
   Partial: 'Partial',
   Blocked: 'Blocked',
   Canceled: 'Cancelled',
+  // HIST-04: the persisted operation outcomes. The apply/undo payload uses these
+  // three values; they are rendered verbatim, never mapped to a rosier word.
+  Applied: 'Applied',
+  Undone: 'Undone',
+  Failed: 'Failed',
 };
 
 const countOutcomes = (entry: OperationHistoryEntryView) => ({
@@ -91,8 +96,10 @@ const formatGiB = (bytes: number) => `${(bytes / (1024 ** 3)).toFixed(1)} GiB`;
 
 /** A completed operation with skipped/failed files must never read as a complete success. */
 const statusText = (status: OperationStatusView, failed: number, skipped: number) => {
-  if (status === 'Completed' && (failed > 0 || skipped > 0)) {
-    return failed > 0 ? 'Completed with failures' : 'Completed with skipped files';
+  if ((status === 'Completed' || status === 'Applied') && (failed > 0 || skipped > 0)) {
+    return failed > 0
+      ? `${statusLabels[status]} with failures`
+      : `${statusLabels[status]} with skipped files`;
   }
   return statusLabels[status];
 };
@@ -104,13 +111,15 @@ const statusText = (status: OperationStatusView, failed: number, skipped: number
  * an outcome, and the text stays the single source of truth for the tests.
  */
 const statusChipClass = (label: string) =>
-  label === statusLabels.Completed
+  label === statusLabels.Completed || label === statusLabels.Applied
     ? 'bg-mac-success/15 text-mac-success'
-    : label === statusLabels.Blocked
+    : label === statusLabels.Blocked || label === statusLabels.Failed
       ? 'bg-mac-danger/15 text-mac-danger'
       : label === statusLabels.Canceled
         ? 'bg-mac-chip text-mac-text-2'
-        : 'bg-mac-warning/15 text-mac-warning';
+        : label === statusLabels.Undone
+          ? 'bg-mac-accent/15 text-mac-accent'
+          : 'bg-mac-warning/15 text-mac-warning';
 
 const fileOutcomeChipClass = (outcome: BatchFileOutcomeView) =>
   outcome === 'Success'
