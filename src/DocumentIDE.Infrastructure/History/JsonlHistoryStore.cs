@@ -17,12 +17,15 @@ namespace DocumentIDE.Infrastructure.History;
 /// <item><c>git-restore-{operationId}.jsonl</c> — one line per SCM-10
 /// discard/restore operation (spec 13 §15.2 step 8). This is the same
 /// Document IDE History store, not a parallel one.</item>
+/// <item><c>git-pull-{operationId}.jsonl</c> — one line per SCM-12 conservative
+/// pull (spec 13 §14.3 step 4). Also the same store.</item>
 /// </list>
 /// The store is intentionally transport-agnostic: the privileged API reads these
 /// records back for the owner history view, and a failed record write surfaces as
 /// a typed failure instead of a silently dropped audit entry.
 /// </summary>
-public sealed class JsonlHistoryStore : IBatchApplyHistoryRecorder, IUndoHistoryRecorder, IGitRestoreHistoryRecorder
+public sealed class JsonlHistoryStore
+    : IBatchApplyHistoryRecorder, IUndoHistoryRecorder, IGitRestoreHistoryRecorder, IGitPullHistoryRecorder
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -55,6 +58,41 @@ public sealed class JsonlHistoryStore : IBatchApplyHistoryRecorder, IUndoHistory
     /// </summary>
     public Task RecordAsync(GitRestoreHistoryRecord record, CancellationToken cancellationToken = default) =>
         AppendAsync($"git-restore-{Sanitize(record.OperationId)}.jsonl", record, cancellationToken);
+
+    /// <summary>
+    /// SCM-12 — records one conservative pull in Document IDE History
+    /// (spec 13 §14.3 step 4). The pull has already completed when this is
+    /// called, so a failed write is surfaced to the caller as a typed warning
+    /// instead of silently dropping the audit entry.
+    /// </summary>
+    public Task RecordAsync(GitPullHistoryRecord record, CancellationToken cancellationToken = default) =>
+        AppendAsync($"git-pull-{Sanitize(record.OperationId)}.jsonl", record, cancellationToken);
+
+    /// <summary>Reads back the Document IDE History records of one SCM-12 pull.</summary>
+    public async Task<IReadOnlyList<GitPullHistoryRecord>> GetGitPullRecordsAsync(
+        string operationId,
+        CancellationToken cancellationToken = default)
+    {
+        var path = Path.Combine(_root, $"git-pull-{Sanitize(operationId)}.jsonl");
+        if (!File.Exists(path)) return Array.Empty<GitPullHistoryRecord>();
+        var records = new List<GitPullHistoryRecord>();
+        foreach (var line in await File.ReadAllLinesAsync(path, cancellationToken))
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            try
+            {
+                var record = JsonSerializer.Deserialize<GitPullHistoryRecord>(line, JsonOptions);
+                if (record != null) records.Add(record);
+            }
+            catch (JsonException)
+            {
+                // A torn final line (crash mid-append) is skipped rather than
+                // failing the whole history read; earlier records stay readable.
+            }
+        }
+
+        return records;
+    }
 
     /// <summary>Reads back the Document IDE History records of one SCM-10 operation.</summary>
     public async Task<IReadOnlyList<GitRestoreHistoryRecord>> GetGitRestoreRecordsAsync(
