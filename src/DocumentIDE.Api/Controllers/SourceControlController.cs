@@ -1539,6 +1539,259 @@ public sealed class SourceControlController : ControllerBase
             status,
             ToFailure(result.Failure ?? (refreshed is { IsAvailable: false } ? refreshed.Failure : null)));
     }
+
+    // =====================================================================
+    // SCM-18 — worktree API surface (spec 13 §16/§18/§20)
+    //
+    // Bounded append-only region: a thin, typed HTTP surface over the
+    // already-tested SCM-15 discovery/open and SCM-16 create/remove/prune
+    // services. This region adds no Git invocation, creates or switches no
+    // branch, and never forces a removal. HTTP 400 is reserved for input
+    // rejected before any Git ran; every inspectable Git outcome — including
+    // RequiresAttachmentFlow, which is a signal and not an error — stays
+    // HTTP 200 with its typed body so screen 07 can render it.
+    //
+    // The services are injected per action ([FromServices]) so the region
+    // stays append-only and the controller's existing constructor is
+    // untouched.
+    // =====================================================================
+
+    /// <summary>
+    /// Lists every worktree Git registers for the repository containing
+    /// <paramref name="path"/> (spec 13 §16.1). A path outside Git is the
+    /// typed <c>NotARepository</c> state (HTTP 200), never an error page; a
+    /// missing path is a typed 400 and Git never runs.
+    /// </summary>
+    [HttpGet("worktrees")]
+    public async Task<IActionResult> ListWorktrees(
+        [FromQuery] string? path,
+        [FromServices] IGitWorktreeService worktrees,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return PathRequiredBadRequest("query parameter");
+        }
+
+        GitWorktreeListResult result = await worktrees.ListWorktreesAsync(path, cancellationToken);
+        return Ok(ToWorktreeListResponse(result));
+    }
+
+    /// <summary>
+    /// Makes a Git-registered worktree the active filesystem context, or
+    /// reports that it is not attached to the workspace (spec 13 §16.2).
+    /// <c>RequiresAttachmentFlow</c> is the typed signal to route the user
+    /// through the existing FS-01 attachment flow: this route never attaches,
+    /// detaches, or reorganizes a folder source, and no branch is switched.
+    /// Malformed input (blank id/path, non-canonical path) is a typed 400 and
+    /// nothing runs; every Git-derived outcome stays HTTP 200.
+    /// </summary>
+    [HttpPost("worktrees/open")]
+    public async Task<IActionResult> OpenWorktree(
+        [FromBody] SourceControlWorktreeOpenRequest? request,
+        [FromServices] IGitWorktreeService worktrees,
+        CancellationToken cancellationToken)
+    {
+        GitWorktreeOpenResult result = await worktrees.OpenWorktreeAsync(
+            new GitWorktreeOpenRequest(
+                request?.WorkspaceId ?? string.Empty,
+                request?.WorkingDirectory ?? string.Empty,
+                request?.WorktreePath ?? string.Empty),
+            cancellationToken);
+
+        if (result.Status == GitWorktreeOpenStatus.InvalidRequest)
+        {
+            return WorktreeInputRejected(result.Status.ToString(), result.ErrorMessage);
+        }
+
+        // Opening and the attachment signal are not errors; every other
+        // non-opened status (not registered, unavailable, list failure) keeps
+        // its typed status as the machine-readable code.
+        string? errorCode = result.Status is GitWorktreeOpenStatus.Opened
+            or GitWorktreeOpenStatus.RequiresAttachmentFlow
+            ? null
+            : result.Status.ToString();
+
+        return Ok(new SourceControlWorktreeOpenResponse(
+            result.Status.ToString(),
+            result.IsOpened,
+            result.IsAttachedToWorkspace,
+            errorCode,
+            result.ErrorMessage,
+            ToWorktreeInfo(result.Worktree),
+            ToWorktreeInfos(result.ListResult),
+            ToWorktreeFailure(null, result.ListResult)));
+    }
+
+    /// <summary>
+    /// Creates a worktree from an existing branch, tag, or commit
+    /// (spec 13 §16.3). No branch is ever created as a side effect. A missing
+    /// or unsafe target path or a malformed ref token is a typed 400 and Git
+    /// never runs; a non-existent ref, occupied target, or Git failure stays
+    /// HTTP 200 with the typed outcome so the UI can render it.
+    /// </summary>
+    [HttpPost("worktrees")]
+    public async Task<IActionResult> CreateWorktree(
+        [FromBody] SourceControlWorktreeCreateRequest? request,
+        [FromServices] IGitWorktreeMutationService worktrees,
+        CancellationToken cancellationToken)
+    {
+        GitWorktreeCreateResult result = await worktrees.CreateWorktreeAsync(
+            new GitWorktreeCreateRequest(
+                request?.WorkingDirectory ?? string.Empty,
+                request?.TargetPath ?? string.Empty,
+                request?.Ref ?? string.Empty),
+            cancellationToken);
+
+        if (result.Status is GitWorktreeCreateStatus.InvalidRequest
+            or GitWorktreeCreateStatus.InvalidTargetPath)
+        {
+            return WorktreeInputRejected(result.Status.ToString(), result.ErrorMessage);
+        }
+
+        return Ok(new SourceControlWorktreeCreateResponse(
+            result.Status.ToString(),
+            result.IsSuccess,
+            result.IsSuccess ? null : result.Status.ToString(),
+            result.ErrorMessage,
+            ToWorktreeInfo(result.Worktree),
+            ToWorktreeInfos(result.ListResult),
+            ToWorktreeFailure(result.IsSuccess ? null : result.ProcessResult, result.ListResult)));
+    }
+
+    /// <summary>
+    /// Removes one registered worktree (spec 13 §16.4). Removal is explicit
+    /// and never forced: a dirty, locked, main, missing, or unregistered
+    /// worktree is refused with a typed HTTP 200 body, and a dirty refusal
+    /// carries the change list. A missing/unsafe path is a typed 400 and Git
+    /// never runs.
+    /// </summary>
+    [HttpDelete("worktrees")]
+    public async Task<IActionResult> RemoveWorktree(
+        [FromBody] SourceControlWorktreeRemoveRequest? request,
+        [FromServices] IGitWorktreeMutationService worktrees,
+        CancellationToken cancellationToken)
+    {
+        GitWorktreeRemoveResult result = await worktrees.RemoveWorktreeAsync(
+            new GitWorktreeRemoveRequest(
+                request?.WorkingDirectory ?? string.Empty,
+                request?.WorktreePath ?? string.Empty),
+            cancellationToken);
+
+        if (result.Status is GitWorktreeRemoveStatus.InvalidRequest
+            or GitWorktreeRemoveStatus.InvalidTargetPath)
+        {
+            return WorktreeInputRejected(result.Status.ToString(), result.ErrorMessage);
+        }
+
+        return Ok(new SourceControlWorktreeRemoveResponse(
+            result.Status.ToString(),
+            result.IsSuccess,
+            result.IsSuccess ? null : result.Status.ToString(),
+            result.ErrorMessage,
+            ToWorktreeInfo(result.Worktree),
+            result.Changes is null
+                ? Array.Empty<SourceControlWorktreeChangeResponse>()
+                : result.Changes.Select(ToWorktreeChange).ToArray(),
+            ToWorktreeInfos(result.ListResult),
+            ToWorktreeFailure(result.IsSuccess ? null : result.ProcessResult, result.ListResult)));
+    }
+
+    /// <summary>
+    /// Runs the safe worktree metadata refresh (spec 13 §16.5) and returns the
+    /// re-read registry. Only stale metadata of missing, unlocked worktrees is
+    /// pruned by Git; a valid worktree is never deleted. A missing path is a
+    /// typed 400 and Git never runs.
+    /// </summary>
+    [HttpPost("worktrees/prune")]
+    public async Task<IActionResult> RefreshWorktrees(
+        [FromBody] SourceControlWorktreeRefreshRequest? request,
+        [FromServices] IGitWorktreeMutationService worktrees,
+        CancellationToken cancellationToken)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.Path))
+        {
+            return PathRequiredBadRequest("request field");
+        }
+
+        GitWorktreeRefreshResult result =
+            await worktrees.RefreshWorktreesAsync(request.Path!, cancellationToken);
+
+        return Ok(new SourceControlWorktreeRefreshResponse(
+            result.Status.ToString(),
+            result.IsSuccess,
+            result.IsSuccess ? null : result.Status.ToString(),
+            result.ErrorMessage,
+            ToWorktreeInfos(result.ListResult),
+            ToWorktreeFailure(result.IsSuccess ? null : result.ProcessResult, result.ListResult)));
+    }
+
+    /// <summary>
+    /// Maps a typed registry listing onto the API contract (spec 13 §16.1/§20):
+    /// the status and failure stay inspectable and are never flattened.
+    /// </summary>
+    private static SourceControlWorktreeListResponse ToWorktreeListResponse(GitWorktreeListResult result) =>
+        new(
+            result.Status.ToString(),
+            result.IsSuccess,
+            result.Worktrees.Select(worktree => ToWorktreeInfo(worktree)!).ToArray(),
+            result.IsSuccess ? null : result.Status.ToString(),
+            result.ErrorMessage,
+            result.IsSuccess ? null : ToFailure(result.ProcessResult));
+
+    /// <summary>
+    /// Maps the optional re-read registry of a mutation onto the typed payload;
+    /// <c>null</c> means the registry could not be re-read, never an empty
+    /// registry.
+    /// </summary>
+    private static IReadOnlyList<SourceControlWorktreeInfoResponse>? ToWorktreeInfos(
+        GitWorktreeListResult? list) =>
+        list is null
+            ? null
+            : list.Worktrees.Select(worktree => ToWorktreeInfo(worktree)!).ToArray();
+
+    /// <summary>
+    /// Surfaces the originating Git failure of either the mutation or the
+    /// post-mutation registry re-read, so a failed re-read is never hidden by a
+    /// successful mutation.
+    /// </summary>
+    private static SourceControlFailureResponse? ToWorktreeFailure(
+        GitProcessResult? failure,
+        GitWorktreeListResult? list) =>
+        ToFailure(failure ?? (list is { IsSuccess: false } ? list.ProcessResult : null));
+
+    private static SourceControlWorktreeInfoResponse? ToWorktreeInfo(GitWorktreeInfo? worktree) =>
+        worktree is null
+            ? null
+            : new SourceControlWorktreeInfoResponse(
+                worktree.Path,
+                worktree.HeadCommit,
+                worktree.BranchRef,
+                worktree.BranchName,
+                worktree.IsDetached,
+                worktree.IsBare,
+                worktree.IsLocked,
+                worktree.LockReason,
+                worktree.IsPrunable,
+                worktree.PruneReason,
+                worktree.IsMainWorktree);
+
+    private static SourceControlWorktreeChangeResponse ToWorktreeChange(GitStatusEntry entry) =>
+        new(
+            entry.Path,
+            entry.OriginalPath,
+            entry.State.ToString(),
+            entry.IndexChange.ToString(),
+            entry.WorkingTreeChange.ToString(),
+            entry.ConflictKind.ToString(),
+            entry.StatusCharacters);
+
+    private static IActionResult WorktreeInputRejected(string errorCode, string? message) =>
+        new BadRequestObjectResult(new
+        {
+            errorCode,
+            error = message,
+        });
 }
 
 /// <summary>
@@ -1678,4 +1931,152 @@ public sealed record SourceControlPullResponse(
     bool HistoryRecorded,
     SourceControlRemoteResponse? Remote,
     SourceControlStatusResponse? Status,
+    SourceControlFailureResponse? Failure);
+
+// -------------------------------------------------------------------------
+// SCM-18 — worktree API payloads (spec 13 §16/§18/§20)
+//
+// Every payload mirrors the typed service outcome instead of the raw Git
+// output: status/isSuccess/errorCode/message plus the read-only registry data.
+// `Path` values are Git's canonical registered locations, never arbitrary
+// caller paths, and no payload carries secret or credential material.
+// -------------------------------------------------------------------------
+
+/// <summary>
+/// SCM-18 — one registered worktree as Git reports it (spec 13 §16.1):
+/// canonical path, HEAD commit, branch or detached state, and locked/prunable
+/// metadata. Branch values are context metadata only — there is no
+/// branch-management surface.
+/// </summary>
+public sealed record SourceControlWorktreeInfoResponse(
+    string Path,
+    string HeadCommit,
+    string? BranchRef,
+    string? BranchName,
+    bool IsDetached,
+    bool IsBare,
+    bool IsLocked,
+    string? LockReason,
+    bool IsPrunable,
+    string? PruneReason,
+    bool IsMainWorktree);
+
+/// <summary>
+/// SCM-18 — typed registry listing (spec 13 §16.1/§20). A path outside Git is
+/// the typed <c>NotARepository</c> status with an empty list (HTTP 200), never
+/// a partial or invented registry.
+/// </summary>
+public sealed record SourceControlWorktreeListResponse(
+    string Status,
+    bool IsSuccess,
+    IReadOnlyList<SourceControlWorktreeInfoResponse> Worktrees,
+    string? ErrorCode,
+    string? Message,
+    SourceControlFailureResponse? Failure);
+
+/// <summary>
+/// SCM-18 — request body for the open-existing-worktree action
+/// (spec 13 §16.2). <c>WorkspaceId</c> selects the workspace whose folder
+/// sources are consulted; <c>WorkingDirectory</c> locates the repository and
+/// <c>WorktreePath</c> must be a location Git registered.
+/// </summary>
+public sealed record SourceControlWorktreeOpenRequest(
+    string? WorkspaceId,
+    string? WorkingDirectory,
+    string? WorktreePath);
+
+/// <summary>
+/// SCM-18 — typed open outcome (spec 13 §16.2/§20). <c>RequiresAttachmentFlow</c>
+/// is a signal, not an error: nothing was attached and the caller must route
+/// the user through the existing FS-01 folder-source flow. <c>Worktrees</c>
+/// carries the registry read during the action when it is available.
+/// </summary>
+public sealed record SourceControlWorktreeOpenResponse(
+    string Status,
+    bool IsSuccess,
+    bool IsAttachedToWorkspace,
+    string? ErrorCode,
+    string? Message,
+    SourceControlWorktreeInfoResponse? Worktree,
+    IReadOnlyList<SourceControlWorktreeInfoResponse>? Worktrees,
+    SourceControlFailureResponse? Failure);
+
+/// <summary>
+/// SCM-18 — request body for the create action (spec 13 §16.3).
+/// <c>Ref</c> must already exist (local branch, tag, or explicit commit):
+/// creation never invents a branch.
+/// </summary>
+public sealed record SourceControlWorktreeCreateRequest(
+    string? WorkingDirectory,
+    string? TargetPath,
+    string? Ref);
+
+/// <summary>
+/// SCM-18 — typed create outcome (spec 13 §16.3/§20). Success carries the
+/// created worktree plus the re-read registry; refused refs and Git failures
+/// stay typed and inspectable.
+/// </summary>
+public sealed record SourceControlWorktreeCreateResponse(
+    string Status,
+    bool IsSuccess,
+    string? ErrorCode,
+    string? Message,
+    SourceControlWorktreeInfoResponse? Worktree,
+    IReadOnlyList<SourceControlWorktreeInfoResponse>? Worktrees,
+    SourceControlFailureResponse? Failure);
+
+/// <summary>
+/// SCM-18 — request body for the remove action (spec 13 §16.4).
+/// <c>WorktreePath</c> must be exactly Git's registered canonical location.
+/// </summary>
+public sealed record SourceControlWorktreeRemoveRequest(
+    string? WorkingDirectory,
+    string? WorktreePath);
+
+/// <summary>
+/// SCM-18 — one change entry of a removal-blocking dirty worktree
+/// (spec 13 §16.4: "show the current change list"). Paths are
+/// worktree-relative exactly as Git reported them.
+/// </summary>
+public sealed record SourceControlWorktreeChangeResponse(
+    string Path,
+    string? OriginalPath,
+    string State,
+    string IndexChange,
+    string WorkingTreeChange,
+    string ConflictKind,
+    string StatusCharacters);
+
+/// <summary>
+/// SCM-18 — typed removal outcome (spec 13 §16.4/§20). Removal is never
+/// forced: a dirty worktree is refused with <c>Changes</c>, and main, locked,
+/// missing, or unregistered worktrees keep their typed blocking status.
+/// </summary>
+public sealed record SourceControlWorktreeRemoveResponse(
+    string Status,
+    bool IsSuccess,
+    string? ErrorCode,
+    string? Message,
+    SourceControlWorktreeInfoResponse? Worktree,
+    IReadOnlyList<SourceControlWorktreeChangeResponse> Changes,
+    IReadOnlyList<SourceControlWorktreeInfoResponse>? Worktrees,
+    SourceControlFailureResponse? Failure);
+
+/// <summary>
+/// SCM-18 — request body for the safe worktree refresh/prune action
+/// (spec 13 §16.5). <c>Path</c> is the workspace folder or active-document
+/// path used to locate the repository.
+/// </summary>
+public sealed record SourceControlWorktreeRefreshRequest(string? Path);
+
+/// <summary>
+/// SCM-18 — typed refresh outcome (spec 13 §16.5/§20). Success carries the
+/// re-read registry; pruning never deletes a valid worktree.
+/// </summary>
+public sealed record SourceControlWorktreeRefreshResponse(
+    string Status,
+    bool IsSuccess,
+    string? ErrorCode,
+    string? Message,
+    IReadOnlyList<SourceControlWorktreeInfoResponse>? Worktrees,
     SourceControlFailureResponse? Failure);

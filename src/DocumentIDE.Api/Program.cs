@@ -153,6 +153,20 @@ builder.Services.AddScoped(sp => new GitRestoreService(
     sp.GetRequiredService<IBatchApplyReindexTrigger>(),
     sp.GetRequiredService<IDocumentRepository>()));
 
+// SCM-18: worktree API surface. Exposes the SCM-15 discovery/open service and
+// the SCM-16 create/remove/prune service over the privileged API as a thin
+// typed layer (spec 13 §16/§18): no Git behaviour is added, no branch is
+// created or switched, removal is never forced, and opening a
+// registered-but-unattached worktree only reports RequiresAttachmentFlow
+// instead of attaching a folder source. Scoped because both services consume
+// the scoped FS-01 folder-source service.
+builder.Services.AddScoped<IGitWorktreeService>(sp => new GitWorktreeService(
+    sp.GetRequiredService<IGitProcessRunner>(),
+    sp.GetRequiredService<IFolderSourceService>()));
+builder.Services.AddScoped<IGitWorktreeMutationService>(sp => new GitWorktreeMutationService(
+    sp.GetRequiredService<IGitProcessRunner>(),
+    sp.GetRequiredService<IGitWorktreeService>()));
+
 builder.Services.AddScoped<PdfExportService>();
 builder.Services.AddScoped<BatchPdfExportService>();
 builder.Services.AddScoped<PdfMergeService>();
