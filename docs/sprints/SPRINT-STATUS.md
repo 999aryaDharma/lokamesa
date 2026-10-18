@@ -138,6 +138,6 @@ Rules:
 | SCM-18 | Worktree API Surface | DONE | SCM-15, SCM-16 | feat/worktree-api-surface (a0474c3) | docs/sprints/handoffs/SCM-18-HANDOFF.md |
 | UI-01 | macOS Three-Pane Shell Redesign | DONE | - | feat/ui-01-macos-shell-redesign (0d6893b) | docs/sprints/handoffs/UI-01-HANDOFF.md |
 | UI-02 | Document Preview Content API (DOCX) | DONE | - | feat/ui-02-document-preview-content-api (bbcf67e) | docs/sprints/handoffs/UI-02-HANDOFF.md |
-| UI-03 | macOS Screen Slicing (remaining screens) | READY | SCM-14, SCM-18 |  |  |
+| UI-03 | macOS Screen Slicing (remaining screens) | IN_PROGRESS | SCM-14, SCM-18 | feat/ui-03-mac-screens-slicing (part A be40a7c) | docs/sprints/handoffs/UI-03-HANDOFF.md |
 
 **REL-03 review notes (2026-10-16) — product verdict BLOCKED.** `docs/quality/v1-readiness-report.md` maps all 22 spec-12 completion gates; 16 PASS, 6 FAIL. Blockers: (1) graph view is a placeholder (GR-03 steps 1/3/4/5 unmet, §27.2/§89 not deliverable); (2) batch Apply unreachable (`BatchPreviewPanel.tsx:147` disabled; no apply/undo route); (3) `/api/word/open` 404 in the shipped desktop host (`BatchPreviewHostTests.cs:91`); (4) no `/api/search` endpoint + search UI unmounted; (5) share lifecycle unwired (SHR-11 callback deferral, no create/revoke endpoints); (6) workspace/canvas bootstrap not wired (canvas never populated outside tests); (7) Markdown editor is a stub and unmounted; (8) E2E administrative workflow test missing (spec 11 §20/§27). Integration sprints are required before V1; gap list G1–G9 with file:line evidence is in the report and handoff.
