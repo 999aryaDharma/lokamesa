@@ -247,6 +247,11 @@ describe('GitHistoryPanel', () => {
     );
 
     expect(await screen.findByTestId('git-history-scope-note')).toHaveTextContent('docs/a.md');
+    // A rename is not followed (`--follow` is deliberately omitted), so the
+    // pane must disclose that history before a move may be missing.
+    expect(screen.getByTestId('git-history-scope-note')).toHaveTextContent(
+      /renames are not followed/i
+    );
     const fileHistoryUrl = fetchMock.mock.calls.find(([url]) =>
       url.includes('/api/source-control/file-history')
     )?.[0];
@@ -316,6 +321,37 @@ describe('GitHistoryPanel', () => {
     expect(preview).toHaveTextContent('Binary document');
     expect(preview).toHaveTextContent('512 bytes');
     expect(preview).not.toHaveTextContent('a v2');
+  });
+
+  it('reports an over-the-bound version as too large to preview', async () => {
+    stubFetch(async (url) => {
+      if (url.includes('/file-version')) {
+        return jsonResponse(
+          200,
+          fileVersionResult({
+            version: {
+              commitId: '1111111111111111111111111111111111111111',
+              path: 'docs/large.md',
+              content: null,
+              isBinary: false,
+              isTruncated: true,
+              sizeBytes: 262208,
+            },
+          })
+        );
+      }
+
+      return jsonResponse(200, historyResult());
+    });
+
+    render(<GitHistoryPanel path={'C:\\workspace'} selectedPath="docs/large.md" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Inspect version 1111111' }));
+
+    const preview = await screen.findByTestId('git-history-version-preview');
+    expect(preview).toHaveTextContent(/too large to preview/i);
+    expect(preview).toHaveTextContent('262208 bytes');
+    expect(preview.querySelector('pre')).toBeNull();
   });
 
   it('keeps typed failures visible instead of showing an empty history', async () => {

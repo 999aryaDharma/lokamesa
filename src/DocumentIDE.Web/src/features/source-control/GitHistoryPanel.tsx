@@ -284,7 +284,8 @@ export default function GitHistoryPanel({
           data-testid="git-history-scope-note"
           className="p-2 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg"
         >
-          File history for <span className="font-mono">{scopeNote}</span>
+          File history for <span className="font-mono">{scopeNote}</span> — renames are not
+          followed, so history before a move may not appear.
         </div>
       )}
 
@@ -365,6 +366,10 @@ export default function GitHistoryPanel({
           {version.isBinary ? (
             <div className="text-slate-600">
               Binary document ({version.sizeBytes} bytes) — no text preview is shown.
+            </div>
+          ) : version.isTruncated && version.content === null ? (
+            <div className="text-slate-600">
+              Document is too large to preview ({version.sizeBytes} bytes).
             </div>
           ) : (
             <>

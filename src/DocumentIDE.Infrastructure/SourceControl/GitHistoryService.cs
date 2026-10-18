@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -63,9 +64,21 @@ public sealed class GitHistoryService
     private const int MetadataFieldCount = 6;
 
     /// <summary>
+    /// The same exit-code HEAD probe SCM-05 uses (<see cref="DocxGitDiffProvider"/>):
+    /// a born HEAD exits 0 with an object id, an unborn branch exits 1 with an
+    /// empty stderr, and anything else is a real failure. Unlike a stderr
+    /// substring it does not depend on Git's English message wording.
+    /// </summary>
+    private static readonly string[] HeadProbeArguments =
+    {
+        "rev-parse", "--verify", "--quiet", "HEAD",
+    };
+
+    /// <summary>
     /// Largest document version this surface serves in one read (256 KiB). A
-    /// larger blob is reported with its true size and clipped content, so one
-    /// click cannot pull an unbounded payload into the pane (spec 13 §25).
+    /// larger blob is reported with its true size and no content — it is never
+    /// read — so one click cannot pull an unbounded payload into the pane
+    /// (spec 13 §25).
     /// </summary>
     public const int MaxVersionBytes = 256 * 1024;
 
@@ -188,6 +201,61 @@ public sealed class GitHistoryService
                 "the request was rejected before any Git or filesystem access.");
         }
 
+        // Probe the committed blob's size before reading anything. A committed
+        // blob may be arbitrarily large (multi-gigabyte), and materialising it
+        // just to clip it afterwards would defeat the bound and could overflow
+        // the byte-array limit; `git cat-file -s` answers with the object size
+        // without streaming the payload (spec 13 §25).
+        GitProcessResult sizeProbe = await _runner.RunAsync(
+            new GitProcessRequest(
+                new[] { "--no-optional-locks", "cat-file", "-s", $"{revision}:{gitPath}" },
+                worktreeRoot),
+            cancellationToken);
+
+        if (!sizeProbe.IsSuccess)
+        {
+            return VersionFailure(sizeProbe, revision, gitPath);
+        }
+
+        if (!long.TryParse(
+                sizeProbe.StandardOutput.Trim(),
+                NumberStyles.None,
+                CultureInfo.InvariantCulture,
+                out long blobSize))
+        {
+            // Without a trustworthy size the read cannot be proven bounded, so
+            // nothing is read and the outcome stays typed and inspectable.
+            string message = $"Git did not report a blob size for '{gitPath}' at commit {revision}.";
+            return new GitFileVersionResult(
+                GitHistoryStatus.Failed,
+                null,
+                sizeProbe with
+                {
+                    Status = GitProcessStatus.Failed,
+                    ErrorKind = GitProcessErrorKind.Unknown,
+                    ErrorMessage = message,
+                },
+                message);
+        }
+
+        if (blobSize > MaxVersionBytes)
+        {
+            // Over the served bound: report the true size and the truncation,
+            // but do not read a single byte of the payload. Content stays null
+            // (nothing was read) and IsBinary stays false (nothing was sniffed);
+            // IsTruncated is the pane's "too large to preview" state.
+            return new GitFileVersionResult(
+                GitHistoryStatus.Available,
+                new GitFileVersion(
+                    revision,
+                    gitPath,
+                    Content: null,
+                    IsBinary: false,
+                    IsTruncated: true,
+                    SizeBytes: blobSize),
+                Failure: null);
+        }
+
         GitProcessResult result = await _runner.RunAsync(
             new GitProcessRequest(
                 // `--no-optional-locks` keeps this inspection from taking the
@@ -209,6 +277,19 @@ public sealed class GitHistoryService
                 Failure: null);
         }
 
+        return VersionFailure(result, revision, gitPath);
+    }
+
+    /// <summary>
+    /// Maps a failed version read (size probe or blob read) onto the typed
+    /// version outcome: a path that is absent at that commit is a real answer,
+    /// every other failure stays inspectable.
+    /// </summary>
+    private static GitFileVersionResult VersionFailure(
+        GitProcessResult result,
+        string revision,
+        string gitPath)
+    {
         if (result.Status == GitProcessStatus.Failed && GitErrorSignatures.IsHeadPathMissing(result))
         {
             // The path simply does not exist at that commit: a real answer the
@@ -313,19 +394,28 @@ public sealed class GitHistoryService
         {
             // An unborn HEAD is a normal repository state ("no commits yet"),
             // not a failure the user must read: report an available, empty page
-            // and keep the read's window (spec 13 §20).
-            if (result.Status == GitProcessStatus.Failed && GitErrorSignatures.IsUnbornHead(result))
+            // and keep the read's window (spec 13 §20). The decision comes from
+            // the same exit-code probe SCM-05 uses, not from Git's stderr
+            // wording, so it survives a message-wording change.
+            if (result.Status == GitProcessStatus.Failed)
             {
-                return new GitHistoryResult(
-                    GitHistoryStatus.Available,
-                    new GitHistoryPage(
-                        Array.Empty<GitHistoryEntry>(),
-                        query.Skip,
-                        query.Limit,
-                        HasMore: false,
-                        NextSkip: null),
-                    Failure: null,
-                    Message: "This worktree has no commits on the current branch yet.");
+                GitProcessResult headProbe = await _runner.RunAsync(
+                    new GitProcessRequest(HeadProbeArguments, worktreeRoot),
+                    cancellationToken);
+
+                if (GitErrorSignatures.IsUnbornHeadProbe(headProbe))
+                {
+                    return new GitHistoryResult(
+                        GitHistoryStatus.Available,
+                        new GitHistoryPage(
+                            Array.Empty<GitHistoryEntry>(),
+                            query.Skip,
+                            query.Limit,
+                            HasMore: false,
+                            NextSkip: null),
+                        Failure: null,
+                        Message: "This worktree has no commits on the current branch yet.");
+                }
             }
 
             return new GitHistoryResult(MapFailure(result), null, result, result.ErrorMessage);
@@ -494,6 +584,10 @@ public sealed class GitHistoryService
     /// Projects one committed blob onto a typed version: the true size is kept,
     /// binary blobs never become text, and text beyond the served bound is
     /// clipped but explicitly flagged (spec 13 §9.3/§12/§25).
+    ///
+    /// The size probe normally keeps this clip unreachable; it stays as a
+    /// defensive invariant so the served bound can never be exceeded even if a
+    /// read ever disagreed with the probe.
     /// </summary>
     private static GitFileVersion BuildVersion(string commitId, string path, byte[] bytes)
     {
@@ -501,23 +595,152 @@ public sealed class GitHistoryService
         bool isTruncated = bytes.Length > MaxVersionBytes;
         string? content = isBinary
             ? null
-            : Encoding.UTF8.GetString(isTruncated ? bytes.AsSpan(0, MaxVersionBytes) : bytes);
+            : Encoding.UTF8.GetString(
+                bytes,
+                0,
+                isTruncated ? CompleteUtf8PrefixLength(bytes, MaxVersionBytes) : bytes.Length);
 
         return new GitFileVersion(commitId, path, content, isBinary, isTruncated, bytes.Length);
     }
 
+    /// <summary>
+    /// Clips a blob to <paramref name="max"/> bytes without cutting a multi-byte
+    /// UTF-8 sequence in half (which would end the served text on U+FFFD).
+    /// </summary>
+    private static int CompleteUtf8PrefixLength(byte[] bytes, int max)
+    {
+        int length = Math.Min(max, bytes.Length);
+
+        // Walk back over the trailing continuation bytes to the lead byte of
+        // the last sequence (a UTF-8 sequence is at most four bytes long).
+        int start = length;
+        int floor = Math.Max(0, length - 4);
+        while (start > floor && (bytes[start - 1] & 0xC0) == 0x80)
+        {
+            start--;
+        }
+
+        if (start == 0)
+        {
+            return length;
+        }
+
+        start--;
+        int expected = Utf8SequenceLength(bytes[start]);
+        return expected > 0 && start + expected > length ? start : length;
+    }
+
+    /// <summary>Length of the UTF-8 sequence introduced by one lead byte.</summary>
+    private static int Utf8SequenceLength(byte lead) =>
+        lead < 0x80 ? 1
+        : (lead & 0xE0) == 0xC0 ? 2
+        : (lead & 0xF0) == 0xE0 ? 3
+        : (lead & 0xF8) == 0xF0 ? 4
+        : 0;
+
+    /// <summary>
+    /// True when the blob must not be rendered as text.
+    ///
+    /// A NUL byte in the leading window is Git's own binary signal. Beyond that
+    /// signal, a blob that is not valid UTF-8 - or that is dense with control
+    /// characters - is binary too: a lenient decode would otherwise hand the
+    /// pane replacement-character garbage (spec 13 §9.3/§12).
+    /// </summary>
     private static bool LooksBinary(byte[] bytes)
     {
         int inspected = Math.Min(bytes.Length, BinarySniffBytes);
+        if (inspected == 0)
+        {
+            return false;
+        }
+
+        int controlCount = 0;
         for (int index = 0; index < inspected; index++)
         {
-            if (bytes[index] == 0)
+            byte value = bytes[index];
+            if (value == 0)
             {
                 return true;
             }
+
+            bool allowedControl = value is 0x09 or 0x0A or 0x0C or 0x0D;
+            if ((value < 0x20 && !allowedControl) || value == 0x7F)
+            {
+                controlCount++;
+            }
         }
 
-        return false;
+        // No text document is 10% control characters; a byte blob usually is.
+        if (controlCount * 10 > inspected)
+        {
+            return true;
+        }
+
+        return !IsUtf8Text(bytes, inspected);
+    }
+
+    /// <summary>
+    /// Validates the sniff window as UTF-8. A multi-byte sequence cut by the end
+    /// of the window is acceptable only when the blob continues past it; an
+    /// incomplete sequence in a complete blob is binary.
+    /// </summary>
+    private static bool IsUtf8Text(byte[] bytes, int count)
+    {
+        int index = 0;
+        while (index < count)
+        {
+            byte lead = bytes[index];
+            if (lead < 0x80)
+            {
+                index++;
+                continue;
+            }
+
+            int continuationBytes = Utf8SequenceLength(lead) - 1;
+            if (continuationBytes < 1)
+            {
+                // A stray continuation byte or an invalid lead byte.
+                return false;
+            }
+
+            if (index + continuationBytes >= count)
+            {
+                for (int tail = index + 1; tail < count; tail++)
+                {
+                    if ((bytes[tail] & 0xC0) != 0x80)
+                    {
+                        return false;
+                    }
+                }
+
+                return count < bytes.Length;
+            }
+
+            int codePoint = lead & (0x7F >> continuationBytes);
+            for (int offset = 1; offset <= continuationBytes; offset++)
+            {
+                byte next = bytes[index + offset];
+                if ((next & 0xC0) != 0x80)
+                {
+                    return false;
+                }
+
+                codePoint = (codePoint << 6) | (next & 0x3F);
+            }
+
+            int minimum = continuationBytes == 1 ? 0x80 : continuationBytes == 2 ? 0x800 : 0x10000;
+            if (codePoint < minimum
+                || codePoint > 0x10FFFF
+                || (codePoint >= 0xD800 && codePoint <= 0xDFFF))
+            {
+                // Overlong encodings, out-of-range code points and surrogates.
+                return false;
+            }
+
+            index += continuationBytes + 1;
+        }
+
+        return true;
     }
 
     /// <summary>Maps a failed Git invocation onto the history status vocabulary.</summary>

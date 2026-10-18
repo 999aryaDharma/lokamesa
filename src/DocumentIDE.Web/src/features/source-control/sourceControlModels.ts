@@ -227,8 +227,9 @@ export interface SourceControlHistoryResult {
 
 /**
  * SCM-08 — one document version read back from a commit (spec 13 §12).
- * `content` is null for a binary blob; a clipped text version is flagged and
- * keeps its true `sizeBytes`.
+ * `content` is null for a binary blob, and also for a blob over the served
+ * bound: such a version is flagged `isTruncated` and is never read, so the pane
+ * shows its true `sizeBytes` without a text preview.
  */
 export interface SourceControlFileVersionInfo {
   commitId: string;

@@ -125,19 +125,22 @@ public sealed record GitHistoryResult(
 /// <param name="Path">Worktree-relative path as Git recorded it.</param>
 /// <param name="Content">
 /// Text content, or <c>null</c> for a binary blob (a byte blob is never
-/// presented as text) — also truncated to the service's bound when
-/// <see cref="IsTruncated"/> is true.
+/// presented as text) — also <c>null</c> when <see cref="IsTruncated"/> is true,
+/// because an over-the-bound blob is never read at all.
 /// </param>
 /// <param name="IsBinary">True when the blob is not text and <see cref="Content"/> is <c>null</c>.</param>
-/// <param name="IsTruncated">True when the blob was larger than the served bound and <see cref="Content"/> was clipped.</param>
-/// <param name="SizeBytes">The blob's true size, whether or not the content was clipped.</param>
+/// <param name="IsTruncated">
+/// True when the blob is larger than the served bound. Its content is not
+/// served, and the size probe means the blob itself was never read.
+/// </param>
+/// <param name="SizeBytes">The blob's true size, whether or not its content was served.</param>
 public sealed record GitFileVersion(
     string CommitId,
     string Path,
     string? Content,
     bool IsBinary,
     bool IsTruncated,
-    int SizeBytes);
+    long SizeBytes);
 
 /// <summary>
 /// SCM-08 — typed result of one document-version inspection

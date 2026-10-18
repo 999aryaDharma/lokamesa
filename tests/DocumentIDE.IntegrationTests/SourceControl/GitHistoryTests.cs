@@ -392,27 +392,167 @@ public sealed class GitHistoryTests
     }
 
     /// <summary>
-    /// A document larger than the inspection bound is truncated with an
-    /// explicit flag and its true size, so one click cannot pull an unbounded
-    /// payload into the pane (spec 13 §25).
+    /// Binary detection is not NUL-only: a NUL-free blob made of control bytes is
+    /// binary too, so the pane never receives a garbage text decode of a byte
+    /// blob that Git would happily store without a single NUL (spec 13 §9.3/§12).
     /// </summary>
     [Fact]
-    public async Task LargeDocumentVersionIsTruncatedAndReportsItsTrueSize()
+    public async Task ControlCharacterBlobWithoutNulByteIsReportedAsBinary()
     {
         using TestGitRepository repo = CreateRepositoryWithKnownHistory();
-        int size = GitHistoryService.MaxVersionBytes + 4096;
+        byte[] payload = new byte[512];
+        for (int index = 0; index < payload.Length; index++)
+        {
+            // 0x01..0x08 are C0 controls and contain no NUL byte.
+            payload[index] = (byte)(0x01 + (index % 8));
+        }
+
+        File.WriteAllBytes(Path.Combine(repo.RootPath, "docs", "opaque.bin"), payload);
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "-A"));
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "commit", "-qm", "adds an opaque blob"));
+
+        (GitHistoryService service, _) = CreateService();
+        GitFileVersionResult result = await service.GetFileVersionAsync(repo.RootPath, "docs/opaque.bin", Head(repo));
+
+        Assert.Equal(GitHistoryStatus.Available, result.Status);
+        GitFileVersion version = Assert.IsType<GitFileVersion>(result.Version);
+        Assert.True(version.IsBinary);
+        Assert.Null(version.Content);
+        Assert.Equal(payload.Length, version.SizeBytes);
+    }
+
+    /// <summary>
+    /// A NUL-free blob that is not valid UTF-8 is binary as well: invalid byte
+    /// sequences must not be replaced with U+FFFD and shown as document text
+    /// (spec 13 §9.3/§12).
+    /// </summary>
+    [Fact]
+    public async Task InvalidUtf8BlobWithoutNulByteIsReportedAsBinary()
+    {
+        using TestGitRepository repo = CreateRepositoryWithKnownHistory();
+        byte[] payload = new byte[256];
+        for (int index = 0; index < payload.Length; index++)
+        {
+            // A stray continuation byte: invalid UTF-8, no NUL and no control
+            // character, so only a UTF-8 validity check can classify it.
+            payload[index] = 0x80;
+        }
+
+        File.WriteAllBytes(Path.Combine(repo.RootPath, "docs", "invalid-utf8.bin"), payload);
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "-A"));
+        Assert.Equal(
+            0, TestGitRepository.RunGit(repo.RootPath, "commit", "-qm", "adds an invalid utf8 blob"));
+
+        (GitHistoryService service, _) = CreateService();
+        GitFileVersionResult result =
+            await service.GetFileVersionAsync(repo.RootPath, "docs/invalid-utf8.bin", Head(repo));
+
+        Assert.Equal(GitHistoryStatus.Available, result.Status);
+        GitFileVersion version = Assert.IsType<GitFileVersion>(result.Version);
+        Assert.True(version.IsBinary);
+        Assert.Null(version.Content);
+    }
+
+    /// <summary>
+    /// Non-ASCII text must stay text: the extra binary checks may not misclassify
+    /// a legitimate UTF-8 document (spec 13 §9.3/§12).
+    /// </summary>
+    [Fact]
+    public async Task NonAsciiUtf8DocumentStaysText()
+    {
+        using TestGitRepository repo = CreateRepositoryWithKnownHistory();
+        const string content = "caf\u00e9 \u2014 na\u00efve r\u00e9sum\u00e9 \u2713";
+        repo.WriteFile("docs/unicode.md", content);
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "-A"));
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "commit", "-qm", "adds a unicode document"));
+
+        (GitHistoryService service, _) = CreateService();
+        GitFileVersionResult result =
+            await service.GetFileVersionAsync(repo.RootPath, "docs/unicode.md", Head(repo));
+
+        Assert.Equal(GitHistoryStatus.Available, result.Status);
+        GitFileVersion version = Assert.IsType<GitFileVersion>(result.Version);
+        Assert.False(version.IsBinary);
+        Assert.Equal(content, version.Content);
+    }
+
+    /// <summary>
+    /// A document that fits the inspection bound is read in full: the size probe
+    /// ran first and the content arrives intact (spec 13 §9.3/§12).
+    /// </summary>
+    [Fact]
+    public async Task SmallDocumentVersionIsReadInFullAfterTheSizeProbe()
+    {
+        using TestGitRepository repo = CreateRepositoryWithKnownHistory();
+        int size = 1024;
+        string content = new string('b', size);
+        repo.WriteFile("docs/small.md", content);
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "-A"));
+        Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "commit", "-qm", "adds a small document"));
+        string commit = Head(repo);
+
+        var recording = new RecordingGitProcessRunner(
+            new GitProcessRunner(GitProcessRunnerOptions.Default, new GitWorktreeMutationQueue()));
+        (GitHistoryService service, _) = CreateService(recording);
+
+        GitFileVersionResult result = await service.GetFileVersionAsync(repo.RootPath, "docs/small.md", commit);
+
+        Assert.Equal(GitHistoryStatus.Available, result.Status);
+        GitFileVersion version = Assert.IsType<GitFileVersion>(result.Version);
+        Assert.False(version.IsTruncated);
+        Assert.False(version.IsBinary);
+        Assert.Equal(content, version.Content);
+        Assert.Equal(size, version.SizeBytes);
+
+        // The bounded read is a size probe followed by the byte-capturing show.
+        Assert.Contains(
+            recording.Invocations,
+            arguments => arguments.Contains("cat-file")
+                && arguments.Contains("-s")
+                && arguments[^1] == $"{commit}:docs/small.md");
+        Assert.Contains(
+            recording.Invocations,
+            arguments => arguments.Contains("show") && arguments[^1] == $"{commit}:docs/small.md");
+    }
+
+    /// <summary>
+    /// A document larger than the inspection bound is reported as truncated with
+    /// its true size and <c>Content = null</c>; the blob itself is never read.
+    /// The size is probed first (<c>git cat-file -s</c>), so a multi-gigabyte
+    /// committed blob is never materialised in memory - not even transiently -
+    /// and cannot overflow the byte-array limit (spec 13 §25).
+    /// </summary>
+    [Fact]
+    public async Task LargeDocumentVersionIsTruncatedWithoutReadingTheBlob()
+    {
+        using TestGitRepository repo = CreateRepositoryWithKnownHistory();
+        int size = GitHistoryService.MaxVersionBytes + 64;
         repo.WriteFile("docs/large.md", new string('a', size));
         Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "add", "-A"));
         Assert.Equal(0, TestGitRepository.RunGit(repo.RootPath, "commit", "-qm", "adds a large document"));
+        string commit = Head(repo);
 
-        (GitHistoryService service, _) = CreateService();
-        GitFileVersionResult result = await service.GetFileVersionAsync(repo.RootPath, "docs/large.md", Head(repo));
+        var recording = new RecordingGitProcessRunner(
+            new GitProcessRunner(GitProcessRunnerOptions.Default, new GitWorktreeMutationQueue()));
+        (GitHistoryService service, _) = CreateService(recording);
 
+        GitFileVersionResult result = await service.GetFileVersionAsync(repo.RootPath, "docs/large.md", commit);
+
+        Assert.Equal(GitHistoryStatus.Available, result.Status);
         GitFileVersion version = Assert.IsType<GitFileVersion>(result.Version);
         Assert.True(version.IsTruncated);
         Assert.False(version.IsBinary);
+        Assert.Null(version.Content);
         Assert.Equal(size, version.SizeBytes);
-        Assert.Equal(GitHistoryService.MaxVersionBytes, version.Content!.Length);
+
+        // The size probe ran and the whole-blob `show` never did: the bound is
+        // enforced before the read, not by clipping an already-materialised blob.
+        Assert.Contains(
+            recording.Invocations,
+            arguments => arguments.Contains("cat-file")
+                && arguments.Contains("-s")
+                && arguments[^1] == $"{commit}:docs/large.md");
+        Assert.DoesNotContain(recording.Invocations, arguments => arguments.Contains("show"));
     }
 
     /// <summary>
@@ -480,7 +620,9 @@ public sealed class GitHistoryTests
     public async Task UnbornHeadRepositoryReportsAnEmptyHistoryPage()
     {
         using TestGitRepository repo = CreateUnbornRepository();
-        (GitHistoryService service, _) = CreateService();
+        var recording = new RecordingGitProcessRunner(
+            new GitProcessRunner(GitProcessRunnerOptions.Default, new GitWorktreeMutationQueue()));
+        (GitHistoryService service, _) = CreateService(recording);
 
         GitHistoryResult result = await service.GetHistoryAsync(repo.RootPath);
 
@@ -491,6 +633,20 @@ public sealed class GitHistoryTests
         Assert.Null(page.NextSkip);
         Assert.Equal(0, page.Skip);
         Assert.Equal(GitHistoryQuery.DefaultLimit, page.Limit);
+
+        // The decision is an exit-code probe (`rev-parse --verify --quiet HEAD`,
+        // exit 1 with empty stderr - the same probe SCM-05 uses), run after the
+        // failed log, not a scrape of Git's English stderr wording.
+        int logIndex = recording.Invocations.FindIndex(arguments => arguments.Contains("log"));
+        int probeIndex = recording.Invocations.FindLastIndex(
+            arguments => arguments.Contains("rev-parse")
+                && arguments.Contains("--verify")
+                && arguments.Contains("--quiet")
+                && arguments.Contains("HEAD"));
+        Assert.True(logIndex >= 0, "the history read must run git log");
+        Assert.True(
+            probeIndex > logIndex,
+            "the unborn-HEAD decision must come from a HEAD probe run after the failed log");
 
         // The repository really is a Git worktree whose log fails: the empty
         // page is a translation of Git's answer, not a silent fallback.

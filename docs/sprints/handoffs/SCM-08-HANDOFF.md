@@ -2,7 +2,7 @@
 
 **Status:** DONE
 **Branch:** `feat/git-commit-history-file-history`
-**Commits:** `94dcc15`, `a5f104f`, `4e1c98b`, plus this handoff commit at the tip — see `git log --oneline f2faa1b..HEAD` (base `f2faa1b`)
+**Commits:** `94dcc15`, `a5f104f`, `4e1c98b`, the handoff commit, plus the post-review fix-up commit at the tip — see `git log --oneline f2faa1b..HEAD` (base `f2faa1b`)
 
 ## What changed
 
@@ -43,23 +43,32 @@
   `GitFileVersionResult`): `Available` (possibly an empty page) / `NoRepository` /
   `GitUnavailable` / `InvalidRequest` / `PathRejected` / `NotFound` / `Failed`, never a
   silent fallback or an exception leaking out. `GitFailureClassificationsStayTypedAndInspectable`
-  pins all ten `GitProcessErrorKind` values through the passthrough, and
+  pins ten of the fourteen `GitProcessErrorKind` members through the passthrough — the ten with a
+  read-only analogue (`None` is the success default, `GitNotInstalled`/`GitRepositoryNotFound` are
+  pinned by the discovery theory, and `GitPullNotFastForward` has no read analogue) — and
   `GitDiscoveryClassificationsMapOntoTheirTypedHistoryOutcome` pins
   `GitNotInstalled → GitUnavailable` and `GitRepositoryNotFound → NoRepository`.
 - **Unborn HEAD is a normal state, not a failure** (spec 13 §20). A fresh worktree with no
-  commits makes `git log` fail with "does not have any commits yet"; `GitErrorSignatures.IsUnbornHead`
-  (SCM-08 addition) turns this into an `Available` **empty** page with the read's window
-  echoed (`UnbornHeadRepositoryReportsAnEmptyHistoryPage`, `UnbornHeadFileHistoryIsAnEmptyPageNotAFailure`).
-- **Version inspection is bounded and never lossy** (spec 13 §9.3/§12/§25).
+  commits makes `git log` fail; the service then runs the same exit-code probe SCM-05 uses
+  (`rev-parse --verify --quiet HEAD`: exit 1 with empty stderr), and
+  `GitErrorSignatures.IsUnbornHeadProbe` (SCM-08 addition) turns it into an `Available` **empty**
+  page with the read's window echoed (`UnbornHeadRepositoryReportsAnEmptyHistoryPage`,
+  `UnbornHeadFileHistoryIsAnEmptyPageNotAFailure`). The decision no longer scrapes Git's English
+  stderr wording, so a Git message change cannot turn a normal state into a typed `Failed`.
+- **Version inspection is bounded before the read** (spec 13 §9.3/§12/§25).
   `GetFileVersionAsync` validates the commit id first — only hex-only text of length 4..64 is
   accepted (`IsCommitIdentifier`), so `HEAD`, `main`, `--help`, `abc` and `zzzzzzzz` are typed
   `InvalidRequest`/400 rejections and never reach Git. Two `[Theory]` cases
   (`DocumentVersionRejectsNonCommitIdentifiersWithoutRunningGit`) plus
-  `DocumentVersionAbsentAtTheSelectedCommitIsTypedNotFound` pin it. The blob read uses
-  `CaptureBinaryOutput = true`, so a DOCX never passes through a lossy text decode; a NUL in
-  the first 8000 bytes marks the blob binary (`Content = null`), and text beyond
-  `MaxVersionBytes` (256 KiB, public const) is clipped but flagged (`IsTruncated`) while
-  `SizeBytes` always reports the **true** blob size.
+  `DocumentVersionAbsentAtTheSelectedCommitIsTypedNotFound` pin it. The service then probes the
+  committed object's size with `git cat-file -s <commit>:<path>` and only runs the byte-capturing
+  `git show` (`CaptureBinaryOutput = true`, so a DOCX never passes through a lossy text decode)
+  when the size fits `MaxVersionBytes` (256 KiB, public const). A larger blob returns
+  `IsTruncated = true`, `Content = null` and its true `SizeBytes`, and **no blob bytes are read at
+  all** — a multi-gigabyte commit can neither exhaust memory nor trip the `byte[]` limit
+  (`LargeDocumentVersionIsTruncatedWithoutReadingTheBlob`). Within the bound, a NUL byte — or a
+  NUL-free blob that is not valid UTF-8 or is dense with control bytes — marks the blob binary
+  (`Content = null`), so the pane never receives a garbage text decode.
 - API (`SourceControlController`, same privileged localhost guard as SCM-03/SCM-06/SCM-07):
   `GET api/source-control/history`, `GET file-history`, `GET file-version`.
   Input rejection (`InvalidRequest`/`PathRejected`) ⇒ HTTP 400 `{errorCode, error}` with
@@ -82,7 +91,7 @@ Planned (sprint doc) → delivered:
 
 - `src/DocumentIDE.Infrastructure/SourceControl/GitHistoryService.cs` — delivered as planned (new; history, file history, pagination, version read, `MaxVersionBytes`, `IsCommitIdentifier`, `BuildVersion`, `LooksBinary`).
 - `src/DocumentIDE.Web/src/features/source-control/GitHistoryPanel.tsx` — delivered as planned (new).
-- `tests/DocumentIDE.IntegrationTests/SourceControl/GitHistoryTests.cs` — delivered as planned (new; two classes: `GitHistoryTests` **46** tests + `GitHistoryApiTests` **14** test cases = **60**).
+- `tests/DocumentIDE.IntegrationTests/SourceControl/GitHistoryTests.cs` — delivered as planned (new; two classes: `GitHistoryTests` **50** tests + `GitHistoryApiTests` **14** test cases = **64**; the fix-up round added four service tests).
 
 Additional files needed to satisfy the sprint (mapping recorded):
 
@@ -92,7 +101,7 @@ Additional files needed to satisfy the sprint (mapping recorded):
   Infrastructure + API. Mirrors the SCM-02 `GitStatusResult` / SCM-06 `GitStageResult` /
   SCM-07 `GitCommitResult` Core placement.
 - `src/DocumentIDE.Infrastructure/SourceControl/GitErrorSignatures.cs` — **one appended
-  member** (`IsUnbornHead`); no existing signature touched.
+  member** (`IsUnbornHeadProbe`); no existing signature touched.
 - `src/DocumentIDE.Api/Controllers/SourceControlController.cs` — extended in a bounded
   region: 5 DTOs, 3 `[HttpGet]` routes, `ToHistoryResponse`/`ToFileVersionResponse`/
   `ToHistoryCommit` mapping helpers, plus the `GitHistoryService` ctor parameter/field. No
@@ -103,7 +112,7 @@ Additional files needed to satisfy the sprint (mapping recorded):
   No other line in the file was touched.
 - `src/DocumentIDE.Web/src/features/source-control/sourceControlModels.ts` — `GitHistoryStatus`
   union, `SourceControlHistoryCommit`/`Page`/`Result`, `SourceControlFileVersionInfo`/`Result`.
-- `src/DocumentIDE.Web/src/features/source-control/GitHistoryPanel.test.tsx` — 8 colocated
+- `src/DocumentIDE.Web/src/features/source-control/GitHistoryPanel.test.tsx` - 9 colocated
   component tests (CAN-05 batch-B ruling; the plan's `tests/frontend/**` path is stale —
   every prior feature component colocates its test).
 
@@ -140,7 +149,7 @@ Backend cycles were RED-first; the mandated first behavior was
   `DecodeText` helper.
 - Cycle 5 (unborn HEAD): RED — 2 failures (`Expected: Available / Actual: Failed`) —
   `UnbornHeadRepositoryReportsAnEmptyHistoryPage`, `UnbornHeadFileHistoryIsAnEmptyPageNotAFailure`
-  → GREEN via `GitErrorSignatures.IsUnbornHead` (29 tests).
+  → GREEN via `GitErrorSignatures.IsUnbornHeadProbe` (29 tests).
 - Cycle 6 (read-only discipline + failure vocabulary + hostile paths): RED introduced the
   read-only/classification/pathspec assertions → GREEN with 10-kind theory,
   discovery-classification theory, worktree-disappearance, literal/Unicode/space pathspecs
@@ -166,35 +175,123 @@ Honest notes (recorded, not hidden):
 
 ## Verification
 
-- `dotnet build DocumentIDE.sln` → **Build succeeded, 0 errors** (161 warnings, all pre-existing
-  style/analyzer/NU1902 warnings; no new warning from the nine SCM-08 files).
+- `dotnet build DocumentIDE.sln` → **Build succeeded, 0 errors** (warning output is the pre-existing
+  style/analyzer/NU1603/NU1902/NU1903 set; no new warning from the SCM-08 files).
 - `dotnet test tests/DocumentIDE.IntegrationTests --filter "FullyQualifiedName~GitHistory"` →
-  **60 passed / 0 failed / 0 skipped** (46 service + 14 API; the sprint-filter evidence).
-- `dotnet test tests/DocumentIDE.IntegrationTests` (full) → **846 passed / 3 failed / 0 skipped**
-  (849 total). Two failures are the documented REL-03-sanctioned release-artifact checks
-  (`ScriptTests.Release_Build_Embeds_Production_Web_Assets` — missing
-  `artifacts/desktop/DocumentIDE.Desktop.exe`; `Release.InstallerTests.Build_Release_Script_Packages_Wxs_Installer_And_ShareHost`
+  **64 passed / 0 failed / 0 skipped** (50 service + 14 API; the sprint-filter evidence, fix-up
+  round 1 re-run).
+- `dotnet test tests/DocumentIDE.IntegrationTests` (full) → **851 passed / 2 failed / 0 skipped**
+  (853 total, fix-up round 1 re-run). Both failures are the documented REL-03-sanctioned
+  release-artifact checks (`ScriptTests.Release_Build_Embeds_Production_Web_Assets` — missing
+  `artifacts/desktop/DocumentIDE.Desktop.exe`;
+  `Release.InstallerTests.Build_Release_Script_Packages_Wxs_Installer_And_ShareHost`
   — missing `artifacts/installer/DocumentIDE-Setup.msi`): `artifacts/` is gitignored, absent in
   a fresh worktree, and this diff touches neither `scripts/` nor packaging. The same two
-  failures are recorded in the SCM-01…SCM-07 handoffs. The **third failure is nondeterministic**:
-  run 1 failed `Batch.BatchPreviewTests.Preview_ApiNonFolderScopeNormalizesInapplicableExclusionFields`
-  and run 2 failed `Pdf.PdfMergeMemoryTests.Merge_PeakMemory_DoesNotScaleLinearlyWithTotalSourceBytes`
-  (a wall-clock/memory-threshold assertion); each **passes in isolation**
-  (`--filter "FullyQualifiedName~Preview_ApiNonFolderScopeNormalizesInapplicableExclusionFields"`
-  → 1 passed). Both are load-sensitive environmental tests unrelated to SCM-08 (neither the
-  Batch nor the Pdf subsystem is touched by this diff).
+  failures are recorded in the SCM-01…SCM-07 handoffs. The known nondeterministic
+  `BatchRename`/load-sensitive environmental flake did **not** reproduce in this run.
 - `dotnet test tests/DocumentIDE.Core.Tests` → **459 passed / 0 failed / 0 skipped** (Core touched
   via the new `GitHistoryResult.cs`).
 - `dotnet test tests/DocumentIDE.SecurityTests` → **91 passed / 0 failed / 0 skipped**.
 - `dotnet test tests/DocumentIDE.ArchitectureTests` → **12 passed / 0 failed / 0 skipped**.
-- `npx vitest run` (`src/DocumentIDE.Web`) → **54 files / 382 tests passed, 0 failed**
-  (SCM-08 `GitHistoryPanel.test.tsx` → 8 tests).
+- `npx vitest run` (`src/DocumentIDE.Web`) → **54 files / 383 tests passed, 0 failed**
+  (SCM-08 `GitHistoryPanel.test.tsx` → 9 tests).
 - `npx tsc -b` (`src/DocumentIDE.Web`) → exit 0.
 - `npx oxlint` (`src/DocumentIDE.Web`) → exit 0, **23 warnings / 0 errors**. Two of the
   warnings are the `react(only-export-components)` note for co-locating the exported
   `fetchHistory`/`fetchFileVersion` helpers with the component — the established convention
   shared by `CommitBox.tsx`, `PdfActions.tsx`, `ShareManager.tsx`, `MetadataFilterChips.tsx`.
   No new warning class was introduced.
+
+## Fix-up round 1 (post-review)
+
+An independent review approved SCM-08 with notes and found one merge-blocking MAJOR defect. The
+fix is a single follow-up commit on the same branch (`feat/git-commit-history-file-history`) on
+top of `7fd9e9e`; no rebase, no new branch.
+
+### MAJOR — the "bounded" version read materialised the whole blob
+
+**Finding.** `GitHistoryService.GetFileVersionAsync` ran `git show <commit>:<path>` with
+`CaptureBinaryOutput = true`, so `GitProcessRunner.ReadAllBytesAsync` copied the **entire** blob
+into a `MemoryStream` and then `ToArray()` before `BuildVersion` clipped it to `MaxVersionBytes`
+(256 KiB). `IsTruncated`/`SizeBytes` therefore bounded the *returned value*, not the *read*: a
+committed multi-gigabyte blob was fully materialised (twice: buffer + `ToArray()`), and past the
+`byte[]` limit `ToArray()` threw `OutOfMemoryException`, which `RunCoreAsync` does not catch (it
+catches only `Win32Exception`). That broke `IGitProcessRunner`'s contract of never throwing for
+operational Git failures.
+
+**Fix.**
+- Probe the object size first with `git cat-file -s <revision>:<path>` — read-only, already in
+  SCM-01's `ReadOnlySubcommands`, so it never takes the mutation queue.
+- When the size exceeds `MaxVersionBytes`, return `Available` with `IsTruncated = true`,
+  `Content = null`, `IsBinary = false` and the true size; the `show` read is **never executed**.
+- Only a blob within the bound is read (byte-captured, as before).
+- `GitFileVersion.SizeBytes` (and the API DTO) is now `long`, so a >2 GiB blob is reported
+  truthfully instead of overflowing an `int` size parse.
+- A successful probe with an unparseable size is a typed `Failed`; nothing is read.
+- `BuildVersion` still clips defensively and now backs off to the last complete UTF-8 code point
+  (no trailing U+FFFD). With the probe gating every read that clip is unreachable through normal
+  Git reads; it is kept as a belt-and-braces invariant.
+- The panel renders `IsTruncated && Content === null` as "Document is too large to preview
+  (N bytes)." instead of an empty `<pre>`.
+
+**RED evidence (before the fix; the exact run output).**
+
+- Backend, `--filter` on the six touched cases → `Failed: 5, Passed: 1, Total: 6`:
+  - `LargeDocumentVersionIsTruncatedWithoutReadingTheBlob` —
+    `Assert.Null() Failure: Value is not null / Expected: null / Actual: "aaaa…"` (the clipped
+    content still arrived).
+  - `SmallDocumentVersionIsReadInFullAfterTheSizeProbe` —
+    `Assert.Contains() Failure: Filter not matched in collection / Collection:
+    [["rev-parse", …], …, ["--no-optional-locks", "show", "<sha>:docs/small.md"]]` (no
+    `cat-file -s` probe ran).
+  - `ControlCharacterBlobWithoutNulByteIsReportedAsBinary` and
+    `InvalidUtf8BlobWithoutNulByteIsReportedAsBinary` — `Assert.True() Failure / Expected: True /
+    Actual: False` (the NUL-only heuristic called them text).
+  - `UnbornHeadRepositoryReportsAnEmptyHistoryPage` — `the unborn-HEAD decision must come from a
+    HEAD probe run after the failed log` (the stderr matcher was used).
+  - `NonAsciiUtf8DocumentStaysText` passed on the old code (guard against over-classification).
+- Frontend, `npx vitest run src/features/source-control/GitHistoryPanel.test.tsx` →
+  `Tests 2 failed | 7 passed (9)`:
+  - scope note: `Expected element to have text content: /renames are not followed/i /
+    Received: File history for docs/a.md`.
+  - over-the-bound version: `Expected … /too large to preview/i / Received: docs/large.md at
+    1111111262208 bytes — truncated preview (the file is larger)`.
+
+**GREEN after the fix.** The same backend filter → `6 passed`; the whole
+`FullyQualifiedName~GitHistory` filter → **64 passed**; the frontend file → **9 passed**; the
+full suites and build are the numbers in "Verification" above. The read-only invariant
+(`HistoryAndVersionReadsAreStrictlyReadOnly`) still passes: `cat-file -s` and `show` are both in
+SCM-01's read-only vocabulary and no read takes the mutation queue.
+
+### Minors fixed in the same round
+
+1. **NUL-free binary detection.** `LooksBinary` now also rejects a sniff window that is not valid
+   UTF-8 and one where control characters exceed 10% (TAB/LF/FF/CR excluded) — pinned by
+   `ControlCharacterBlobWithoutNulByteIsReportedAsBinary`,
+   `InvalidUtf8BlobWithoutNulByteIsReportedAsBinary` and the false-positive guard
+   `NonAsciiUtf8DocumentStaysText`.
+2. **Rename disclosure.** The panel's document-scope note now says "renames are not followed, so
+   history before a move may not appear", asserted by the scope test.
+3. **Unborn HEAD** now uses the SCM-05 exit-code probe (`rev-parse --verify --quiet HEAD` → exit 1
+   with empty stderr) via `GitErrorSignatures.IsUnbornHeadProbe`, run after the failed `log`;
+   the stderr-substring matcher was removed. Pinned by the probe-ordering assertion in
+   `UnbornHeadRepositoryReportsAnEmptyHistoryPage`.
+4. **UTF-8 truncation back-off** implemented in `CompleteUtf8PrefixLength` (defensive, see above).
+
+### Deliberately not changed (recorded, out of scope)
+
+- **`repositoryPath` on the history routes is caller-named** (`?path=C:\other-repo` reads that
+  repository's history). This is identical to the pre-existing SCM-03 `context`/`status` routes,
+  is **not** a traversal escape (the *document* path is containment-checked), and is **not** a
+  regression. Recorded as an accepted, pre-existing consistency point for a future sprint; route
+  validation was not changed here.
+- **`NextSkip` overflow near `int.MaxValue`** — not reachable through the bounded page window in
+  this sprint; known and deliberate.
+- **`--no-optional-locks` is present on the version reads but not on every `log`/`rev-parse`
+  read** — cosmetic consistency nit only; those commands never take the index lock either.
+- **`IsTruncated` + `Content = null` is also the binary shape** — now documented as the
+  "too large to preview" state; `IsBinary` stays `false` because no bytes were sniffed. A richer
+  discriminated version state is a contract change for a later sprint.
 
 ## Acceptance criteria
 
@@ -248,7 +345,7 @@ Failure / edge cases from the sprint doc:
 - One extra Core file beyond the planned list (`GitHistoryResult.cs`); it is the typed public
   contract consumed by Infrastructure/API and follows the SCM-02/SCM-06/SCM-07 Core placement
   precedent. No lane file touched; no higher-level requirement weakened.
-- `GitErrorSignatures.cs` (SCM-01/06 shared helper) gained one member (`IsUnbornHead`). It is an
+- `GitErrorSignatures.cs` (SCM-01/06 shared helper) gained one member (`IsUnbornHeadProbe`). It is an
   append-only addition in the same shape as the existing `IsUnmergedIndexPath`; no existing
   signature changed.
 - The API test class `GitHistoryApiTests` lives in the same `GitHistoryTests.cs` file. The plan
@@ -263,12 +360,15 @@ Failure / edge cases from the sprint doc:
 ## Risks discovered
 
 - **Bounded version read (consumer-relevant):** `GetFileVersionAsync` serves at most
-  `MaxVersionBytes` (256 KiB) of content. A larger **text** blob returns `IsTruncated = true` with
-  clipped content and the true `SizeBytes`; a consumer must honor `IsTruncated` rather than treat
-  `Content` as complete.
-- **Binary detection is a heuristic** (`NUL` in the first 8000 bytes, mirroring Git). A text file
-  that legitimately contains a NUL byte in that window is reported as binary (`Content = null`) —
-  never rendered as text, which is the safer failure direction.
+  `MaxVersionBytes` (256 KiB) of content and enforces the bound **before** reading: it probes the
+  object size (`git cat-file -s`) and a larger blob returns `IsTruncated = true` with
+  `Content = null` and the true `SizeBytes` (a `long`, so a multi-gigabyte blob is reported
+  exactly). A consumer must treat `IsTruncated` as "too large to preview", not as empty content.
+- **Binary detection is a heuristic**, now with three signals over the first 8000 bytes: a NUL
+  byte (Git's own signal), a window that is not valid UTF-8, and a window dense with control
+  characters (>10% excluding TAB/LF/FF/CR). A text file that legitimately contains a NUL byte in
+  that window is reported as binary (`Content = null`) — never rendered as text, which is the
+  safer failure direction.
 - **`FileCount` for file history is pathspec-limited**, i.e. Git's own count of that commit's files
   matching the requested path. A consumer must not read it as "files in the commit" when the read
   was file-scoped.
@@ -278,10 +378,15 @@ Failure / edge cases from the sprint doc:
   expression).
 - **`%cI` committer time is a string**, deliberately never localized server-side; the panel calls
   `toLocaleString()` only for display and falls back to the raw value if parsing fails.
-- **Unborn-HEAD handling is text-based** (`DoesNotHaveAnyCommitsYet` marker under `LC_ALL=C`). A
-  locale override would degrade it to a typed `Failed` — never to a silent success.
+- **Unborn-HEAD handling is an exit-code probe** (`rev-parse --verify --quiet HEAD`: exit 1 with
+  empty stderr), the same probe SCM-05 uses. It does not depend on Git's locale (the runner pins
+  `LC_ALL=C` in `GitProcessRunnerOptions.ProtectedEnvironment`, which a request cannot override),
+  but it is not invariant to a change in the probe's own exit-code contract. The remaining
+  stderr-signature matches (`IsHeadPathMissing` and friends) are wording-based: a Git message
+  change would degrade those cases to a typed `Failed`, never to a silent success.
 - **No rename following** in file history: a document moved/renamed shows history only under its
-  current path. `--follow` was intentionally omitted (spec 13 §12 semantics + determinism).
+  current path. `--follow` was intentionally omitted (spec 13 §12 semantics + determinism), and
+  the panel's scope note now discloses that limitation to the user.
 - **The panel is not wired into `App.tsx`**; it is a self-contained lane-C-owned insertion point.
   Until wired, it exposes no navigation surface — this matches the sprint's "no branch-management
   UI" constraint.

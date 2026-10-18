@@ -198,8 +198,8 @@ public sealed record SourceControlHistoryResponse(
 
 /// <summary>
 /// SCM-08 — one document version read back from a commit (spec 13 §12).
-/// <c>Content</c> is <c>null</c> for a binary blob; a clipped text version is
-/// flagged with its true size.
+/// <c>Content</c> is <c>null</c> for a binary blob or for a blob larger than the
+/// served bound (which is never read); <c>SizeBytes</c> is always the true size.
 /// </summary>
 public sealed record SourceControlFileVersionInfoResponse(
     string CommitId,
@@ -207,7 +207,7 @@ public sealed record SourceControlFileVersionInfoResponse(
     string? Content,
     bool IsBinary,
     bool IsTruncated,
-    int SizeBytes);
+    long SizeBytes);
 
 /// <summary>SCM-08 — typed document-version payload (spec 13 §12/§20).</summary>
 public sealed record SourceControlFileVersionResponse(
