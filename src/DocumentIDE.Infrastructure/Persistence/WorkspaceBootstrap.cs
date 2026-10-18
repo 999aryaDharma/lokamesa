@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Threading.Tasks;
 using DocumentIDE.Core.Domain;
 using DocumentIDE.Core.Domain.Repositories;
@@ -13,6 +14,10 @@ namespace DocumentIDE.Infrastructure.Persistence;
 /// foreign key to <c>workspaces</c>. On a fresh database no workspace existed,
 /// so the insert violated the FK, the API returned 500, and the error handler
 /// cleared the CORS headers - the UI only saw "Failed to fetch".
+///
+/// Seeding is deliberately limited to a database that has no workspaces at all:
+/// a host/embedder (or test) that already created its own workspace keeps full
+/// control and does not gain a surprise "default" row.
 /// </summary>
 public static class WorkspaceBootstrap
 {
@@ -21,7 +26,8 @@ public static class WorkspaceBootstrap
 
     public static async Task EnsureDefaultAsync(IWorkspaceRepository workspaces)
     {
-        if (await workspaces.GetByIdAsync(DefaultWorkspaceId) is not null)
+        var existing = (await workspaces.GetAllAsync()).ToList();
+        if (existing.Count > 0)
         {
             return;
         }
@@ -37,8 +43,8 @@ public static class WorkspaceBootstrap
         catch
         {
             // Two hosts may start against the same database. Only rethrow when
-            // the workspace genuinely is not there after the race.
-            if (await workspaces.GetByIdAsync(DefaultWorkspaceId) is null)
+            // no workspace exists after the race.
+            if (!(await workspaces.GetAllAsync()).Any())
             {
                 throw;
             }
