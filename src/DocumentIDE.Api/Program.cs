@@ -101,6 +101,20 @@ builder.Services.AddSingleton(sp => new GitRemoteService(
     sp.GetRequiredService<IGitProcessRunner>(),
     sp.GetRequiredService<GitRepositoryService>()));
 
+// SCM-13: explicit Push. Runs `git push` through the same controlled
+// runner/mutation queue against the resolved true worktree root, so a push
+// serializes with concurrent stage/commit/fetch on one worktree and is scoped to
+// the current branch's configured upstream: a branch with no upstream is a typed
+// state that runs no Git at all, never a push to a guessed default remote
+// (spec 13 §14.2/§14.4/§19). Push is only ever user initiated — no commit, save
+// or other flow calls it — and the runner keeps interactive credential prompts
+// disabled (GIT_TERMINAL_PROMPT=0, emptied askpass, GCM_INTERACTIVE=never), so an
+// authenticated remote fails fast typed instead of hanging (spec 13 §14.4/§18).
+builder.Services.AddSingleton(sp => new GitPushService(
+    sp.GetRequiredService<IGitProcessRunner>(),
+    sp.GetRequiredService<GitRepositoryService>(),
+    sp.GetRequiredService<GitRemoteService>()));
+
 builder.Services.AddScoped<PdfExportService>();
 builder.Services.AddScoped<BatchPdfExportService>();
 builder.Services.AddScoped<PdfMergeService>();
