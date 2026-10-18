@@ -29,6 +29,11 @@ flowchart TD
     NOTE_03["NOTE-03 Note Editor, Status & Review Integration"]
     NOTE_04["NOTE-04 Note Search & Navigation Integration"]
     NOTE_05["NOTE-05 Canvas Note Regression & Release Hardening"]
+    WB_01["WB-01 Workspace Kind, Workspace API & Subsystem Gating"]
+    WB_02["WB-02 Space-Object Domain, Vault & Atomic Writes"]
+    WB_03["WB-03 Wildboard Canvas Surface"]
+    WB_04["WB-04 Quick Capture"]
+    WB_05["WB-05 Wildboard Recovery, Security & Performance Hardening"]
     PAL_01 --> PAL_02
     PAL_01 --> PAL_03
     PAL_02 --> PAL_04
@@ -83,6 +88,23 @@ flowchart TD
     SRCH_05 --> NOTE_04
     NOTE_04 --> NOTE_05
     QA_06 --> NOTE_05
+    FND_02 --> WB_01
+    FND_03 --> WB_01
+    FND_07 --> WB_01
+    WB_01 --> WB_02
+    FS_07 --> WB_02
+    FS_08 --> WB_02
+    WB_02 --> WB_03
+    CAN_01 --> WB_03
+    CAN_06 --> WB_03
+    CAN_07 --> WB_03
+    MD_01 --> WB_03
+    WB_03 --> WB_04
+    FND_07 --> WB_04
+    CAN_05 --> WB_04
+    WB_04 --> WB_05
+    QA_06 --> WB_05
+    QA_07 --> WB_05
 ```
 
 ## Notes

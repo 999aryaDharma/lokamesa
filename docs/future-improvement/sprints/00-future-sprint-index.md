@@ -1,8 +1,8 @@
 # Future Improvement Sprint Index
 
-**Total future sprints:** 27
+**Total future sprints:** 32
 
-These sprints are planning artifacts for roadmap versions `1.1.0 → 1.6.0`. They are not part of the active V1 sprint count until promoted.
+These sprints are planning artifacts for roadmap versions `1.1.0 → 1.9.0`. They are not part of the active V1 sprint count until promoted.
 
 ## Sprint table
 
@@ -35,3 +35,8 @@ These sprints are planning artifacts for roadmap versions `1.1.0 → 1.6.0`. The
 | `NOTE-03` | Note Editor, Status & Review Integration | P0 | v1.6.0 | NOTE-02, REV-02 | SPECIFIED |
 | `NOTE-04` | Note Search & Navigation Integration | P1 | v1.6.0 | NOTE-03, SRCH-05 | SPECIFIED |
 | `NOTE-05` | Canvas Note Regression & Release Hardening | P1 | v1.6.0 | NOTE-04, QA-06 | SPECIFIED |
+| `WB-01` | Workspace Kind, Workspace API & Subsystem Gating | P0 | v1.7.0 | FND-02, FND-03, FND-07 | SPECIFIED |
+| `WB-02` | Space-Object Domain, Vault & Atomic Writes | P0 | v1.7.0 | WB-01, FS-07, FS-08 | SPECIFIED |
+| `WB-03` | Wildboard Canvas Surface | P0 | v1.7.0 | WB-02, CAN-01, CAN-06, CAN-07, MD-01 | SPECIFIED |
+| `WB-04` | Quick Capture | P0 | v1.7.0 | WB-03, FND-07, CAN-05 | SPECIFIED |
+| `WB-05` | Wildboard Recovery, Security & Performance Hardening | P1 | v1.7.0 | WB-04, QA-06, QA-07 | SPECIFIED |

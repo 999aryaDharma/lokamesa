@@ -10,6 +10,9 @@
 | `1.4.0` | `HLTH-01…HLTH-05` | SPECIFIED | Owner promotes 1.4.0 to active implementation |
 | `1.5.0` | `WS-01…WS-04` | SPECIFIED | Owner promotes 1.5.0 to active implementation |
 | `1.6.0` | `NOTE-01…NOTE-05` | SPECIFIED | Owner promotes 1.6.0 to active implementation |
+| `1.7.0` | `WB-01…WB-05` | SPECIFIED | Owner promotes 1.7.0 to active implementation (ADR-003 accepted) |
+| `1.8.0` | `RW-01…RW-05` (tentative) | CANDIDATE | Owner approves the "source-first" amendment, then specifies and promotes 1.8.0 |
+| `1.9.0` | `MR-01…MR-06` (tentative) | CANDIDATE | Owner confirms media/network risk, then specifies and promotes 1.9.0 |
 
 ## Status definitions
 
@@ -20,4 +23,4 @@
 
 ## Current rule
 
-All six feature lines are `SPECIFIED` and remain outside the active V1 sprint count.
+The six `1.1.0`–`1.6.0` feature lines are `SPECIFIED` and remain outside the active V1 sprint count. `1.7.0` is now `SPECIFIED` (`WB-01…WB-05`, ADR-003 accepted) and is also outside the active V1 sprint count until promoted. `1.8.0` and `1.9.0` remain `CANDIDATE` with no sprint decomposition yet.

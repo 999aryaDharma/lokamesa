@@ -89,6 +89,23 @@ These are dependency layers, not Scrum timeboxes. A roadmap version may be promo
 ### Wave 4
 - `NOTE-05`
 
+## Version 1.7.0
+
+### Wave 0
+- `WB-01`
+
+### Wave 1
+- `WB-02`
+
+### Wave 2
+- `WB-03`
+
+### Wave 3
+- `WB-04`
+
+### Wave 4
+- `WB-05`
+
 ## Parallelism rule
 
 When a version is promoted, parallel execution is allowed only when the sprints:

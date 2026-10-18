@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "roadmap": "1.1.0-1.6.0",
+  "roadmap": "1.1.0-1.7.0",
   "active_v1_sprint_count_unchanged": true,
   "branch_management_in_product_scope": false,
   "sprints": [
@@ -323,6 +323,73 @@
       "depends_on": [
         "NOTE-04",
         "QA-06"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "WB-01",
+      "title": "Workspace Kind, Workspace API & Subsystem Gating",
+      "version": "v1.7.0",
+      "priority": "P0",
+      "depends_on": [
+        "FND-02",
+        "FND-03",
+        "FND-07"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "WB-02",
+      "title": "Space-Object Domain, Vault & Atomic Writes",
+      "version": "v1.7.0",
+      "priority": "P0",
+      "depends_on": [
+        "WB-01",
+        "FS-07",
+        "FS-08"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "WB-03",
+      "title": "Wildboard Canvas Surface",
+      "version": "v1.7.0",
+      "priority": "P0",
+      "depends_on": [
+        "WB-02",
+        "CAN-01",
+        "CAN-06",
+        "CAN-07",
+        "MD-01"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "WB-04",
+      "title": "Quick Capture",
+      "version": "v1.7.0",
+      "priority": "P0",
+      "depends_on": [
+        "WB-03",
+        "FND-07",
+        "CAN-05"
+      ],
+      "state": "SPECIFIED",
+      "label": "future-improvement"
+    },
+    {
+      "id": "WB-05",
+      "title": "Wildboard Recovery, Security & Performance Hardening",
+      "version": "v1.7.0",
+      "priority": "P1",
+      "depends_on": [
+        "WB-04",
+        "QA-06",
+        "QA-07"
       ],
       "state": "SPECIFIED",
       "label": "future-improvement"
