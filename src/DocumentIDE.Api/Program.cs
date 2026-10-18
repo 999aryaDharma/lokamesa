@@ -116,6 +116,21 @@ builder.Services.AddSingleton(sp => new GitPushService(
     sp.GetRequiredService<GitRepositoryService>(),
     sp.GetRequiredService<GitRemoteService>()));
 
+// SCM-12: conservative fast-forward Pull. Runs `git pull --ff-only --no-rebase`
+// through the same controlled runner/mutation queue against the resolved true
+// worktree root, so a pull serializes with concurrent stage/commit/fetch on one
+// worktree. A dirty/conflicted worktree is refused before Git runs, divergence is
+// a typed blocking state (never a merge commit or rebase), and a successful pull
+// re-reads status, reindexes the changed documents and records the operation in
+// the same Document IDE History store (spec 13 §14.3/§19/§20/§23).
+builder.Services.AddScoped(sp => new GitPullService(
+    sp.GetRequiredService<IGitProcessRunner>(),
+    sp.GetRequiredService<GitRepositoryService>(),
+    sp.GetRequiredService<GitRemoteService>(),
+    sp.GetRequiredService<IDocumentRepository>(),
+    sp.GetRequiredService<IBatchApplyReindexTrigger>(),
+    sp.GetRequiredService<IGitPullHistoryRecorder>()));
+
 // SCM-08: read-only Git history service (commit history, file history and
 // document-version inspection). Every read goes through the same controlled
 // runner and `log`/`show` are in its read-only vocabulary, so nothing here

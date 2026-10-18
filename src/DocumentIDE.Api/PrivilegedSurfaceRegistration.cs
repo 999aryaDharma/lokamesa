@@ -82,6 +82,8 @@ public static class PrivilegedSurfaceRegistration
         // SCM-10 — discard/restore operations are recorded in the same Document
         // IDE History store (spec 13 §15.2 step 8), not a parallel one.
         services.TryAddSingleton<IGitRestoreHistoryRecorder>(sp => sp.GetRequiredService<JsonlHistoryStore>());
+        // SCM-12 — conservative pull operations are recorded in the same store.
+        services.TryAddSingleton<IGitPullHistoryRecorder>(sp => sp.GetRequiredService<JsonlHistoryStore>());
         services.TryAddScoped<RecoverySnapshotService>();
         services.TryAddScoped<IExternalEditStateProbe, WordEditStateProbe>();
         services.TryAddScoped<IAtomicFileReplacer, AtomicFileReplacer>();

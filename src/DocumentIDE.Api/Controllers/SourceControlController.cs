@@ -356,6 +356,7 @@ public sealed class SourceControlController : ControllerBase
     private readonly GitCommitService _commits;
     private readonly GitRemoteService _remotes;
     private readonly GitPushService _pushes;
+    private readonly GitPullService _pulls;
     private readonly GitHistoryService _history;
     private readonly GitRestoreService _restores;
     private readonly IDocumentRepository _documents;
@@ -370,7 +371,8 @@ public sealed class SourceControlController : ControllerBase
         GitHistoryService history,
         GitRestoreService restores,
         IDocumentRepository documents,
-        IWorkSessionService workSessions)
+        IWorkSessionService workSessions,
+        GitPullService pulls)
     {
         _repositories = repositories ?? throw new ArgumentNullException(nameof(repositories));
         _stages = stages ?? throw new ArgumentNullException(nameof(stages));
@@ -381,6 +383,7 @@ public sealed class SourceControlController : ControllerBase
         _restores = restores ?? throw new ArgumentNullException(nameof(restores));
         _documents = documents ?? throw new ArgumentNullException(nameof(documents));
         _workSessions = workSessions ?? throw new ArgumentNullException(nameof(workSessions));
+        _pulls = pulls ?? throw new ArgumentNullException(nameof(pulls));
     }
 
     /// <summary>
@@ -1137,6 +1140,73 @@ public sealed class SourceControlController : ControllerBase
             ToFailure(result.Failure));
 
     // ---------------------------------------------------------------------
+    // SCM-12 — conservative fast-forward pull
+    // (spec 13 §14.3/§18/§19/§20/§21/§23)
+    //
+    // Bounded append-only region: Pull is a POST that never merges and never
+    // rebases. The preflight (dirty/conflicted) and divergence outcomes are
+    // typed blocking states returned with HTTP 200 so the pane can render them;
+    // a missing request path is a typed 400 and Git never runs.
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Runs one conservative Pull (<c>git pull --ff-only --no-rebase</c>, spec 13
+    /// §14.3) against the resolved worktree and returns the typed outcome plus
+    /// the refreshed status. A dirty or conflicted worktree is refused typed
+    /// before Git runs; diverged history is the typed blocking <c>Diverged</c>
+    /// outcome with no merge commit and no rebase; a branch with no configured
+    /// upstream runs no Git at all. Every execution outcome stays HTTP 200 with a
+    /// typed body; a missing request path is a typed 400 and Git never runs.
+    /// </summary>
+    [HttpPost("pull")]
+    public async Task<IActionResult> Pull(
+        [FromBody] SourceControlPullRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.Path))
+        {
+            return PathRequiredBadRequest("request field");
+        }
+
+        GitPullResult result = await _pulls.PullAsync(request.Path!, cancellationToken);
+        return Ok(await ToPullResponseAsync(result, cancellationToken));
+    }
+
+    /// <summary>
+    /// Maps a typed pull result onto the API contract (spec 13 §14.3/§20):
+    /// success carries the previous/new HEAD, the changed paths and the status
+    /// re-read from Git; blocking states keep their typed outcome and message so
+    /// the UI can show divergence as a blocking state rather than an error
+    /// string. Nothing here ever exposes a credential.
+    /// </summary>
+    private async Task<SourceControlPullResponse> ToPullResponseAsync(
+        GitPullResult result,
+        CancellationToken cancellationToken)
+    {
+        SourceControlStatusResponse? status =
+            result.Refresh?.Status is { IsAvailable: true, Snapshot: { } snapshot }
+                ? await MapSnapshotAsync(snapshot, cancellationToken)
+                : null;
+
+        return new SourceControlPullResponse(
+            result.Outcome.ToString(),
+            result.IsSuccess,
+            result.IsBlocking,
+            result.ErrorCode,
+            result.Message,
+            result.OperationId,
+            result.PreviousHead,
+            result.Head,
+            result.Refresh?.ChangedPaths ?? Array.Empty<string>(),
+            result.Refresh?.ReindexedDocuments ?? 0,
+            result.Refresh?.StatusRefreshed ?? false,
+            result.Refresh?.HistoryRecorded ?? false,
+            ToRemoteResponse(result.Remote),
+            status,
+            ToFailure(result.Failure));
+    }
+
+    // ---------------------------------------------------------------------
     // SCM-08 - Git history, file history and document-version inspection
     // (spec 13 §9.4/§12/§18/§20/§25). Read-only: nothing here mutates the
     // repository, and there is no branch-management, push, pull or remote
@@ -1571,5 +1641,41 @@ public sealed record SourceControlRestoreResponse(
     bool RecoveryRecorded,
     bool HistoryRecorded,
     bool Reindexed,
+    SourceControlStatusResponse? Status,
+    SourceControlFailureResponse? Failure);
+
+// -------------------------------------------------------------------------
+// SCM-12 — safe fast-forward pull payloads (spec 13 §14.3/§20)
+// -------------------------------------------------------------------------
+
+/// <summary>
+/// SCM-12 — request body for the conservative Pull action. <c>Path</c> is the
+/// workspace folder or active-document path used to discover the repository;
+/// the pull runs against exactly that resolved true worktree root (spec 13 §19).
+/// </summary>
+public sealed record SourceControlPullRequest(string? Path);
+
+/// <summary>
+/// SCM-12 — typed Pull outcome (spec 13 §14.3/§20). On success <c>Head</c> is the
+/// fast-forwarded commit, <c>ChangedPaths</c> the files the pull brought in, and
+/// <c>Status</c> the status re-read from Git. <c>IsBlocking</c> is true for
+/// diverged history and for a dirty/conflicted worktree (nothing ran), so the UI
+/// renders a blocking state instead of a raw error; no outcome ever carries
+/// credential material or performs a merge/rebase.
+/// </summary>
+public sealed record SourceControlPullResponse(
+    string Outcome,
+    bool IsSuccess,
+    bool IsBlocking,
+    string? ErrorCode,
+    string? Message,
+    string? OperationId,
+    string? PreviousHead,
+    string? Head,
+    IReadOnlyList<string> ChangedPaths,
+    int ReindexedDocuments,
+    bool StatusRefreshed,
+    bool HistoryRecorded,
+    SourceControlRemoteResponse? Remote,
     SourceControlStatusResponse? Status,
     SourceControlFailureResponse? Failure);

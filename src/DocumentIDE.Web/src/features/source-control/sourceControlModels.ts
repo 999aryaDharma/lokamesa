@@ -492,3 +492,46 @@ export interface SourceControlRestoreResult {
   status: SourceControlStatusModel | null;
   failure: SourceControlFailure | null;
 }
+
+/**
+ * SCM-12 — typed outcome of one conservative Pull (spec 13 §14.3/§20).
+ * `Diverged`, `DirtyWorktree` and `ConflictedWorktree` are blocking states that
+ * changed nothing; every non-success outcome is rendered typed, never blank.
+ */
+export type GitPullOutcome =
+  | 'Succeeded'
+  | 'NoUpstream'
+  | 'NoRepository'
+  | 'GitUnavailable'
+  | 'DirtyWorktree'
+  | 'ConflictedWorktree'
+  | 'Diverged'
+  | 'IndexLocked'
+  | 'AuthenticationRequired'
+  | 'PermissionDenied'
+  | 'HostUnreachable'
+  | 'WorktreeMissing'
+  | 'Failed';
+
+/**
+ * SCM-12 — typed Pull result. On success `head` is the fast-forwarded commit,
+ * `changedPaths` the files the pull brought in, and `status`/`remote` the state
+ * re-read from Git. A blocking result ran nothing: no merge commit, no rebase.
+ */
+export interface SourceControlPullResult {
+  outcome: GitPullOutcome;
+  isSuccess: boolean;
+  isBlocking: boolean;
+  errorCode: string | null;
+  message: string | null;
+  operationId: string | null;
+  previousHead: string | null;
+  head: string | null;
+  changedPaths: string[];
+  reindexedDocuments: number;
+  statusRefreshed: boolean;
+  historyRecorded: boolean;
+  remote: SourceControlRemoteModel | null;
+  status: SourceControlStatusModel | null;
+  failure: SourceControlFailure | null;
+}
