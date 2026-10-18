@@ -64,8 +64,9 @@ Also inspect, before writing any code:
    content region, right inspector dock. Apply the `mac-*` tokens, Inter
    typography, and JetBrains Mono for diff/code surfaces.
 2. **Per-screen restyle**, matching the 12 reference screens:
-   - 01 Canvas, 02 List, 03 Graph — card/table/tree surfaces + their
-     inspectors (relations inspector, selection inspector, edge legend).
+   - 01 Canvas, 02 List, 03 Graph — surfaces + their inspectors (relations
+     inspector, selection inspector, edge legend). **Canvas nodes must be
+     folder/file *objects*, not look-alike cards** — see "Node objects" below.
    - 04 Batch operations — centred sheet (scrim, shadow, header, scroll body,
      footer secondary+primary) replacing the current panel chrome.
    - 05 Source control (+ 06 DOCX diff, 07 Worktrees) — sidebar change
@@ -93,6 +94,39 @@ Also inspect, before writing any code:
    structure/roles where the old assertions were purely presentational
    (e.g. a class-name check), while preserving every assertion that checks
    product behavior (gestures, API calls, data shown).
+
+## Node objects — folders and files must be distinguishable objects (owner directive 2026-10-18)
+
+The owner rejected the earlier design where a folder and a file were drawn as the same rounded
+box differing only by a type label. The canvas must show a **folder object** and a **file
+object** (macOS Finder icon view). Exact geometry and colours are in
+`docs/design/UI-DESIGN-BRIEF-MACOS.md` § "Canvas node objects"; the reference render is
+`docs/design/screens-mac/01-canvas.png`.
+
+Current code that must change:
+- `src/DocumentIDE.Web/src/features/canvas/DocumentCanvas.tsx` (~line 115-179) renders a
+  `type: 'folder'` object as a white rounded card with a `📁` emoji and a "Folder" caption.
+- `src/DocumentIDE.Web/src/features/canvas/nodes/DocumentNode.tsx` renders a document as a
+  card (`data-testid="document-paper-sheet"`) with a filename, a DOCX/MD badge and a
+  paper-fold accent.
+
+Required:
+- folder → folder object (blue folder shape with tab); file → file object (sheet + type-coloured
+  accent + folded corner); filename label beneath; **no card border**.
+- type accent colour: `.docx` → system blue, `.md` → system green, unknown → neutral.
+- graph nodes get a folder/file **icon** in place of the leading dot (keep the tree geometry).
+- list rows / sidebar rows / SCM change rows / inspector reference rows get a small folder-or-file
+  **icon** (Finder convention: objects on spatial surfaces, small icons in lists).
+
+Non-negotiable: this is a *shape* change only. The existing accessible names, testids, gesture
+wiring (`aria-label="Document: <title>"`, `data-testid="document-paper-sheet"`,
+`aria-label="Folder: <title>"`, single-click folder → picker, double-click document → open) and
+the no-physical-move rule must survive. Prefer keeping the existing testids/labels and swapping
+the visual body, so the G-gate tests stay meaningful.
+
+Required test: a canvas rendering test asserts a folder object and a file object are structurally
+distinct (e.g. different testids / different type markers), so the two can never silently
+regress into the same card.
 
 ## Out of Scope (non-goals)
 

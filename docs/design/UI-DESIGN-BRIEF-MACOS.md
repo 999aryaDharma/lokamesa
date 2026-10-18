@@ -1,6 +1,6 @@
 # Document IDE — macOS-oriented design series (design of record)
 
-Status: **complete** (12 of 12 screens rendered, 2026-10-17) · Source file: `D:\document-ide\ui.pen` (git-ignored, opened in the Pen app)
+Status: **complete** (12 of 12 screens rendered, 2026-10-17; canvas/graph node objects revised 2026-10-18) · Source file: `D:\document-ide\ui.pen` (git-ignored, opened in the Pen app)
 Exports: `docs/design/screens-mac/*.png` (full resolution, 1440×900 per screen)
 
 ## Direction (decided 2026-10-17)
@@ -44,6 +44,40 @@ Typography: **Inter** (stand-in for SF Pro — SF is not licensable as a web fon
 **JetBrains Mono** for diff gutter/code. Density stays small (`10–15px`) to match the product's
 existing `text-xs` feel.
 
+## Canvas node objects — folders and files are *objects*, not boxes (revised 2026-10-18)
+
+Owner directive: the canvas must not draw folders and files as look-alike rounded boxes that
+differ only by a small type label. They must be **recognisable objects** so the two are
+distinguishable at a glance. Chosen idiom: **macOS Finder icon view**.
+
+Applied to every place a folder or file is shown (owner scope decision):
+
+| Surface | Treatment |
+| --- | --- |
+| Canvas (screen 01) | **Folder object** and **file object** as the node itself; filename label centred underneath; no card border |
+| Graph (screen 03) | node row keeps its tree geometry but the leading dot is a **folder / file icon** (tree layout depends on the node bounds, so the object does not replace the row) |
+| List (02), sidebar `FOLDER SOURCES`, Source control (05) change rows, inspector reference cards | **small type icon** per row — which is the Finder convention for lists (icon view on spatial surfaces, small icons in lists) |
+
+### Folder object
+
+- folder body `56×48`, `cornerRadius 7`, fill `#3E8EF7`, outer shadow `#0000001F` (0/2/6)
+- folder front panel `56×36` at `y+12`, `cornerRadius 7`, fill `#7CB6FF` (the back peeking above the front creates the tab)
+- label: Inter 12, weight 500, `$mac-text`, `textAlign: center`, width 140
+
+### File object
+
+- sheet `52×66`, `cornerRadius 5`, fill `$mac-fill-2`, stroke `$mac-hairline-strong` 1, outer shadow `#0000001F` (0/2/6)
+- type accent bar `50×7` at the top, `cornerRadius [4,4,0,0]`, fill = **type colour**: `.docx` → `$mac-accent` (#007AFF), `.md` → `$mac-success` (#34C759)
+- folded corner `14×14`, `cornerRadius [0,5,0,0]`, fill `$mac-chip`
+- three content lines (36/29/34 × 3, radius 1.5) in `$mac-chip`
+- label: as above
+
+Object frame is `140×122` in both cases (icon area on top, label beneath).
+
+**Implementation note for code:** this is a change of *node shape*, not of behaviour — the
+canvas object model (`CanvasObject.type: 'folder' | 'document'`) already distinguishes the two,
+so no API/contract change is implied.
+
 ## macOS patterns used
 
 - **Unified toolbar**: traffic lights, sidebar toggle, segmented control (`Canvas | List | Graph`),
@@ -60,9 +94,9 @@ existing `text-xs` feel.
 
 | # | Screen | Export | Highlights |
 | --- | --- | --- | --- |
-| 01 | Canvas view | `screens-mac/01-canvas.png` | 4 document cards on canvas, explicit/inferred edge hint, relations legend, floating zoom pill, relations inspector |
+| 01 | Canvas view | `screens-mac/01-canvas.png` | **folder/file objects** (Finder icon-view: folder object, file object with type-coloured accent + folded corner, filename beneath — no card box), explicit/inferred edge hint, relations legend, floating zoom pill, relations inspector |
 | 02 | List view | `screens-mac/02-list.png` | filter bar (name field, type filter, selection counter), table `NAME/TYPE/STATUS/MODIFIED` with status dots + selection checkboxes, selection inspector |
-| 03 | Graph view | `screens-mac/03-graph.png` | scope bar (Workspace/Folder/Selection, depth stepper, include-inferred), orthogonal relation tree, 3 edge classes (explicit / inferred / missing), edge legend |
+| 03 | Graph view | `screens-mac/03-graph.png` | scope bar (Workspace/Folder/Selection, depth stepper, include-inferred), orthogonal relation tree with **folder/file icons** on each node, 3 edge classes (explicit / inferred / missing), edge legend |
 | 04 | Batch operations | `screens-mac/04-batch-operations.png` | modal sheet: preview status, expiry warning, progress bar, review tree with per-occurrence before/after, missing-file exclusion, `Apply 34 changes` primary |
 | 05 | Source control | `screens-mac/05-source-control.png` | sidebar change groups (Staged/Changes/Untracked/Conflicts), unified diff with typed add/del rows, commit bar with message field + `Commit all` / `Commit staged` |
 
