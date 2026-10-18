@@ -726,10 +726,10 @@ public sealed class GitCommitTests
 
     /// <summary>
     /// Failure/edge case "commit blocked by an unresolved merge conflict": with
-    /// unmerged entries the pre-check deliberately lets Git be the reporting
-    /// authority, and the typed failure carries
-    /// <see cref="GitProcessErrorKind.GitConflict"/> (spec 13 §11/§20). HEAD is
-    /// unchanged because no commit was recorded.
+    /// unmerged entries the SCM-14 conflict preflight refuses the commit before
+    /// Git runs and returns the typed
+    /// <see cref="GitCommitOutcome.ConflictedWorktree"/> (spec 13 §11/§20/§21).
+    /// HEAD is unchanged because no commit was recorded.
     /// </summary>
     [Fact]
     public async Task UnresolvedConflictIsATypedCommitFailure()
@@ -749,12 +749,13 @@ public sealed class GitCommitTests
         (GitCommitService service, _, _, _) = CreateService();
         GitCommitResult result = await service.CommitAsync(repo.RootPath, "must not commit a conflict");
 
-        Assert.Equal(GitCommitOutcome.Failed, result.Outcome);
+        Assert.Equal(GitCommitOutcome.ConflictedWorktree, result.Outcome);
         Assert.False(result.IsSuccess);
         Assert.Null(result.Commit);
-
-        GitProcessResult failure = Assert.IsType<GitProcessResult>(result.Failure);
-        Assert.Equal(GitProcessErrorKind.GitConflict, failure.ErrorKind);
+        Assert.Equal("ConflictedWorktree", result.ErrorCode);
+        Assert.Null(result.Failure);
+        Assert.Equal(new[] { "docs/a.md" }, result.ConflictedPaths);
+        Assert.Contains("conflict", result.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(headBefore, Head(repo));
     }
 

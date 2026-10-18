@@ -134,6 +134,7 @@ export type GitCommitOutcome =
   | 'MissingIdentity'
   | 'HookRejected'
   | 'IndexLocked'
+  | 'ConflictedWorktree'
   | 'Failed';
 
 /** SCM-07 — summary metadata of the commit that was created (spec 13 §11.1). */
@@ -164,6 +165,8 @@ export interface SourceControlCommitResult {
   commit: SourceControlCommitInfo | null;
   /** Paths the Commit All flow staged; null for the plain Commit flow. */
   stagedPaths: string[] | null;
+  /** Unmerged paths that blocked a ConflictedWorktree outcome; null otherwise. */
+  conflictedPaths?: string[] | null;
   status: SourceControlStatusModel | null;
   failure: SourceControlFailure | null;
 }
@@ -533,5 +536,69 @@ export interface SourceControlPullResult {
   historyRecorded: boolean;
   remote: SourceControlRemoteModel | null;
   status: SourceControlStatusModel | null;
+  failure: SourceControlFailure | null;
+}
+
+/**
+ * SCM-14 — typed unmerged-state outcome (spec 13 §20/§21). `Available` means
+ * conflicts are present, `NoConflicts` means Git was read successfully and
+ * reports none, and every other value is a typed inability to observe Git
+ * safely. None of them is ever rendered as a silent clean state.
+ */
+export type GitConflictStatus =
+  | 'Available'
+  | 'NoConflicts'
+  | 'NoRepository'
+  | 'GitUnavailable'
+  | 'WorktreeMissing'
+  | 'IndexLocked'
+  | 'Unreadable'
+  | 'Failed';
+
+/**
+ * SCM-14 — how an affected document may be opened for manual resolution.
+ * `OpenInWord` is the existing guarded Word open route, `OpenDocument` the
+ * existing document-open seam, `None` means the path is not a registered
+ * document (the shell must not offer an arbitrary-path opener).
+ */
+export type GitConflictOpenAction = 'None' | 'OpenInWord' | 'OpenDocument';
+
+/**
+ * SCM-14 — one real unmerged entry (spec 13 §21). `path` is worktree-relative
+ * exactly as Git reported it; `documentId` is the only open target. There is
+ * deliberately no absolute-path field.
+ */
+export interface SourceControlConflictEntry {
+  path: string;
+  conflictKind: GitConflictKind;
+  statusCharacters: string;
+  isDocx: boolean;
+  openAction: GitConflictOpenAction;
+  documentId: string | null;
+}
+
+/** SCM-14 — one unsafe action refused while the repository is unmerged. */
+export interface SourceControlBlockedAction {
+  action: string;
+  errorCode: string;
+  message: string;
+  affectedPaths: string[];
+}
+
+/**
+ * SCM-14 — typed conflict summary consumed by the ConflictPanel. The panel is
+ * props-driven and performs no fetch/Git work of its own.
+ */
+export interface SourceControlConflictModel {
+  status: GitConflictStatus;
+  hasRepository: boolean;
+  hasConflicts: boolean;
+  worktreeRoot: string | null;
+  branchName: string | null;
+  isDetached: boolean;
+  headCommit: string | null;
+  conflicts: SourceControlConflictEntry[];
+  blockedActions: SourceControlBlockedAction[];
+  message: string | null;
   failure: SourceControlFailure | null;
 }
