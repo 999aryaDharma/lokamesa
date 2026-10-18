@@ -9,6 +9,12 @@
  *     containment rule (an outside document must not appear);
  *   - releasing a fanned page keeps the CAN-04 semantic: metadata only, with no
  *     filesystem mutation path invoked.
+ *
+ * Gesture sequence, stated exactly (see the handoff): a real double click is
+ * `click, click, dblclick`, so the folder's `handleClick` runs twice
+ * (select + open, then select + close) and `handleDoubleClick` runs last,
+ * closing again (idempotent) and releasing every supported file exactly once.
+ * The end state is deterministic: closed, selected, one release, no picker.
  */
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
