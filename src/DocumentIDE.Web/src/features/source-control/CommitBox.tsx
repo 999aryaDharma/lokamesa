@@ -62,6 +62,16 @@ export interface CommitBoxProps {
   onStatusRefreshed?: (status: SourceControlStatusModel) => void;
   /** Receives the created commit plus the flow that ran. */
   onCommitSucceeded?: (commit: SourceControlCommitInfo, flow: GitCommitFlow) => void;
+  /** Optional design-05 label for the staged commit action. */
+  commitLabel?: string;
+  /** Optional design-05 label for the commit-all action. */
+  commitAllLabel?: string;
+  /**
+   * UI-03: Commit All stages every eligible change (including unstaged work), so
+   * the design requires explicit confirmation. Defaults to false to preserve
+   * the existing SCM-07 surface behaviour for other callers.
+   */
+  confirmCommitAll?: boolean;
 }
 
 function failureMessage(result: SourceControlCommitResult): string {
@@ -88,11 +98,15 @@ export default function CommitBox({
   gitUnavailable = false,
   onStatusRefreshed,
   onCommitSucceeded,
+  commitLabel = 'Commit',
+  commitAllLabel = 'Commit All',
+  confirmCommitAll = false,
 }: CommitBoxProps) {
   const [message, setMessage] = useState('');
   const [busyAction, setBusyAction] = useState<CommitAction | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastCommit, setLastCommit] = useState<SourceControlCommitInfo | null>(null);
+  const [confirmingCommitAll, setConfirmingCommitAll] = useState(false);
 
   const busy = busyAction !== null;
   // The client mirrors the API's typed rejection: a blank message never
@@ -105,6 +119,7 @@ export default function CommitBox({
       return;
     }
 
+    setConfirmingCommitAll(false);
     setBusyAction(action);
     setErrorMessage(null);
     try {
@@ -150,24 +165,60 @@ export default function CommitBox({
         className="w-full px-2 py-1 text-sm text-mac-text bg-mac-content border border-mac-hairline-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-50"
       />
 
-      <div className="flex items-center gap-2 flex-wrap">
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => void run('commit')}
-          className={primaryButtonClassName}
+      {confirmingCommitAll ? (
+        <div
+          data-testid="commit-all-confirmation"
+          className="space-y-2 rounded-lg border border-mac-warning/50 bg-mac-warning/10 p-2"
         >
-          Commit
-        </button>
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => void run('commit-all')}
-          className={actionButtonClassName}
-        >
-          Commit All
-        </button>
-      </div>
+          <p className="text-xs text-mac-text">
+            Commit all changes? This stages and commits every eligible change, including
+            unstaged files. Commit staged only records what is already staged.
+          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setConfirmingCommitAll(false)}
+              className={actionButtonClassName}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => void run('commit-all')}
+              className={primaryButtonClassName}
+            >
+              Confirm commit all
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => void run('commit')}
+            className={primaryButtonClassName}
+          >
+            {commitLabel}
+          </button>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => {
+              if (confirmCommitAll) {
+                setConfirmingCommitAll(true);
+                return;
+              }
+              void run('commit-all');
+            }}
+            className={actionButtonClassName}
+          >
+            {commitAllLabel}
+          </button>
+        </div>
+      )}
 
       {lastCommit && (
         <div

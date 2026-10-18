@@ -25,6 +25,11 @@ interface WorktreeListProps {
   /** Canonical path of the worktree currently acting as Document IDE context. */
   activeWorktreePath?: string | null;
   onOpenWorktree?: (path: string) => void;
+  /**
+   * UI-03: optional reviewed removal action. When absent no Remove control is
+   * rendered at all (the read-only SCM-15 surface stays unchanged).
+   */
+  onRemoveWorktree?: (path: string) => void;
   /** Path currently being opened; all open actions are disabled while set. */
   busyPath?: string | null;
   errorMessage?: string | null;
@@ -50,6 +55,7 @@ export default function WorktreeList({
   worktrees,
   activeWorktreePath,
   onOpenWorktree,
+  onRemoveWorktree,
   busyPath,
   errorMessage,
   isLoading = false,
@@ -144,15 +150,37 @@ export default function WorktreeList({
                     Active
                   </span>
                 ) : (
-                  <button
-                    type="button"
-                    aria-label={`Open worktree ${entry.path}`}
-                    disabled={busy}
-                    onClick={() => onOpenWorktree?.(entry.path)}
-                    className="shrink-0 px-3 py-1.5 text-sm font-medium text-white bg-mac-accent rounded-lg hover:bg-mac-accent focus:outline-none focus:ring-2 focus:ring-mac-accent disabled:opacity-50 transition-colors"
-                  >
-                    {isBusy ? 'Opening...' : 'Open'}
-                  </button>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      aria-label={`Open worktree ${entry.path}`}
+                      disabled={busy}
+                      onClick={() => onOpenWorktree?.(entry.path)}
+                      className="px-3 py-1.5 text-sm font-medium text-white bg-mac-accent rounded-lg hover:bg-mac-accent focus:outline-none focus:ring-2 focus:ring-mac-accent disabled:opacity-50 transition-colors"
+                    >
+                      {isBusy ? 'Opening...' : 'Open'}
+                    </button>
+                    {onRemoveWorktree &&
+                      (entry.isMainWorktree || entry.isLocked || entry.isPrunable ? (
+                        <span className="text-xs text-mac-text-3">
+                          {entry.isMainWorktree
+                            ? 'Not removable'
+                            : entry.isLocked
+                              ? 'Locked'
+                              : 'Use Prune'}
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          aria-label={`Remove worktree ${entry.path}`}
+                          disabled={busy}
+                          onClick={() => onRemoveWorktree(entry.path)}
+                          className="px-3 py-1.5 text-sm font-medium text-mac-danger bg-mac-content border border-mac-danger/60 rounded-lg hover:bg-mac-danger/10 focus:outline-none focus:ring-2 focus:ring-red-400 disabled:opacity-50 transition-colors"
+                        >
+                          Remove
+                        </button>
+                      ))}
+                  </div>
                 )}
               </li>
             );

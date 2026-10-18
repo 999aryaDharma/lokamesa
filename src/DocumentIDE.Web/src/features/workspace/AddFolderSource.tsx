@@ -15,14 +15,25 @@ export interface AttachedFolderCard {
 
 interface AddFolderSourceProps {
   workspaceId: string;
+  /** UI-03: optional path prefilled by the worktree attachment signal. */
+  initialPath?: string;
   onFolderAttached?: (card: AttachedFolderCard) => void;
 }
 
-export default function AddFolderSource({ workspaceId, onFolderAttached }: AddFolderSourceProps) {
-  const [folderPath, setFolderPath] = useState('');
+export default function AddFolderSource({
+  workspaceId,
+  initialPath = '',
+  onFolderAttached,
+}: AddFolderSourceProps) {
+  const [folderPath, setFolderPath] = useState(initialPath);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [attachedSources, setAttachedSources] = useState<AttachedFolderCard[]>([]);
+
+  // The worktree attachment signal may arrive after this panel mounted.
+  useEffect(() => {
+    setFolderPath(initialPath);
+  }, [initialPath]);
 
   // Load existing folder sources on mount
   useEffect(() => {

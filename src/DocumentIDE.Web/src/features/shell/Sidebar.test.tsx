@@ -16,6 +16,8 @@ function renderSidebar(overrides: Partial<React.ComponentProps<typeof Sidebar>> 
     searchOpen: false,
     onToggleShares: () => {},
     sharesOpen: false,
+    activeSurface: 'workspace',
+    onNavigate: () => {},
     ...overrides,
   };
   return render(<Sidebar {...props} />);
@@ -66,12 +68,30 @@ describe('Sidebar', () => {
     expect(onToggleShares).toHaveBeenCalledTimes(1);
   });
 
-  it('lists the not-yet-mounted SCM surfaces as inert labels, not fake buttons', () => {
-    renderSidebar();
-    expect(screen.getByText('Source control')).toBeInTheDocument();
-    expect(screen.getByText('Worktrees')).toBeInTheDocument();
-    expect(screen.getByText('History')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Source control' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Worktrees' })).not.toBeInTheDocument();
+  it('navigates the SCM surfaces instead of rendering inert labels', () => {
+    const onNavigate = vi.fn();
+    renderSidebar({ activeSurface: 'workspace', onNavigate });
+
+    // Every SCM row is a real button: no inert label is allowed to remain.
+    fireEvent.click(screen.getByRole('button', { name: 'Source control' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Worktrees' }));
+    fireEvent.click(screen.getByRole('button', { name: 'History' }));
+
+    expect(onNavigate).toHaveBeenNthCalledWith(1, 'source-control');
+    expect(onNavigate).toHaveBeenNthCalledWith(2, 'worktrees');
+    expect(onNavigate).toHaveBeenNthCalledWith(3, 'git-history');
+  });
+
+  it('marks only the active SCM row as pressed', () => {
+    renderSidebar({ activeSurface: 'worktrees' });
+
+    expect(screen.getByRole('button', { name: 'Worktrees' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Source control' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
   });
 });
