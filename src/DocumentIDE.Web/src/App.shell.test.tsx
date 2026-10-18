@@ -14,7 +14,7 @@
  * No test-only props are used — `App` owns the wiring, so a pass here is
  * evidence of product reachability.
  */
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { useCanvasStore } from './features/canvas/canvasStore';
@@ -437,13 +437,14 @@ describe('App shell reachability', () => {
     );
   });
 
-  it('UI-03: the History sidebar row opens the real Git history surface', async () => {
+  it('UI-03: the History sidebar row opens the composed History surface on its Git tab', async () => {
     const fetchMock = installFetch();
     render(<App />);
 
-    fireEvent.click(screen.getByTestId('sidebar-git-history'));
+    fireEvent.click(screen.getByTestId('sidebar-history'));
 
-    expect(await screen.findByTestId('git-history-screen')).toBeInTheDocument();
+    expect(await screen.findByTestId('history-screen')).toBeInTheDocument();
+    expect(screen.getByTestId('git-history-screen')).toBeInTheDocument();
     expect(screen.getByTestId('git-history-panel')).toBeInTheDocument();
     await waitFor(() =>
       expect(
@@ -452,6 +453,26 @@ describe('App shell reachability', () => {
         ),
       ).toBe(true),
     );
+  });
+
+  it('UI-03: the History segmented control switches to Document IDE operations and states the missing listing route', async () => {
+    installFetch();
+    render(<App />);
+
+    fireEvent.click(screen.getByTestId('sidebar-history'));
+    const control = await screen.findByRole('radiogroup', { name: 'History source' });
+    expect(within(control).getByRole('radio', { name: 'Git' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+
+    fireEvent.click(within(control).getByRole('radio', { name: 'Operations' }));
+
+    // No route lists Document IDE operations: a typed unavailable state, never
+    // an empty list or sample rows.
+    expect(await screen.findByTestId('history-operations-unavailable')).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Operation history' })).not.toBeInTheDocument();
+    expect(screen.queryAllByTestId(/^history-entry-/)).toHaveLength(0);
   });
 
   it('G4: double-clicking a DOCX canvas card opens it in Word (the deliberate QuickLook product path)', async () => {

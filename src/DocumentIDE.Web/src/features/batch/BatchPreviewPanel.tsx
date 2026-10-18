@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import SheetShell from '../shell/SheetShell';
 import { batchRequest, type Preview } from './batchApi';
 import SearchReplaceReview from './SearchReplaceReview';
 
@@ -7,9 +8,14 @@ export interface BatchApplyResult {
   files: { documentId: string; filePath: string; outcome: string; reasonCode: string | null; detail: string | null }[];
 }
 
+export interface BatchPreviewPanelProps {
+  /** Optional: renders the sheet's close affordance (same action as the toolbar toggle). */
+  onClose?: () => void;
+}
+
 const scopeNames = ['Selection', 'Folder', 'Workspace', 'Collection'];
 const lines = (value: string) => value.split(/\r?\n/).map(v => v.trim()).filter(Boolean);
-export default function BatchPreviewPanel() {
+export default function BatchPreviewPanel({ onClose }: BatchPreviewPanelProps = {}) {
   const [workspaces, setWorkspaces] = useState<{ id: string; name: string }[]>([]);
   const [workspaceId, setWorkspaceId] = useState('');
   const [type, setType] = useState('');
@@ -136,41 +142,64 @@ export default function BatchPreviewPanel() {
     setSaved(false); setDirty(true);
     setPreview(p => p && { ...p, files: p.files.map(f => f.documentId !== documentId ? f : occurrenceId ? { ...f, occurrences: f.occurrences.map(o => o.id === occurrenceId ? { ...o, selected: !o.selected } : o) } : { ...f, selected: !f.selected }) });
   }
-  return <section aria-label="Batch operations" className="w-full max-w-xl shrink-0 overflow-auto border-l border-mac-hairline bg-mac-content p-4" onKeyDown={e => e.stopPropagation()}>
-    <h2>Batch operations</h2>
-    <form onSubmit={e => { e.preventDefault(); void start(); }} className="grid gap-3">
-      <label>Workspace<select required value={workspaceId} onChange={e => setWorkspaceId(e.target.value)}><option value="">Choose workspace</option>{workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></label>
-      <label>Scope<select required value={type} onChange={e => setType(e.target.value)}><option value="">Choose scope</option>{scopeNames.map((name, i) => <option key={name} value={i}>{name}</option>)}</select></label>
-      {type === '0' && <fieldset><legend>Documents</legend>{options.documents.map(doc => <label className="block" key={doc.id}><input type="checkbox" checked={documentIds.includes(doc.id)} onChange={e => setDocumentIds(ids => e.target.checked ? [...ids, doc.id] : ids.filter(id => id !== doc.id))} />{doc.fileName}</label>)}</fieldset>}
-      {type === '1' && <label>Root folder<input required value={folderPath} onChange={e => setFolderPath(e.target.value)} /></label>}
-      {type === '3' && <label>Collection<select required value={collectionId} onChange={e => setCollectionId(e.target.value)}><option value="">Choose collection</option>{options.collections.map(collection => <option key={collection.id} value={collection.id}>{collection.name}</option>)}</select></label>}
-      {type === '1' && <label><input type="checkbox" checked={includeSubfolders} onChange={e => setIncludeSubfolders(e.target.checked)} />Include subfolders</label>}
-      {type === '1' && <label>Excluded branches (one per line)<textarea value={excludedBranches} onChange={e => setExcludedBranches(e.target.value)} /></label>}
-      <label>Exact find<textarea required value={find} onChange={e => setFind(e.target.value)} /></label>
-      <label>Replacement<textarea value={replacement} onChange={e => setReplacement(e.target.value)} /></label>
-      <button disabled={busy || (!!active.current?.running && !pollFailed) || !workspaceId || type === '' || !find || (type === '0' && documentIds.length === 0) || (type === '3' && !collectionId)} type="submit">Preview</button>
-    </form>
-    {error && <p role="alert">{error}</p>}
-    {pollFailed && active.current?.planId && <button disabled={busy} onClick={retry}>Retry preview status</button>}
-    {!preview && active.current?.planId && active.current.running && <button disabled={busy} onClick={() => void cancel()}>Cancel preview</button>}
-    {preview && <div>
-      <p role="status">{preview.status}: {preview.progress}%</p><progress aria-label="Preview progress" value={preview.progress} max={100} />{preview.errorCode && <p role="alert">{preview.errorCode}</p>}{preview.status === 'Expired' && <p role="alert">Plan expired. Re-preview required.</p>}{(preview.status === 'Running' || preview.status === 'Pending') && <button disabled={busy} onClick={() => void cancel()}>Cancel preview</button>}
-      <SearchReplaceReview
-        preview={preview}
-        find={find}
-        replacement={replacement}
-        editable={editable}
-        scopeLabel={scopeNames[preview.scope.type]}
-        workspaceName={workspaces.find(w => w.id === preview.scope.workspaceId)?.name || 'Unavailable workspace'}
-        collectionLabel={preview.scope.collectionId ? options.collections.find(c => c.id === preview.scope.collectionId)?.name || 'Unavailable collection' : 'None'}
-        documentName={id => preview.files.find(f => f.documentId === id)?.fileName || options.documents.find(d => d.id === id)?.fileName || 'Unavailable document'}
-        onEdit={edit}
-      />
-    </div>}
-    <button disabled={!editable || !dirty} onClick={() => void save()}>Save selection</button>{saved && <p role="status">Selection saved.</p>}
-    <button disabled={!canApply} onClick={() => void apply()}>Apply</button>
-    {applyState && <p role="status">{applyState.summary}</p>}
-    {!applyState && dirty && <p role="status">Save the reviewed selection before applying.</p>}
+  return <section
+    aria-label="Batch operations"
+    data-testid="batch-sheet-layer"
+    onKeyDown={e => e.stopPropagation()}
+    // UI-03 screen 04: the design's centred sheet, deliberately non-modal.
+    // No scrim and `pointer-events-none` on the layer mean the canvas stays
+    // usable — only the sheet panel itself receives input.
+    className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center p-6"
+  >
+    <SheetShell
+      title="Batch operations"
+      testId="batch-sheet-panel"
+      widthClass="max-w-[720px]"
+      className="pointer-events-auto"
+      scrim={false}
+      onClose={onClose}
+      status={preview ? `${preview.filesAffected === 1 ? '1 file' : `${preview.filesAffected} files`} · ${preview.occurrenceCount} occurrences` : undefined}
+      footer={<div className="flex w-full items-center gap-2">
+        {!preview && active.current?.planId && active.current.running && <button disabled={busy} onClick={() => void cancel()}>Cancel preview</button>}
+        {preview && (preview.status === 'Running' || preview.status === 'Pending') && <button disabled={busy} onClick={() => void cancel()}>Cancel preview</button>}
+        <div className="ml-auto flex items-center gap-2">
+          <button disabled={!editable || !dirty} onClick={() => void save()}>Save selection</button>
+          <button disabled={!canApply} onClick={() => void apply()}>Apply</button>
+        </div>
+      </div>}
+    >
+      <form onSubmit={e => { e.preventDefault(); void start(); }} className="grid gap-3">
+        <label>Workspace<select required value={workspaceId} onChange={e => setWorkspaceId(e.target.value)}><option value="">Choose workspace</option>{workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></label>
+        <label>Scope<select required value={type} onChange={e => setType(e.target.value)}><option value="">Choose scope</option>{scopeNames.map((name, i) => <option key={name} value={i}>{name}</option>)}</select></label>
+        {type === '0' && <fieldset><legend>Documents</legend>{options.documents.map(doc => <label className="block" key={doc.id}><input type="checkbox" checked={documentIds.includes(doc.id)} onChange={e => setDocumentIds(ids => e.target.checked ? [...ids, doc.id] : ids.filter(id => id !== doc.id))} />{doc.fileName}</label>)}</fieldset>}
+        {type === '1' && <label>Root folder<input required value={folderPath} onChange={e => setFolderPath(e.target.value)} /></label>}
+        {type === '3' && <label>Collection<select required value={collectionId} onChange={e => setCollectionId(e.target.value)}><option value="">Choose collection</option>{options.collections.map(collection => <option key={collection.id} value={collection.id}>{collection.name}</option>)}</select></label>}
+        {type === '1' && <label><input type="checkbox" checked={includeSubfolders} onChange={e => setIncludeSubfolders(e.target.checked)} />Include subfolders</label>}
+        {type === '1' && <label>Excluded branches (one per line)<textarea value={excludedBranches} onChange={e => setExcludedBranches(e.target.value)} /></label>}
+        <label>Exact find<textarea required value={find} onChange={e => setFind(e.target.value)} /></label>
+        <label>Replacement<textarea value={replacement} onChange={e => setReplacement(e.target.value)} /></label>
+        <button disabled={busy || (!!active.current?.running && !pollFailed) || !workspaceId || type === '' || !find || (type === '0' && documentIds.length === 0) || (type === '3' && !collectionId)} type="submit">Preview</button>
+      </form>
+      {error && <p role="alert">{error}</p>}
+      {pollFailed && active.current?.planId && <button disabled={busy} onClick={retry}>Retry preview status</button>}
+      {preview && <div>
+        <p role="status">{preview.status}: {preview.progress}%</p><progress aria-label="Preview progress" value={preview.progress} max={100} />{preview.errorCode && <p role="alert">{preview.errorCode}</p>}{preview.status === 'Expired' && <p role="alert">Plan expired. Re-preview required.</p>}
+        <SearchReplaceReview
+          preview={preview}
+          find={find}
+          replacement={replacement}
+          editable={editable}
+          scopeLabel={scopeNames[preview.scope.type]}
+          workspaceName={workspaces.find(w => w.id === preview.scope.workspaceId)?.name || 'Unavailable workspace'}
+          collectionLabel={preview.scope.collectionId ? options.collections.find(c => c.id === preview.scope.collectionId)?.name || 'Unavailable collection' : 'None'}
+          documentName={id => preview.files.find(f => f.documentId === id)?.fileName || options.documents.find(d => d.id === id)?.fileName || 'Unavailable document'}
+          onEdit={edit}
+        />
+      </div>}
+      {saved && <p role="status">Selection saved.</p>}
+      {applyState && <p role="status">{applyState.summary}</p>}
+      {!applyState && dirty && <p role="status">Save the reviewed selection before applying.</p>}
+    </SheetShell>
   </section>;
 }
 

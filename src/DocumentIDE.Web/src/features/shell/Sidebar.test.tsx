@@ -79,7 +79,7 @@ describe('Sidebar', () => {
 
     expect(onNavigate).toHaveBeenNthCalledWith(1, 'source-control');
     expect(onNavigate).toHaveBeenNthCalledWith(2, 'worktrees');
-    expect(onNavigate).toHaveBeenNthCalledWith(3, 'git-history');
+    expect(onNavigate).toHaveBeenNthCalledWith(3, 'history');
   });
 
   it('marks only the active SCM row as pressed', () => {

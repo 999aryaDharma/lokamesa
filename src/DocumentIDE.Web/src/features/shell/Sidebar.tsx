@@ -14,9 +14,10 @@ import SourceListRow from './SourceListRow';
  *                        `Add folder` row that opens the attach surface;
  *   - `LIBRARY`        → the `Search` and `Shares` surfaces plus the
  *                        source-control navigations mounted by UI-03
- *                        (`Source control`, `Worktrees`, Git `History`).
+ *                        (`Source control`, `Worktrees`, `History`).
  *                        Every row is a real navigation; there are no inert
- *                        labels.
+ *                        labels. `History` opens one surface whose segmented
+ *                        control separates Document IDE operations from Git.
  *
  * Fully controlled and presentational: it owns no state, so a restyle cannot
  * change behaviour. Every row that used to be reachable from the flat top nav
@@ -34,7 +35,7 @@ export type ShellSurface =
   | 'source-control'
   | 'worktrees'
   | 'docx-diff'
-  | 'git-history';
+  | 'history';
 
 export interface SidebarProps {
   activeView: string;
@@ -76,7 +77,8 @@ const SCM_ROWS: ReadonlyArray<{
 }> = [
   { label: 'Source control', glyph: '⎇', surface: 'source-control', testId: 'sidebar-source-control' },
   { label: 'Worktrees', glyph: '⑂', surface: 'worktrees', testId: 'sidebar-worktrees' },
-  { label: 'History', glyph: '↻', surface: 'git-history', testId: 'sidebar-git-history' },
+  // One History row (UI-03 part B): the surface itself segments Operations | Git.
+  { label: 'History', glyph: '↻', surface: 'history', testId: 'sidebar-history' },
 ];
 
 const SidebarSection: React.FC<{ title: string; children: React.ReactNode }> = ({

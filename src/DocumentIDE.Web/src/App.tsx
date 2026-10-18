@@ -30,11 +30,11 @@
  *     canvas selection and its workspace document paths.
  *
  * UI-03 mounts the source-control surfaces into the same shell: the sidebar's
- * `Source control`, `Worktrees` and Git `History` rows switch the content pane
- * to screens 05/06/07 (plus the Git history surface), and the toolbar's
- * Canvas/List/Graph switch always returns to the workspace surface. The SCM
- * screens own their right-hand inspectors; the workspace inspector is only
- * shown on the workspace surface.
+ * `Source control`, `Worktrees` and `History` rows switch the content pane to
+ * screens 05/06/07 and to the composed History surface (Document IDE
+ * operations + Git history), and the toolbar's Canvas/List/Graph switch always
+ * returns to the workspace surface. The SCM screens own their right-hand
+ * inspectors; the workspace inspector is only shown on the workspace surface.
  *
  * Reachability rule: exactly one control carries each of the accessible names
  * the shell tests query (`Search`, `Shares`, `PDF`, `Add folder`,
@@ -63,6 +63,7 @@ import type { CanvasObject } from './features/canvas/types';
 import { openInWord } from './features/files/OpenInWordAction';
 import DocumentGraph from './features/graph/DocumentGraph';
 import { useGraphStore, type GraphNode } from './features/graph/graphStore';
+import HistoryScreen from './features/history/HistoryScreen';
 import DocumentList from './features/list/DocumentList';
 import MarkdownEditor from './features/markdown/MarkdownEditor';
 import PdfExportPanel from './features/pdf/PdfExportPanel';
@@ -73,7 +74,6 @@ import Inspector from './features/shell/Inspector';
 import Sidebar, { type ShellSurface, type SidebarFolderSource } from './features/shell/Sidebar';
 import Toolbar from './features/shell/Toolbar';
 import DocxDiffScreen from './features/source-control/DocxDiffScreen';
-import GitHistoryScreen from './features/source-control/GitHistoryScreen';
 import SourceControlScreen from './features/source-control/SourceControlScreen';
 import type { SourceControlChangeEntry } from './features/source-control/sourceControlModels';
 import WorktreesScreen from './features/source-control/WorktreesScreen';
@@ -284,6 +284,31 @@ export default function App() {
     [handleOpenMarkdown, objects],
   );
 
+  /** UI-03 part B: document name for history rows (the same title the app shows). */
+  const resolveDocumentName = useCallback(
+    (documentId: string) =>
+      objects.find((candidate) => candidate.id === documentId)?.title ?? documentId,
+    [objects],
+  );
+
+  /**
+   * UI-03 part B: a history row links a changed file back to its document. DOCX
+   * goes through the existing open-in-Word action; everything else opens the
+   * Markdown editor. The history payload carries only ids, so this resolver is
+   * what keeps the link honest for each document type.
+   */
+  const handleOpenHistoryDocument = useCallback(
+    (documentId: string) => {
+      const object = objects.find((candidate) => candidate.id === documentId);
+      if (object?.docType === 'docx') {
+        void handleOpenInWord(documentId);
+        return;
+      }
+      handleOpenMarkdownById(documentId);
+    },
+    [handleOpenInWord, handleOpenMarkdownById, objects],
+  );
+
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-mac-content text-mac-text">
       <Toolbar
@@ -409,11 +434,17 @@ export default function App() {
               </div>
             )}
 
-            {activeSurface === 'git-history' && (
-              <GitHistoryScreen
+            {activeSurface === 'history' && (
+              <HistoryScreen
                 path={repositoryPath}
                 inspectorOpen={inspectorOpen}
                 onAttachFolder={() => handleAttachFolder('')}
+                onOpenDocument={handleOpenHistoryDocument}
+                documentName={resolveDocumentName}
+                // No `source` on purpose: this build has no privileged route
+                // that lists Document IDE operations or storage usage, so the
+                // Operations tab renders a typed unavailable state instead of
+                // an empty or sample list. See the UI-03 handoff.
               />
             )}
           </div>
@@ -447,7 +478,7 @@ export default function App() {
             />
           )}
 
-          {batchOpen && <BatchPreviewPanel />}
+          {batchOpen && <BatchPreviewPanel onClose={() => setBatchOpen(false)} />}
 
           {pdfOpen && (
             <PdfExportPanel
