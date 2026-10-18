@@ -152,7 +152,7 @@ Poin implementasi yang mudah salah:
 2. **Group drag** = translasi seragam; posisi relatif terjaga; objek `pinned` tidak ikut bergerak.
 3. **Seleksi sebagai pure function** (`applyClick`, `rectSelect`, `groupDrag`) → mudah diuji tanpa DOM.
 4. **Gesture folder (pasca UI-01)**: klik tunggal **membuka folder**, klik berikutnya menutup; picker CAN-04 pindah ke affordance `⌄`. Timer arbitrase `FOLDER_CLICK_OPEN_DELAY_MS` sudah **tidak ada** — jangan direintroduksi. Urutan DOM yang benar-benar terjadi: `click, click, dblclick`.
-5. **Aksesibilitas**: `role="button"`, `tabIndex={0}`, `aria-label`, **`aria-pressed`** (bukan `aria-selected` — itu state yang tidak didukung untuk role button), handler `Enter`/`Space`. `FolderObject` sudah memakai `aria-pressed`; `DocumentNode.tsx:119` masih `aria-selected` dan sedang diselaraskan.
+5. **Aksesibilitas**: `role="button"`, `tabIndex={0}`, `aria-label`, **`aria-pressed`** (bukan `aria-selected` — itu state yang tidak didukung untuk role button), handler `Enter`/`Space`. `FolderObject` dan `DocumentNode` sudah memakai `aria-pressed`. Sisa sejenis yang belum diperbaiki: `SearchPanel.tsx:227` dan `SourceControlPanel.tsx:266` (`aria-selected` pada `<div>`/`<li>` tanpa role pendukung) — follow-up a11y terpisah, bukan bagian wildboard.
 
 ### 3.5 Persistensi
 

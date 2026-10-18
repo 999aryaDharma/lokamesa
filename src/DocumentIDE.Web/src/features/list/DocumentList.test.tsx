@@ -245,8 +245,9 @@ describe('List selection can feed existing selection model', () => {
 
     // Switching back to Canvas shows the card selected — same selection state.
     fireEvent.click(screen.getByTestId('view-canvas-btn'));
-    expect(document.querySelector('[data-object-id="doc-1"]')?.getAttribute('aria-selected')).toBe('true');
-    expect(document.querySelector('[data-object-id="doc-2"]')?.getAttribute('aria-selected')).toBe('false');
+    expect(document.querySelector('[data-object-id="doc-1"]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(document.querySelector('[data-object-id="doc-2"]')?.getAttribute('aria-pressed')).toBe('false');
+    expect(document.querySelector('[data-object-id="doc-1"]')?.hasAttribute('aria-selected')).toBe(false);
   });
 
   it('preserves a canvas-made selection when switching to the list', () => {
@@ -440,6 +441,7 @@ describe('Returning to Canvas preserves coordinates', () => {
     const card = document.querySelector('[data-object-id="doc-1"]') as HTMLElement;
     expect(card.style.left).toBe('100px');
     expect(card.style.top).toBe('200px');
-    expect(card.getAttribute('aria-selected')).toBe('true');
+    expect(card.getAttribute('aria-pressed')).toBe('true');
+    expect(card.hasAttribute('aria-selected')).toBe(false);
   });
 });
