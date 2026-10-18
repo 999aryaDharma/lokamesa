@@ -120,6 +120,8 @@ Rules:
 | SCM-20 | Source Control Debt Closure | READY | SCM-17, SCM-18, SCM-19 |  |  |
 | DEPS-01 | Dependency Advisories and the Last Intermittent Test | READY | REL-03 |  |  |
 | DATA-01 | Reference Hygiene and Missing-Status Refresh | READY | UI-05 |  |  |
+| HIST-05 | At-Least-Once Operation Recording and Backfill | READY | HIST-04, DATA-01 |  |  |
+| CTX-06 | Context Pack Export and Real Token Estimate | READY | CTX-04, UI-05 |  |  |
 | REL-04 | Release Gate Integrity & Markdown Preview Sanitizer Coverage | DONE | REL-02 | fix/rel-04-release-gate-integrity (0d7ef2a) | docs/sprints/handoffs/REL-04-HANDOFF.md |
 | SCM-01 | Git Capability & Controlled Process Runner | DONE | FND-03, FND-07, FS-02 | feat/git-capability-controlled-process-runner | docs/sprints/handoffs/SCM-01-HANDOFF.md |
 | SCM-02 | Git Repository, Worktree & Status Domain | DONE | SCM-01, FS-03 | feat/git-repository-worktree-status-domain | docs/sprints/handoffs/SCM-02-HANDOFF.md |
