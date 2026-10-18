@@ -28,6 +28,12 @@ export interface ConflictPanelProps {
    * alternative opener.
    */
   onOpenDocument?: (documentId: string) => void;
+  /**
+   * UI-03: optional DOCX-specific routing so a `.docx` conflict can use the
+   * existing Word path while other documents keep the document-open seam.
+   * When absent, `onOpenDocument` is used unchanged.
+   */
+  onOpenDocxDocument?: (documentId: string) => void;
 }
 
 const kindLabels: Record<GitConflictKind, string> = {
@@ -96,9 +102,11 @@ function TypedState({ state }: { state: SourceControlConflictModel }) {
 function ConflictRow({
   entry,
   onOpenDocument,
+  onOpenDocxDocument,
 }: {
   entry: SourceControlConflictEntry;
   onOpenDocument?: (documentId: string) => void;
+  onOpenDocxDocument?: (documentId: string) => void;
 }) {
   const canOpen = entry.openAction !== 'None' && entry.documentId !== null;
 
@@ -123,7 +131,13 @@ function ConflictRow({
             <button
               type="button"
               data-testid={`conflict-open-${entry.path}`}
-              onClick={() => onOpenDocument?.(entry.documentId!)}
+              onClick={() => {
+                if (entry.isDocx && onOpenDocxDocument) {
+                  onOpenDocxDocument(entry.documentId!);
+                  return;
+                }
+                onOpenDocument?.(entry.documentId!);
+              }}
               className={secondaryButtonClassName}
               aria-label={`Open for manual resolution: ${entry.path}`}
             >
@@ -145,6 +159,7 @@ export default function ConflictPanel({
   isLoading = false,
   errorMessage = null,
   onOpenDocument,
+  onOpenDocxDocument,
 }: ConflictPanelProps) {
   if (state === null) {
     return (
@@ -237,7 +252,12 @@ export default function ConflictPanel({
       ) : (
         <ul className="space-y-1">
           {state.conflicts.map((entry) => (
-            <ConflictRow key={entry.path} entry={entry} onOpenDocument={onOpenDocument} />
+            <ConflictRow
+              key={entry.path}
+              entry={entry}
+              onOpenDocument={onOpenDocument}
+              onOpenDocxDocument={onOpenDocxDocument}
+            />
           ))}
         </ul>
       )}

@@ -12,10 +12,11 @@ import SourceListRow from './SourceListRow';
  *   - `FOLDER SOURCES` → the real folder sources the shell loaded from
  *                        `GET /api/workspaces/{id}/folder-sources`, with the
  *                        `Add folder` row that opens the attach surface;
- *   - `LIBRARY`        → the `Search` and `Shares` surfaces, plus the
- *                        source-control surfaces as *inert labels* (they are
- *                        not mounted in this app, so they must not pretend to
- *                        be buttons).
+ *   - `LIBRARY`        → the `Search` and `Shares` surfaces plus the
+ *                        source-control navigations mounted by UI-03
+ *                        (`Source control`, `Worktrees`, Git `History`).
+ *                        Every row is a real navigation; there are no inert
+ *                        labels.
  *
  * Fully controlled and presentational: it owns no state, so a restyle cannot
  * change behaviour. Every row that used to be reachable from the flat top nav
@@ -27,6 +28,14 @@ export interface SidebarFolderSource {
   documentCount: number;
 }
 
+/** Non-workspace surfaces the shell can navigate to. */
+export type ShellSurface =
+  | 'workspace'
+  | 'source-control'
+  | 'worktrees'
+  | 'docx-diff'
+  | 'git-history';
+
 export interface SidebarProps {
   activeView: string;
   onViewChange: (view: 'canvas' | 'list' | 'graph') => void;
@@ -37,6 +46,10 @@ export interface SidebarProps {
   searchOpen: boolean;
   onToggleShares: () => void;
   sharesOpen: boolean;
+  /** Which top-level surface is mounted in the content pane. */
+  activeSurface: ShellSurface;
+  /** Navigates to a mounted surface; no row is ever inert. */
+  onNavigate: (surface: ShellSurface) => void;
 }
 
 const VIEW_ROWS: ReadonlyArray<{
@@ -50,15 +63,20 @@ const VIEW_ROWS: ReadonlyArray<{
 ];
 
 /**
- * The source-control surfaces exist as shipped, restyled components (screens
- * 05/06/07) but are not mounted by this app: no route, store or DTO source
- * feeds them yet. They are listed as inert labels rather than buttons so the
- * sidebar never advertises an action that cannot happen.
+ * UI-03 mounts the source-control surfaces (screens 05/06/07), so these rows
+ * are real navigations driven by the same shell surface state as the toolbar.
+ * The design's trailing badges are only rendered when the caller has a real
+ * count; no placeholder count is ever passed here.
  */
-const SCM_ROWS: ReadonlyArray<{ label: string; glyph: string }> = [
-  { label: 'Source control', glyph: '⎇' },
-  { label: 'Worktrees', glyph: '⑂' },
-  { label: 'History', glyph: '↻' },
+const SCM_ROWS: ReadonlyArray<{
+  label: string;
+  glyph: string;
+  surface: ShellSurface;
+  testId: string;
+}> = [
+  { label: 'Source control', glyph: '⎇', surface: 'source-control', testId: 'sidebar-source-control' },
+  { label: 'Worktrees', glyph: '⑂', surface: 'worktrees', testId: 'sidebar-worktrees' },
+  { label: 'History', glyph: '↻', surface: 'git-history', testId: 'sidebar-git-history' },
 ];
 
 const SidebarSection: React.FC<{ title: string; children: React.ReactNode }> = ({
@@ -83,6 +101,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   searchOpen,
   onToggleShares,
   sharesOpen,
+  activeSurface,
+  onNavigate,
 }) => (
   <aside
     aria-label="Sidebar"
@@ -95,7 +115,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           key={row.view}
           label={row.label}
           icon={row.glyph}
-          selected={activeView === row.view}
+          selected={activeSurface === 'workspace' && activeView === row.view}
           onClick={() => onViewChange(row.view)}
           testId={`sidebar-view-${row.view}`}
         />
@@ -144,7 +164,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           key={row.label}
           label={row.label}
           icon={row.glyph}
-          testId={`sidebar-inert-${row.label.replace(/\s+/g, '-').toLowerCase()}`}
+          selected={activeSurface === row.surface}
+          onClick={() => onNavigate(row.surface)}
+          testId={row.testId}
         />
       ))}
     </SidebarSection>

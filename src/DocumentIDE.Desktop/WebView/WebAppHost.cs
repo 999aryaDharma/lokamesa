@@ -6,10 +6,14 @@ using System.Threading.Tasks;
 using DocumentIDE.Api.Security;
 using DocumentIDE.Api;
 using DocumentIDE.Api.Controllers;
+using DocumentIDE.Core.Batch;
 using DocumentIDE.Core.Domain.Repositories;
 using DocumentIDE.Core.Filesystem;
+using DocumentIDE.Core.History;
+using DocumentIDE.Core.SourceControl;
 using DocumentIDE.Infrastructure.Persistence;
 using DocumentIDE.Infrastructure.Persistence.Repositories;
+using DocumentIDE.Infrastructure.SourceControl;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -17,6 +21,7 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -67,6 +72,62 @@ public class WebAppHost : IAsyncDisposable, IDisposable
         builder.Services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
         builder.Services.AddScoped<IFolderSourceRepository, FolderSourceRepository>();
         builder.Services.AddScoped<StartupRecoveryService>();
+
+        // UI-03: SourceControlController is on the allow-list below, so its
+        // application services must exist in this host too. These are the same
+        // SCM-01..18 registrations the development API host uses; registering
+        // them changes no Git behaviour, it only makes the already-tested
+        // controller constructible behind the same privileged guard.
+        builder.Services.TryAddSingleton<GitProcessRunnerOptions>(GitProcessRunnerOptions.Default);
+        builder.Services.TryAddSingleton<GitWorktreeMutationQueue>();
+        builder.Services.TryAddSingleton<IGitProcessRunner, GitProcessRunner>();
+        builder.Services.TryAddSingleton(sp => new GitRepositoryService(
+            sp.GetRequiredService<IGitProcessRunner>(),
+            sp.GetService<FileChangeCoordinator>()));
+        builder.Services.TryAddSingleton(sp => new GitStageService(
+            sp.GetRequiredService<IGitProcessRunner>(),
+            sp.GetRequiredService<GitRepositoryService>()));
+        builder.Services.TryAddSingleton(sp => new GitCommitService(
+            sp.GetRequiredService<IGitProcessRunner>(),
+            sp.GetRequiredService<GitRepositoryService>(),
+            sp.GetRequiredService<GitStageService>()));
+        builder.Services.TryAddScoped<IWorkSessionRepository, WorkSessionRepository>();
+        builder.Services.TryAddScoped<IWorkSessionService>(sp => new WorkSessionService(
+            sp.GetRequiredService<IWorkSessionRepository>()));
+        builder.Services.TryAddSingleton(sp => new GitRemoteService(
+            sp.GetRequiredService<IGitProcessRunner>(),
+            sp.GetRequiredService<GitRepositoryService>()));
+        builder.Services.TryAddSingleton(sp => new GitPushService(
+            sp.GetRequiredService<IGitProcessRunner>(),
+            sp.GetRequiredService<GitRepositoryService>(),
+            sp.GetRequiredService<GitRemoteService>()));
+        builder.Services.TryAddScoped(sp => new GitPullService(
+            sp.GetRequiredService<IGitProcessRunner>(),
+            sp.GetRequiredService<GitRepositoryService>(),
+            sp.GetRequiredService<GitRemoteService>(),
+            sp.GetRequiredService<IDocumentRepository>(),
+            sp.GetRequiredService<IBatchApplyReindexTrigger>(),
+            sp.GetRequiredService<IGitPullHistoryRecorder>()));
+        builder.Services.TryAddSingleton(sp => new GitHistoryService(
+            sp.GetRequiredService<IGitProcessRunner>(),
+            sp.GetRequiredService<GitRepositoryService>()));
+        builder.Services.TryAddScoped(sp => new GitRestoreService(
+            sp.GetRequiredService<IGitProcessRunner>(),
+            sp.GetRequiredService<GitRepositoryService>(),
+            sp.GetRequiredService<RecoverySnapshotService>(),
+            sp.GetRequiredService<IGitRestoreHistoryRecorder>(),
+            sp.GetRequiredService<IBatchApplyReindexTrigger>(),
+            sp.GetRequiredService<IDocumentRepository>()));
+        builder.Services.TryAddScoped<IGitWorktreeService>(sp => new GitWorktreeService(
+            sp.GetRequiredService<IGitProcessRunner>(),
+            sp.GetRequiredService<IFolderSourceService>()));
+        builder.Services.TryAddScoped<IGitWorktreeMutationService>(sp => new GitWorktreeMutationService(
+            sp.GetRequiredService<IGitProcessRunner>(),
+            sp.GetRequiredService<IGitWorktreeService>()));
+        builder.Services.TryAddScoped(sp => new GitConflictService(
+            sp.GetRequiredService<GitRepositoryService>(),
+            sp.GetRequiredService<IDocumentRepository>()));
+
         builder.Services.AddControllers()
             .AddApplicationPart(typeof(BatchPreviewController).Assembly)
             .ConfigureApplicationPartManager(manager =>
@@ -171,6 +232,10 @@ public class WebAppHost : IAsyncDisposable, IDisposable
             typeof(MarkdownDocumentController),
             // UI-02: read-only DOCX preview content for the canvas file object.
             typeof(DocumentPreviewController),
+            // UI-03: source control, DOCX document-aware diff and worktree
+            // screens (05/06/07). The controller was intentionally left off the
+            // list by SCM-18 until the UI could actually mount it.
+            typeof(SourceControlController),
         };
 
         protected override bool IsController(TypeInfo typeInfo) => Array.IndexOf(AllowedControllers, typeInfo.AsType()) >= 0;

@@ -29,6 +29,13 @@
  *     privileged PDF route (single / separate / merge), driven by the current
  *     canvas selection and its workspace document paths.
  *
+ * UI-03 mounts the source-control surfaces into the same shell: the sidebar's
+ * `Source control`, `Worktrees` and Git `History` rows switch the content pane
+ * to screens 05/06/07 (plus the Git history surface), and the toolbar's
+ * Canvas/List/Graph switch always returns to the workspace surface. The SCM
+ * screens own their right-hand inspectors; the workspace inspector is only
+ * shown on the workspace surface.
+ *
  * Reachability rule: exactly one control carries each of the accessible names
  * the shell tests query (`Search`, `Shares`, `PDF`, `Add folder`,
  * `Batch operations`), so those queries stay unambiguous.
@@ -63,8 +70,13 @@ import type { PdfSelectableDocument } from './features/pdf/PdfActions';
 import { SearchPanel } from './features/search/SearchPanel';
 import { SharePanel } from './features/sharing/SharePanel';
 import Inspector from './features/shell/Inspector';
-import Sidebar, { type SidebarFolderSource } from './features/shell/Sidebar';
+import Sidebar, { type ShellSurface, type SidebarFolderSource } from './features/shell/Sidebar';
 import Toolbar from './features/shell/Toolbar';
+import DocxDiffScreen from './features/source-control/DocxDiffScreen';
+import GitHistoryScreen from './features/source-control/GitHistoryScreen';
+import SourceControlScreen from './features/source-control/SourceControlScreen';
+import type { SourceControlChangeEntry } from './features/source-control/sourceControlModels';
+import WorktreesScreen from './features/source-control/WorktreesScreen';
 import AddFolderSource from './features/workspace/AddFolderSource';
 import { useViewStore } from './features/workspace/viewStore';
 import { bootstrapWorkspace } from './features/workspace/workspaceBootstrap';
@@ -110,9 +122,19 @@ export default function App() {
   const { objects, selectedIds, setObjects, upsertObject } = useCanvasState();
   const graph = useGraphState();
 
+  const [activeSurface, setActiveSurface] = useState<ShellSurface>('workspace');
   const [searchOpen, setSearchOpen] = useState(false);
   const [sharesOpen, setSharesOpen] = useState(false);
   const [addFolderOpen, setAddFolderOpen] = useState(false);
+  /** UI-03: path prefilled into the existing FS-01 attachment flow. */
+  const [attachmentInitialPath, setAttachmentInitialPath] = useState('');
+  /**
+   * UI-03: the repository path the SCM screens read. It is the first attached
+   * folder source (or the first document's contained path when no folder source
+   * exists); the screens never scan arbitrary paths.
+   */
+  const [repositoryPath, setRepositoryPath] = useState<string | null>(null);
+  const [docxDiffEntry, setDocxDiffEntry] = useState<SourceControlChangeEntry | null>(null);
   const [batchOpen, setBatchOpen] = useState(false);
   const [pdfOpen, setPdfOpen] = useState(false);
   const [markdownDoc, setMarkdownDoc] = useState<{ id: string; title: string } | null>(null);
@@ -163,6 +185,9 @@ export default function App() {
           .map((doc) => [doc.id, doc.currentPath as string]),
       ),
     );
+    const primaryFolder = result.folderSources.find((source) => Boolean(source.canonicalPath));
+    const primaryDocument = result.documents.find((doc) => Boolean(doc.currentPath));
+    setRepositoryPath(primaryFolder?.canonicalPath ?? primaryDocument?.currentPath ?? null);
     setObjects(result.objects);
   }, [workspaceId, setObjects]);
 
@@ -233,11 +258,37 @@ export default function App() {
     [documentPaths],
   );
 
+  /** The toolbar/sidebar view switch always returns to the workspace surface. */
+  const handleViewChange = useCallback(
+    (view: 'canvas' | 'list' | 'graph') => {
+      setActiveView(view);
+      setActiveSurface('workspace');
+    },
+    [setActiveView],
+  );
+
+  const handleNavigate = useCallback((surface: ShellSurface) => {
+    setActiveSurface(surface);
+  }, []);
+
+  const handleAttachFolder = useCallback((path = '') => {
+    setAttachmentInitialPath(path);
+    setAddFolderOpen(true);
+  }, []);
+
+  const handleOpenMarkdownById = useCallback(
+    (documentId: string) => {
+      const object = objects.find((candidate) => candidate.id === documentId);
+      handleOpenMarkdown({ id: documentId, title: object?.title ?? documentId });
+    },
+    [handleOpenMarkdown, objects],
+  );
+
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-mac-content text-mac-text">
       <Toolbar
         activeView={activeView}
-        onViewChange={setActiveView}
+        onViewChange={handleViewChange}
         sidebarOpen={sidebarOpen}
         onToggleSidebar={() => setSidebarOpen((open) => !open)}
         inspectorOpen={inspectorOpen}
@@ -270,14 +321,19 @@ export default function App() {
         {sidebarOpen && (
           <Sidebar
             activeView={activeView}
-            onViewChange={setActiveView}
+            onViewChange={handleViewChange}
             folderSources={folderSources}
-            onAddFolder={() => setAddFolderOpen((open) => !open)}
+            onAddFolder={() => {
+              setAttachmentInitialPath('');
+              setAddFolderOpen((open) => !open);
+            }}
             addFolderOpen={addFolderOpen}
             onToggleSearch={() => setSearchOpen((open) => !open)}
             searchOpen={searchOpen}
             onToggleShares={() => setSharesOpen((open) => !open)}
             sharesOpen={sharesOpen}
+            activeSurface={activeSurface}
+            onNavigate={handleNavigate}
           />
         )}
 
@@ -286,23 +342,78 @@ export default function App() {
           className="relative flex min-w-0 flex-1 bg-mac-content"
         >
           <div className="min-w-0 flex-1">
-            {activeView === 'canvas' && (
-              <DocumentCanvas
-                workspaceId={workspaceId}
-                folderFiles={folderFiles}
-                onReleaseDocuments={handleReleaseDocuments}
-                onOpenMarkdownDocument={(documentId) => {
-                  const object = objects.find((candidate) => candidate.id === documentId);
-                  handleOpenMarkdown({ id: documentId, title: object?.title ?? documentId });
+            {activeSurface === 'workspace' && (
+              <>
+                {activeView === 'canvas' && (
+                  <DocumentCanvas
+                    workspaceId={workspaceId}
+                    folderFiles={folderFiles}
+                    onReleaseDocuments={handleReleaseDocuments}
+                    onOpenMarkdownDocument={handleOpenMarkdownById}
+                  />
+                )}
+                {activeView === 'list' && <DocumentList />}
+                {activeView === 'graph' && (
+                  <DocumentGraph
+                    workspaceId={workspaceId}
+                    onOpenDocument={handleOpenMarkdown}
+                    onOpenInWord={(documentId) => void handleOpenInWord(documentId)}
+                  />
+                )}
+              </>
+            )}
+
+            {activeSurface === 'source-control' && (
+              <SourceControlScreen
+                path={repositoryPath}
+                inspectorOpen={inspectorOpen}
+                onOpenWorktrees={() => setActiveSurface('worktrees')}
+                onOpenDocxDiff={(entry) => {
+                  setDocxDiffEntry(entry);
+                  setActiveSurface('docx-diff');
                 }}
+                onOpenInWord={(documentId) => void handleOpenInWord(documentId)}
+                onOpenMarkdown={handleOpenMarkdownById}
+                onAttachFolder={() => handleAttachFolder('')}
               />
             )}
-            {activeView === 'list' && <DocumentList />}
-            {activeView === 'graph' && (
-              <DocumentGraph
+
+            {activeSurface === 'worktrees' && (
+              <WorktreesScreen
+                path={repositoryPath}
                 workspaceId={workspaceId}
-                onOpenDocument={handleOpenMarkdown}
-                onOpenInWord={(documentId) => void handleOpenInWord(documentId)}
+                inspectorOpen={inspectorOpen}
+                onRequestAttachment={(path) => handleAttachFolder(path)}
+              />
+            )}
+
+            {activeSurface === 'docx-diff' && docxDiffEntry && (
+              <DocxDiffScreen
+                entry={docxDiffEntry}
+                inspectorOpen={inspectorOpen}
+                onBack={() => setActiveSurface('source-control')}
+              />
+            )}
+            {activeSurface === 'docx-diff' && !docxDiffEntry && (
+              <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+                <p className="text-xs text-mac-text-2">
+                  No document change is selected for the document diff.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setActiveSurface('source-control')}
+                  className="rounded-lg border border-mac-hairline-strong bg-mac-content px-3 py-1.5 text-xs font-medium text-mac-text hover:bg-mac-chip"
+                >
+                  Back to source control
+                </button>
+              </div>
+            )}
+
+            {activeSurface === 'git-history' && (
+              <GitHistoryScreen
+                path={repositoryPath}
+                inspectorOpen={inspectorOpen}
+                onAttachFolder={() => handleAttachFolder('')}
               />
             )}
           </div>
@@ -310,7 +421,7 @@ export default function App() {
           {searchOpen && (
             <SearchPanel
               onClosePanel={() => setSearchOpen(false)}
-              onSelectDocument={() => setActiveView('canvas')}
+              onSelectDocument={() => handleViewChange('canvas')}
               onInvokeBatchOperation={() => setBatchOpen(true)}
             />
           )}
@@ -322,6 +433,7 @@ export default function App() {
             >
               <AddFolderSource
                 workspaceId={workspaceId}
+                initialPath={attachmentInitialPath}
                 onFolderAttached={() => void loadWorkspace()}
               />
             </aside>
@@ -352,7 +464,7 @@ export default function App() {
           )}
         </main>
 
-        {inspectorOpen && (
+        {activeSurface === 'workspace' && inspectorOpen && (
           <Inspector
             activeView={activeView}
             objects={objects}

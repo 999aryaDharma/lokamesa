@@ -56,6 +56,53 @@ const annexDocument = {
   availabilityStatus: 'available',
 };
 
+/** Minimal real-shaped SCM payload used by the UI-03 reachability tests. */
+function scmStatusPayload() {
+  return {
+    status: 'Available',
+    hasRepository: true,
+    worktreeRoot: 'C:/Docs',
+    branchName: 'main',
+    isDetached: false,
+    headCommit: 'abcdef0123456789abcdef0123456789abcdef01',
+    upstreamReference: 'origin/main',
+    hasUpstream: true,
+    ahead: 0,
+    behind: 0,
+    sections: {
+      staged: [
+        {
+          path: 'Report.docx',
+          originalPath: null,
+          state: 'Modified',
+          indexChange: 'Modified',
+          workingTreeChange: 'Unmodified',
+          conflictKind: 'None',
+          statusCharacters: 'M ',
+          absolutePath: 'C:/Docs/Report.docx',
+          documentId: 'docx-1',
+        },
+      ],
+      unstaged: [
+        {
+          path: 'notes.md',
+          originalPath: null,
+          state: 'Modified',
+          indexChange: 'Unmodified',
+          workingTreeChange: 'Modified',
+          conflictKind: 'None',
+          statusCharacters: ' M',
+          absolutePath: 'C:/Docs/notes.md',
+          documentId: 'doc-1',
+        },
+      ],
+      untracked: [],
+      conflicts: [],
+    },
+    failure: null,
+  };
+}
+
 /** Route-based fetch mock covering every endpoint the shell touches. */
 function installFetch(
   graph: GraphFixture = { nodes: [], edges: [] },
@@ -122,6 +169,73 @@ function installFetch(
     }
     if (url.includes('/api/shares')) {
       return jsonResponse([]);
+    }
+    if (url.includes('/api/source-control/status')) {
+      return jsonResponse(scmStatusPayload());
+    }
+    if (url.includes('/api/source-control/remote')) {
+      return jsonResponse({
+        status: 'Available',
+        hasRepository: true,
+        worktreeRoot: 'C:/Docs',
+        branchName: 'main',
+        isDetached: false,
+        headCommit: 'abcdef0123456789abcdef0123456789abcdef01',
+        remoteName: 'origin',
+        upstreamReference: 'origin/main',
+        hasUpstream: true,
+        ahead: 0,
+        behind: 0,
+        failure: null,
+      });
+    }
+    if (url.includes('/api/source-control/conflicts')) {
+      return jsonResponse({
+        status: 'NoConflicts',
+        hasRepository: true,
+        hasConflicts: false,
+        worktreeRoot: 'C:/Docs',
+        branchName: 'main',
+        isDetached: false,
+        headCommit: 'abcdef0123456789abcdef0123456789abcdef01',
+        conflicts: [],
+        blockedActions: [],
+        message: null,
+        failure: null,
+      });
+    }
+    if (url.includes('/api/source-control/worktrees')) {
+      return jsonResponse({
+        status: 'Succeeded',
+        isSuccess: true,
+        worktrees: [
+          {
+            path: 'C:/Docs',
+            headCommit: 'abcdef0',
+            branchRef: 'refs/heads/main',
+            branchName: 'main',
+            isDetached: false,
+            isBare: false,
+            isLocked: false,
+            isPrunable: false,
+            isMainWorktree: true,
+          },
+        ],
+        errorCode: null,
+        message: null,
+        failure: null,
+      });
+    }
+    if (url.includes('/api/source-control/history')) {
+      return jsonResponse({
+        status: 'Available',
+        source: 'Git',
+        errorCode: null,
+        message: null,
+        isAvailable: true,
+        page: { commits: [], skip: 0, limit: 50, hasMore: false, nextSkip: null },
+        failure: null,
+      });
     }
     if (url.includes('/documents')) {
       return jsonResponse(documents);
@@ -265,6 +379,78 @@ describe('App shell reachability', () => {
     // The batch response (not the single-export body) drove the results.
     expect(await screen.findByRole('status')).toHaveTextContent(
       '2 PDFs generated / 0 skipped / 0 failed',
+    );
+  });
+
+  it('UI-03: the Source control sidebar row mounts screen 05 and reads GET status', async () => {
+    const fetchMock = installFetch();
+    render(<App />);
+
+    fireEvent.click(screen.getByTestId('sidebar-source-control'));
+
+    expect(await screen.findByTestId('source-control-screen')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([input]) =>
+          String(input).includes('/api/source-control/status'),
+        ),
+      ).toBe(true),
+    );
+    expect(await screen.findByTestId('source-control-section-unstaged')).toBeInTheDocument();
+  });
+
+  it('UI-03: a .docx change opens screen 06 and its primary action reaches POST /api/word/open', async () => {
+    const fetchMock = installFetch();
+    render(<App />);
+
+    fireEvent.click(screen.getByTestId('sidebar-source-control'));
+    fireEvent.click(await screen.findByTestId('source-control-entry-Report.docx'));
+    fireEvent.click(screen.getByRole('button', { name: 'Open document diff' }));
+
+    expect(await screen.findByTestId('docx-diff-screen')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open in Word' }));
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([input]) => String(input).endsWith('/api/word/open')),
+      ).toBe(true),
+    );
+    const call = fetchMock.mock.calls.find(([input]) =>
+      String(input).endsWith('/api/word/open'),
+    )!;
+    expect(JSON.parse(String(call[1]?.body))).toEqual({ documentId: 'docx-1' });
+  });
+
+  it('UI-03: the Worktrees sidebar row mounts screen 07 and reads GET worktrees', async () => {
+    const fetchMock = installFetch();
+    render(<App />);
+
+    fireEvent.click(screen.getByTestId('sidebar-worktrees'));
+
+    expect(await screen.findByTestId('worktrees-screen')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([input]) =>
+          String(input).includes('/api/source-control/worktrees'),
+        ),
+      ).toBe(true),
+    );
+  });
+
+  it('UI-03: the History sidebar row opens the real Git history surface', async () => {
+    const fetchMock = installFetch();
+    render(<App />);
+
+    fireEvent.click(screen.getByTestId('sidebar-git-history'));
+
+    expect(await screen.findByTestId('git-history-screen')).toBeInTheDocument();
+    expect(screen.getByTestId('git-history-panel')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([input]) =>
+          String(input).includes('/api/source-control/history'),
+        ),
+      ).toBe(true),
     );
   });
 
