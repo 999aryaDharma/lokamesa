@@ -152,24 +152,47 @@ describe('HistoryScreen (UI-03 screen 10)', () => {
     );
   });
 
-  it('renders a typed unavailable state instead of an empty fake list when no history route exists', async () => {
+  it('renders a typed unavailable state instead of an empty fake list when the read fails', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({}));
     renderScreen({ source: undefined });
 
     fireEvent.click(screen.getByRole('radio', { name: 'Operations' }));
 
     const unavailable = await screen.findByTestId('history-operations-unavailable');
-    expect(unavailable).toHaveTextContent(/not available/i);
+    expect(unavailable).toHaveTextContent(/could not be loaded/i);
     expect(screen.getByTestId('history-operations-unavailable-reason')).toHaveTextContent(
       HISTORY_OPERATIONS_UNAVAILABLE_REASON,
     );
-    // The gap is named, not hidden: no route lists operations or storage usage.
-    expect(unavailable).toHaveTextContent(/no route/i);
+    // The failure is named, not hidden: no rows and no route claim.
+    expect(screen.getByTestId('history-operations-unavailable-reason')).toHaveTextContent(
+      /did not return the Document IDE operation history/i,
+    );
     // Absent is better than fake: no rows, no meter, no empty-list claim.
     expect(screen.queryByRole('list', { name: 'Operation history' })).not.toBeInTheDocument();
     expect(screen.queryAllByTestId(/^history-entry-/)).toHaveLength(0);
     expect(screen.queryByTestId('history-storage-usage')).not.toBeInTheDocument();
     expect(screen.queryByText('No operations recorded yet.')).not.toBeInTheDocument();
+  });
+
+  it('turns a rejected load into the same typed unavailable state', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({}));
+    renderScreen({
+      source: {
+        load: async () => {
+          throw new Error('HistoryUnavailable: the history read failed (503).');
+        },
+        undo: async () => undoResult,
+      },
+    });
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Operations' }));
+
+    const unavailable = await screen.findByTestId('history-operations-unavailable');
+    expect(screen.getByTestId('history-operations-unavailable-reason')).toHaveTextContent(
+      'HistoryUnavailable: the history read failed (503).',
+    );
+    expect(unavailable).not.toHaveTextContent(/No operations recorded yet/);
+    expect(screen.queryByRole('list', { name: 'Operation history' })).not.toBeInTheDocument();
   });
 
   it('opens the undo conflict review from a real undo result and keeps it actionable', async () => {

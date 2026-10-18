@@ -187,6 +187,9 @@ public class WebAppHost : IAsyncDisposable, IDisposable
             // screens (05/06/07). The controller was intentionally left off the
             // list by SCM-18 until the UI could actually mount it.
             typeof(SourceControlController),
+            // HIST-04: read-only operation-history listing and storage usage
+            // for screen 10's Operations tab.
+            typeof(HistoryController),
         };
 
         protected override bool IsController(TypeInfo typeInfo) => Array.IndexOf(AllowedControllers, typeInfo.AsType()) >= 0;

@@ -237,6 +237,38 @@ function installFetch(
         failure: null,
       });
     }
+    if (url.includes('/api/history/operations')) {
+      return jsonResponse({
+        status: 'Available',
+        entries: [
+          {
+            operationId: 'op-applied',
+            planId: 'op-applied',
+            operationType: 'Search & Replace',
+            status: 'Applied',
+            recordedUtc: '2026-10-18T12:04:18Z',
+            startedUtc: '2026-10-18T12:04:17Z',
+            completedUtc: '2026-10-18T12:04:18Z',
+            affectedFileCount: 1,
+            snapshotId: 'snap-1',
+            files: [{ documentId: 'doc-1', outcome: 'Success', reasonCode: null, detail: null }],
+            undo: null,
+          },
+        ],
+        skip: 0,
+        limit: 50,
+        totalCount: 1,
+        hasMore: false,
+        nextSkip: null,
+      });
+    }
+    if (url.includes('/api/history/storage')) {
+      return jsonResponse({
+        status: 'Available',
+        usedBytes: 1024 ** 3,
+        capacityBytes: 5 * 1024 ** 3,
+      });
+    }
     if (url.includes('/documents')) {
       return jsonResponse(documents);
     }
@@ -455,8 +487,8 @@ describe('App shell reachability', () => {
     );
   });
 
-  it('UI-03: the History segmented control switches to Document IDE operations and states the missing listing route', async () => {
-    installFetch();
+  it('HIST-04: the History segmented control switches to the real Document IDE operations listing', async () => {
+    const fetchMock = installFetch();
     render(<App />);
 
     fireEvent.click(screen.getByTestId('sidebar-history'));
@@ -468,11 +500,18 @@ describe('App shell reachability', () => {
 
     fireEvent.click(within(control).getByRole('radio', { name: 'Operations' }));
 
-    // No route lists Document IDE operations: a typed unavailable state, never
-    // an empty list or sample rows.
-    expect(await screen.findByTestId('history-operations-unavailable')).toBeInTheDocument();
-    expect(screen.queryByRole('list', { name: 'Operation history' })).not.toBeInTheDocument();
-    expect(screen.queryAllByTestId(/^history-entry-/)).toHaveLength(0);
+    // Real rows from GET /api/history/operations, never the unavailable state.
+    const list = await screen.findByRole('list', { name: 'Operation history' });
+    expect(within(list).getByTestId('history-entry-op-applied')).toBeInTheDocument();
+    expect(screen.queryByTestId('history-operations-unavailable')).not.toBeInTheDocument();
+    expect(screen.getByTestId('history-storage-usage')).toHaveTextContent('1.0 GiB of 5.0 GiB');
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([input]) =>
+          String(input).includes('/api/history/operations'),
+        ),
+      ).toBe(true),
+    );
   });
 
   it('G4: double-clicking a DOCX canvas card opens it in Word (the deliberate QuickLook product path)', async () => {

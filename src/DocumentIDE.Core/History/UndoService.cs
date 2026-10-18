@@ -58,6 +58,7 @@ public sealed class UndoService
     private readonly IBatchApplyReindexTrigger _reindex;
     private readonly IUndoHistoryRecorder _history;
     private readonly IDateTimeProvider _clock;
+    private readonly IOperationHistoryRecorder? _operationHistory;
 
     public UndoService(
         IHistoryStorage storage,
@@ -66,7 +67,8 @@ public sealed class UndoService
         IExternalEditStateProbe externalEditProbe,
         IBatchApplyReindexTrigger reindexTrigger,
         IUndoHistoryRecorder historyRecorder,
-        IDateTimeProvider? clock = null)
+        IDateTimeProvider? clock = null,
+        IOperationHistoryRecorder? operationHistory = null)
     {
         _storage = storage ?? throw new ArgumentNullException(nameof(storage));
         _documents = documents ?? throw new ArgumentNullException(nameof(documents));
@@ -75,6 +77,7 @@ public sealed class UndoService
         _reindex = reindexTrigger ?? throw new ArgumentNullException(nameof(reindexTrigger));
         _history = historyRecorder ?? throw new ArgumentNullException(nameof(historyRecorder));
         _clock = clock ?? new SystemDateTimeProvider();
+        _operationHistory = operationHistory;
     }
 
     public async Task<UndoResult> UndoAsync(string operationId, CancellationToken cancellationToken = default)
@@ -82,6 +85,7 @@ public sealed class UndoService
         if (string.IsNullOrWhiteSpace(operationId))
             throw new ArgumentException("Operation ID cannot be empty.", nameof(operationId));
         cancellationToken.ThrowIfCancellationRequested();
+        var startedAt = _clock.UtcNow;
 
         var metadata = (await _storage.GetAllMetadataAsync())
             .Where(m => string.Equals(m.OperationId, operationId, StringComparison.Ordinal))
@@ -156,7 +160,71 @@ public sealed class UndoService
         if (status is UndoResultStatus.Completed or UndoResultStatus.Partial)
             await RecordStatusAsync(operationId, status);
 
+        await RecordOperationAsync(operationId, startedAt, metadata.SnapshotId, status, outcomes);
+
         return new UndoResult(operationId, metadata.SnapshotId, status, outcomes);
+    }
+
+    /// <summary>
+    /// HIST-04 — records the undo review on the same operation row. The existing
+    /// undo semantics are unchanged: this only observes the result. A failed write
+    /// is surfaced as a typed <see cref="InvalidOperationException"/>, matching
+    /// <see cref="RecordStatusAsync"/>; it is never silently dropped.
+    /// </summary>
+    private async Task RecordOperationAsync(
+        string operationId,
+        DateTime startedAt,
+        string snapshotId,
+        UndoResultStatus status,
+        IReadOnlyList<UndoFileResult> outcomes)
+    {
+        if (_operationHistory is null) return;
+
+        var recordedAt = _clock.UtcNow;
+        var record = new OperationUndoRecord(
+            OperationId: operationId,
+            PlanId: operationId,
+            // Only used when this operation has no apply row yet (it was applied
+            // before HIST-04). The repository keeps the original operation's kind
+            // for every operation that is already listed.
+            Kind: "Undo",
+            StartedUtc: startedAt,
+            CompletedUtc: recordedAt,
+            Outcome: status is UndoResultStatus.Completed or UndoResultStatus.Partial
+                ? OperationOutcome.Undone
+                : OperationOutcome.Failed,
+            AffectedFileCount: outcomes.Count,
+            Files: outcomes
+                .Select(file => new OperationHistoryFileOutcome(
+                    file.DocumentId,
+                    file.Outcome switch
+                    {
+                        UndoFileOutcome.Restored or UndoFileOutcome.AlreadyRestored => BatchApplyFileOutcome.Success,
+                        UndoFileOutcome.Skipped => BatchApplyFileOutcome.Skipped,
+                        _ => BatchApplyFileOutcome.Failure,
+                    },
+                    file.ReasonCode,
+                    file.Detail))
+                .ToArray(),
+            Undo: new OperationHistoryUndoView(
+                status,
+                outcomes
+                    .Select(file => new OperationHistoryUndoFileOutcome(
+                        file.DocumentId,
+                        file.Outcome,
+                        file.ReasonCode,
+                        file.Detail))
+                    .ToArray()),
+            SnapshotId: snapshotId);
+
+        try
+        {
+            await _operationHistory.RecordUndoneAsync(record, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Operation history record failed for operation '{operationId}'.", ex);
+        }
     }
 
     private async Task<UndoFileResult> UndoFileAsync(string snapshotId, SnapshotFileRecord record, CancellationToken cancellationToken)

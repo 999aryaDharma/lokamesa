@@ -15,6 +15,7 @@ using DocumentIDE.Infrastructure.Docx;
 using DocumentIDE.Infrastructure.Filesystem;
 using DocumentIDE.Infrastructure.History;
 using DocumentIDE.Infrastructure.Markdown;
+using DocumentIDE.Infrastructure.Persistence;
 using DocumentIDE.Infrastructure.Persistence.Repositories;
 using DocumentIDE.Infrastructure.Search;
 using DocumentIDE.Infrastructure.Sharing;
@@ -84,6 +85,12 @@ public static class PrivilegedSurfaceRegistration
         services.TryAddSingleton<IGitRestoreHistoryRecorder>(sp => sp.GetRequiredService<JsonlHistoryStore>());
         // SCM-12 — conservative pull operations are recorded in the same store.
         services.TryAddSingleton<IGitPullHistoryRecorder>(sp => sp.GetRequiredService<JsonlHistoryStore>());
+        // HIST-04 — the persisted operation listing + storage usage reads. The
+        // repository is also the recorder consumed by the existing apply/undo
+        // write paths; it does not replace the per-file JSONL audit records.
+        services.TryAddScoped<OperationHistoryRepository>();
+        services.TryAddScoped<IOperationHistoryRepository>(sp => sp.GetRequiredService<OperationHistoryRepository>());
+        services.TryAddScoped<IOperationHistoryRecorder>(sp => sp.GetRequiredService<OperationHistoryRepository>());
         services.TryAddScoped<RecoverySnapshotService>();
         services.TryAddScoped<IExternalEditStateProbe, WordEditStateProbe>();
         services.TryAddScoped<IAtomicFileReplacer, AtomicFileReplacer>();

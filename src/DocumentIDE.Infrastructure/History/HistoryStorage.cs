@@ -24,10 +24,12 @@ namespace DocumentIDE.Infrastructure.History
         // Default capacity is 5 GiB (5 * 1024^3 bytes)
         private const long DefaultCapacityBytes = 5L * 1024 * 1024 * 1024;
 
-        public HistoryStorage(long capacityBytes = DefaultCapacityBytes, IDateTimeProvider? clock = null)
+        public HistoryStorage(long capacityBytes = DefaultCapacityBytes, IDateTimeProvider? clock = null, string? root = null)
         {
             var localApp = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            _basePath = Path.Combine(localApp, "DocumentIDE", "snapshots");
+            _basePath = root is null
+                ? Path.Combine(localApp, "DocumentIDE", "snapshots")
+                : Path.Combine(root, "snapshots");
             _metadataPath = Path.Combine(_basePath, "metadata");
             Directory.CreateDirectory(_basePath);
             Directory.CreateDirectory(_metadataPath);

@@ -22,18 +22,16 @@ import { UndoConflictDialog, type UndoResultView } from './UndoConflictDialog';
  *   - **Git** — part A's `GitHistoryScreen` unchanged (`GET
  *     /api/source-control/history`).
  *
- * HONESTY GAP (recorded in `docs/sprints/handoffs/UI-03-HANDOFF.md`): this
- * build's privileged API exposes per-plan apply/undo/history routes
- * (`POST /api/batch-operations/{planId}/apply|undo`,
- * `GET /api/batch-operations/{planId}/history`) but **no route that lists
- * operations or the history storage usage**. The shell therefore passes no
- * `source`, and the Operations tab renders a typed unavailable state: no rows,
- * no meter, and no "no operations recorded" claim that would imply an empty but
- * working list. When a real read-only listing route lands, wiring it is a
- * single `source` prop at the shell; nothing in this component changes.
+ * Data source: the privileged API exposes the read-only listing
+ * (`GET /api/history/operations`) and the real history storage usage
+ * (`GET /api/history/storage`); `App` injects the shipped `operationHistorySource`.
+ * Undo still uses the reviewed conflict-aware route
+ * (`POST /api/batch-operations/{planId}/undo`, HIST-02) — this screen never
+ * widens it. If either read fails, the screen renders a typed unavailable state
+ * instead of an empty list, so "no data" and "read failed" never look alike.
  *
- * The Git tab is the default, preserving part A's shipped History behaviour
- * for the sidebar row while the Operations listing is unavailable.
+ * The Git tab is the default, preserving part A's shipped History behaviour for
+ * the sidebar row; the Operations tab renders the same real listing when chosen.
  */
 
 export type HistoryTab = 'operations' | 'git';
@@ -54,14 +52,12 @@ export interface OperationHistorySource {
 }
 
 /**
- * Named plainly so the product never implies the list is empty rather than
- * absent. The exact routes that DO exist are listed; the missing one is named.
+ * Named plainly so a genuine read failure never implies the list is empty rather
+ * than absent. The real route failures override this with the transport detail.
  */
 export const HISTORY_OPERATIONS_UNAVAILABLE_REASON =
-  'The privileged API exposes per-plan apply/undo/history routes ' +
-  '(POST /api/batch-operations/{planId}/apply, POST .../{planId}/undo and ' +
-  'GET .../{planId}/history), but no route lists Document IDE operations or ' +
-  'history storage usage.';
+  'The privileged API did not return the Document IDE operation history ' +
+  '(GET /api/history/operations and GET /api/history/storage).';
 
 export interface HistoryScreenProps {
   /** Repository path for the Git surface; `null` renders its real no-path state. */
@@ -71,7 +67,7 @@ export interface HistoryScreenProps {
   onOpenDocument?: (documentId: string) => void;
   /** Resolves a document id to the name the rest of the app already shows. */
   documentName?: (documentId: string) => string;
-  /** Absent when the shipped API has no operations listing route. */
+  /** Absent only in tests/diagnostics; the shipped App injects the real source. */
   source?: OperationHistorySource;
   /** Overrides the typed reason (e.g. a transport error detail). */
   unavailableReason?: string;
@@ -230,7 +226,7 @@ export default function HistoryScreen({
                 className="max-w-xl rounded-lg border border-mac-hairline bg-mac-toolbar p-4"
               >
                 <h2 className="text-[13px] font-semibold text-mac-text">
-                  Document IDE operations are not available in this build
+                  Document IDE operations could not be loaded
                 </h2>
                 <p
                   data-testid="history-operations-unavailable-reason"
@@ -239,8 +235,9 @@ export default function HistoryScreen({
                   {operations.reason}
                 </p>
                 <p className="mt-2 text-[11px] text-mac-text-3">
-                  No operations are listed and no storage figure is shown, because no route
-                  supplies them. Nothing on this screen is a placeholder list.
+                  No operations are listed and no storage figure is shown, because the history
+                  read failed. This is not an empty history, and nothing on this screen is a
+                  placeholder list.
                 </p>
               </div>
             )}
