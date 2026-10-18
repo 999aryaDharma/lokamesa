@@ -65,6 +65,14 @@ public sealed class GitWorktreeMutationQueue
             static _ => new SemaphoreSlim(1, 1));
 
         await gate.WaitAsync(cancellationToken);
+
+        // SCM-17: SemaphoreSlim.WaitAsync checks the token only on entry. If the
+        // gate is released at the same moment cancellation is requested, the
+        // release can win and the acquire succeeds with an already-cancelled
+        // token. The documented contract is that an operation cancelled while
+        // queued never runs, so the token is re-checked after the acquire and
+        // before any work (the finally below still releases the gate).
+        cancellationToken.ThrowIfCancellationRequested();
         try
         {
             int active = Interlocked.Increment(ref _activeCount);
