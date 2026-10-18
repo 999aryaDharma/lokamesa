@@ -162,6 +162,63 @@ describe('RemoteStatus', () => {
     expect(alert).toHaveTextContent('HostUnreachable');
   });
 
+  it('shows a tracking-unavailable state when upstream exists but counters are null', async () => {
+    // F2 — a configured upstream with no computable counters (the upstream's
+    // remote-tracking ref is absent) must not render " ahead · behind" with
+    // blank values; it is an explicit unavailable state.
+    stubFetch(async () =>
+      jsonResponse(
+        200,
+        remoteModel({
+          status: 'Available',
+          hasUpstream: true,
+          upstreamReference: 'origin/main',
+          ahead: null,
+          behind: null,
+        })
+      )
+    );
+
+    render(<RemoteStatus path={'C:\\workspace'} />);
+
+    expect(await screen.findByTestId('remote-upstream')).toHaveTextContent('origin/main');
+    // No fake/blank counter row.
+    expect(screen.queryByTestId('remote-ahead-behind')).toBeNull();
+    expect(screen.getByTestId('remote-tracking-unavailable')).toHaveTextContent(/unavailable/i);
+    // No error: this is a valid state, just without counters.
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('renders a typed remote-state read failure in the alert region', async () => {
+    // F8 — status:"Failed" arrives as HTTP 200 with a failure payload; it must
+    // surface as an error alert, not a neutral grey line.
+    stubFetch(async () =>
+      jsonResponse(
+        200,
+        remoteModel({
+          status: 'Failed',
+          hasUpstream: false,
+          upstreamReference: null,
+          remoteName: null,
+          ahead: null,
+          behind: null,
+          failure: {
+            status: 'Failed',
+            errorKind: 'Unknown',
+            errorMessage: 'fatal: bad revision',
+            exitCode: 128,
+          },
+        })
+      )
+    );
+
+    render(<RemoteStatus path={'C:\\workspace'} />);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('bad revision');
+    expect(screen.getByRole('button', { name: 'Fetch' })).toBeDisabled();
+  });
+
   it('exposes only the explicit Fetch action and no push/pull/branch surface', async () => {
     stubFetch(async () => jsonResponse(200, remoteModel()));
 

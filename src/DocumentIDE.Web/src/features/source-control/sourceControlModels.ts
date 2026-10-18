@@ -170,7 +170,7 @@ export interface SourceControlCommitResult {
 
 /** SCM-11 — typed status of a worktree's remote/tracking state (spec 13 §14.2).
  * `NoUpstream` is a first-class, non-error state: the counters are unknown, not
- * zero. */
+ * zero. Counters can also be unknown while `hasUpstream` is true (see below). */
 export type GitRemoteStatus =
   | 'Available'
   | 'NoUpstream'
@@ -191,10 +191,18 @@ export type GitFetchOutcome =
   | 'Failed';
 
 /**
- * SCM-11 — remote/tracking state of one worktree (spec 13 §14.1/§14.2). When
- * `hasUpstream` is false the status is `NoUpstream` and `ahead`/`behind` are
- * null — the pane renders the explicit "no upstream" state instead of a fake
- * 0/0.
+ * SCM-11 — remote/tracking state of one worktree (spec 13 §14.1/§14.2).
+ *
+ * `hasUpstream:false` is the explicit `NoUpstream` state (no configured
+ * upstream) and `ahead`/`behind` are null there — the pane renders the explicit
+ * "no upstream" state instead of a fake 0/0.
+ *
+ * A configured upstream (`hasUpstream:true`) can *also* have null
+ * `ahead`/`behind`: Git cannot compute them when the upstream's remote-tracking
+ * ref is absent (the upstream branch was deleted remotely, or a `fetch --prune`
+ * removed the ref). The pane must treat that as an explicit "tracking info
+ * unavailable" state, not 0/0 — `hasUpstream` and counters-available are
+ * independent (F1/F2).
  */
 export interface SourceControlRemoteModel {
   status: GitRemoteStatus;
@@ -203,12 +211,14 @@ export interface SourceControlRemoteModel {
   branchName: string | null;
   isDetached: boolean;
   headCommit: string | null;
-  /** Remote of the configured upstream (e.g. `origin`); null without one. */
+  /** Remote of the configured upstream (e.g. `origin`); null without one or when the upstream is a local branch. */
   remoteName: string | null;
   /** Configured upstream reference (e.g. `origin/main`); null without one. */
   upstreamReference: string | null;
   hasUpstream: boolean;
+  /** Local commits not yet upstream; null without an upstream or when Git cannot compute the count. */
   ahead: number | null;
+  /** Upstream commits not yet local; null without an upstream or when Git cannot compute the count. */
   behind: number | null;
   failure: SourceControlFailure | null;
 }

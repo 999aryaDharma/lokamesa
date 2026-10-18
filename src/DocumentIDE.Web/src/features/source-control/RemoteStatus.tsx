@@ -8,10 +8,14 @@ import type { SourceControlFetchResult, SourceControlRemoteModel } from './sourc
  * Reads the worktree's upstream/tracking state from the privileged API and
  * renders the ahead/behind counters. A branch with no configured upstream is
  * shown as an explicit "no upstream" state — the counters are unknown, so the
- * pane never renders a fake 0/0 (spec 13 §14.2). Fetch is the only remote
- * action: it posts through the privileged API, refreshes the counters from the
- * state Git re-read after the fetch, and surfaces remote failures typed. There
- * is deliberately no push, pull or branch-management surface.
+ * pane never renders a fake 0/0 (spec 13 §14.2). A configured upstream whose
+ * counters Git cannot compute (the upstream's remote-tracking ref is absent)
+ * shows an explicit "tracking info unavailable" state, also never a fake 0/0
+ * (F2). Fetch is the only remote action: it posts through the privileged API,
+ * refreshes the counters from the state Git re-read after the fetch, and
+ * surfaces remote failures typed. A typed remote-state read failure
+ * (`status:"Failed"`) surfaces in the alert region (F8). There is deliberately
+ * no push, pull or branch-management surface.
  */
 
 interface SourceControlApiGlobals {
@@ -83,7 +87,11 @@ function fetchFailureMessage(result: SourceControlFetchResult): string {
   return result.message ?? `The fetch failed (${result.outcome}).`;
 }
 
-/** The explicit "no upstream" / unavailable state, or null when counters render. */
+/**
+ * The explicit "no upstream" / unavailable state, or null. `Failed` is
+ * deliberately not rendered here: a typed remote-state read failure is an error
+ * and shows in the alert region instead (F8).
+ */
 function statusLabel(remote: SourceControlRemoteModel): string | null {
   if (remote.hasUpstream) {
     return null;
@@ -97,8 +105,25 @@ function statusLabel(remote: SourceControlRemoteModel): string | null {
     case 'GitUnavailable':
       return 'Git is not available.';
     default:
-      return 'The remote state could not be read.';
+      return null;
   }
+}
+
+/**
+ * A typed remote-state read failure (`status:"Failed"`, HTTP 200 with a failure
+ * payload) as an alert message, or null. Only fetch failures and non-2xx loads
+ * reached the alert region before, so a failed read rendered as a neutral grey
+ * line (F8).
+ */
+function remoteReadFailureMessage(remote: SourceControlRemoteModel): string | null {
+  if (remote.status !== 'Failed') {
+    return null;
+  }
+
+  const failure = remote.failure;
+  return failure?.errorMessage
+    ? `Failed (${failure.errorKind}): ${failure.errorMessage}`
+    : 'The remote state could not be read.';
 }
 
 const fetchButtonClassName =
@@ -170,6 +195,11 @@ export default function RemoteStatus({
   }
 
   const label = remote ? statusLabel(remote) : null;
+  const readFailure = remote ? remoteReadFailureMessage(remote) : null;
+  // F2 — a configured upstream can still have no computable counters (the
+  // upstream's remote-tracking ref is absent); render an explicit
+  // "unavailable" state instead of " ahead · behind" with blank values.
+  const hasCounters = hasUpstream && remote?.ahead != null && remote?.behind != null;
 
   return (
     <div data-testid="remote-status" className="space-y-2">
@@ -184,7 +214,7 @@ export default function RemoteStatus({
 
       {label && <p className="text-xs text-slate-500">{label}</p>}
 
-      {hasUpstream && (
+      {hasUpstream && hasCounters && (
         <div
           data-testid="remote-ahead-behind"
           className="flex items-center gap-2 text-xs text-slate-600"
@@ -195,6 +225,12 @@ export default function RemoteStatus({
         </div>
       )}
 
+      {hasUpstream && !hasCounters && (
+        <p data-testid="remote-tracking-unavailable" className="text-xs text-slate-500">
+          Ahead/behind tracking information is unavailable; fetch to refresh the upstream.
+        </p>
+      )}
+
       <button
         type="button"
         disabled={!canFetch}
@@ -203,6 +239,15 @@ export default function RemoteStatus({
       >
         {busy ? 'Fetching…' : 'Fetch'}
       </button>
+
+      {readFailure && (
+        <div
+          role="alert"
+          className="p-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg"
+        >
+          {readFailure}
+        </div>
+      )}
 
       {loadError && (
         <div
