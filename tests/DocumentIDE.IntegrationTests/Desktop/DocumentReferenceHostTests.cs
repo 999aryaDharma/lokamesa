@@ -15,6 +15,7 @@ namespace DocumentIDE.IntegrationTests.Desktop;
 /// still exists and hashes byte-identically after the call. Unknown ids and the
 /// privileged guard are typed outcomes.
 /// </summary>
+[Collection("HostFixtures")]
 public sealed class DocumentReferenceHostTests : IDisposable
 {
     private const string AllowedOrigin = "https://appassets.html2sav";

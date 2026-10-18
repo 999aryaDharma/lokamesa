@@ -22,6 +22,7 @@ namespace DocumentIDE.IntegrationTests.Desktop;
 /// regenerate as a rotated token (spec §17/§18). Raw tokens are returned only at
 /// create/regenerate time — never re-exposed by read endpoints.
 /// </summary>
+[Collection("HostFixtures")]
 public sealed class ShareLifecycleHostTests : IDisposable
 {
     private const string AllowedOrigin = "https://appassets.html2sav";

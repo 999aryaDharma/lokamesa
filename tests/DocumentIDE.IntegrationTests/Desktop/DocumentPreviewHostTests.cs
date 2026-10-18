@@ -19,6 +19,7 @@ namespace DocumentIDE.IntegrationTests.Desktop;
 /// unbounded dump. A non-<c>.docx</c> document stays on its own authority (Markdown
 /// keeps <c>GET /api/documents/{id}/markdown</c>).
 /// </summary>
+[Collection("HostFixtures")]
 public sealed class DocumentPreviewHostTests : IDisposable
 {
     private const string AllowedOrigin = "https://appassets.html2sav";

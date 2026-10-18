@@ -7,6 +7,7 @@ using Xunit;
 
 namespace DocumentIDE.IntegrationTests.Desktop;
 
+[Collection("HostFixtures")]
 public class WebAppHostTests : IDisposable
 {
     private readonly string _root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "desktop-host-" + Guid.NewGuid().ToString("N"));

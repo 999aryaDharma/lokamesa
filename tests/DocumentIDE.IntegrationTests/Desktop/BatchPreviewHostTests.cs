@@ -8,6 +8,7 @@ using DocumentIDE.Infrastructure.Persistence.Repositories;
 
 namespace DocumentIDE.IntegrationTests.Desktop;
 
+[Collection("HostFixtures")]
 public sealed class BatchPreviewHostTests
 {
     [Fact]

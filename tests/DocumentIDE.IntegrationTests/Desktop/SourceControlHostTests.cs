@@ -14,6 +14,7 @@ namespace DocumentIDE.IntegrationTests.Desktop;
 /// HTTP 200 state (Git unavailable / no repository / real status); a 404 here
 /// means the desktop WebView cannot reach screen 05/06/07 at all.
 /// </summary>
+[Collection("HostFixtures")]
 public sealed class SourceControlHostTests : IDisposable
 {
     private const string AllowedOrigin = "https://appassets.html2sav";

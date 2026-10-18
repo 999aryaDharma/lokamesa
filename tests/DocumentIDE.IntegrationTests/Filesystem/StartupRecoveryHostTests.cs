@@ -18,6 +18,7 @@ namespace DocumentIDE.IntegrationTests.Filesystem;
 /// database seeded with the exact state a crash leaves behind, and assert the repair
 /// happened on start.
 /// </summary>
+[Collection("HostFixtures")]
 public sealed class StartupRecoveryHostTests : IDisposable
 {
     private readonly string _root;

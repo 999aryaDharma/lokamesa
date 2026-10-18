@@ -22,6 +22,7 @@ namespace DocumentIDE.IntegrationTests.Context;
 /// no indexed text is a typed refusal, never a silently empty item. Every cap
 /// (per document, whole pack, token budget) is a typed refusal.
 /// </summary>
+[Collection("HostFixtures")]
 public sealed class ContextPackHostTests : IDisposable
 {
     private const string AllowedOrigin = "https://appassets.html2sav";

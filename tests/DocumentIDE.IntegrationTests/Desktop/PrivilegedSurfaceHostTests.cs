@@ -17,6 +17,7 @@ namespace DocumentIDE.IntegrationTests.Desktop;
 /// Before the fix these routes were deliberately absent from the desktop
 /// controller allow-list, so every call was a 404.
 /// </summary>
+[Collection("HostFixtures")]
 public sealed class PrivilegedSurfaceHostTests : IDisposable
 {
     private const string AllowedOrigin = "https://appassets.html2sav";

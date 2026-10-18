@@ -18,6 +18,7 @@ namespace DocumentIDE.IntegrationTests.Desktop;
 /// unchanged so explicit/manual edges stay solid and inferred/semantic edges
 /// stay dashed — the view never falsifies a relationship.
 /// </summary>
+[Collection("HostFixtures")]
 public sealed class AppShellSurfaceHostTests : IDisposable
 {
     private const string AllowedOrigin = "https://appassets.html2sav";
