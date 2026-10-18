@@ -1946,7 +1946,9 @@ public sealed class SourceControlController : ControllerBase
     {
         if (request is null || string.IsNullOrWhiteSpace(request.Path))
         {
-            return PathRequiredBadRequest("request field");
+            return DocxDiffInputRejected(
+                "PathRequired",
+                "The 'path' request field (true worktree root) is required.");
         }
 
         if (string.IsNullOrWhiteSpace(request.DocumentPath))
