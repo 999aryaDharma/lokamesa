@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from 'react';
+import SheetShell from '../shell/SheetShell';
+import PushButton from '../shell/PushButton';
 
 export interface ContextSourceItem {
   id: string;
@@ -19,6 +21,13 @@ export interface ContextPackDialogProps {
 
 export type TokenizerModelType = 'generic' | 'gpt4' | 'claude35' | 'llama3';
 
+/**
+ * UI-01 — context-pack sheet (screen 12).
+ *
+ * Presentation only: the overlay was hand-rolled with inline styles and is now
+ * the shared `SheetShell` scrim sheet with `mac-*` tokens. Every testid,
+ * accessible name, label and callback is unchanged.
+ */
 export const ContextPackDialog: React.FC<ContextPackDialogProps> = ({
   isOpen,
   onClose,
@@ -105,24 +114,40 @@ export const ContextPackDialog: React.FC<ContextPackDialogProps> = ({
     setTimeout(() => setExported(false), 2000);
   };
 
-  return (
-    <div className="modal-overlay" style={overlayStyle}>
-      <div className="modal-content" style={modalStyle}>
-        <div style={headerStyle}>
-          <h2>Context Pack Export &amp; Token Estimate</h2>
-          <button style={closeBtnStyle} onClick={onClose}>
-            &times;
-          </button>
-        </div>
+  const fieldLabelClass = 'text-[11px] font-medium text-mac-text-2';
+  const inputClass =
+    'rounded-md border border-mac-hairline-strong bg-mac-content px-2 py-1 text-xs text-mac-text';
+  const thClass = 'border-b border-mac-hairline px-3 py-2 text-left font-medium text-mac-text-2';
+  const tdClass = 'px-3 py-2 align-top text-mac-text-2';
 
-        <div style={controlsRowStyle}>
-          <div style={controlGroupStyle}>
-            <label htmlFor="tokenizer-model-select">Tokenizer Model</label>
+  return (
+    <div className="fixed inset-0 z-[1000]">
+      <SheetShell
+        title="Context Pack Export & Token Estimate"
+        widthClass="max-w-[640px]"
+        onClose={onClose}
+        footer={
+          <div className="flex w-full justify-end gap-2">
+            <PushButton onClick={onClose}>Close</PushButton>
+            <PushButton variant="primary" onClick={handleCopyClick}>
+              {copied ? 'Copied!' : 'Copy Context'}
+            </PushButton>
+            <PushButton onClick={handleExportClick}>
+              {exported ? 'Exported!' : 'Export context.md'}
+            </PushButton>
+          </div>
+        }
+      >
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1">
+            <label htmlFor="tokenizer-model-select" className={fieldLabelClass}>
+              Tokenizer Model
+            </label>
             <select
               id="tokenizer-model-select"
               value={model}
               onChange={(e) => setModel(e.target.value as TokenizerModelType)}
-              style={inputStyle}
+              className={inputClass}
             >
               <option value="generic">Generic (4 chars/token)</option>
               <option value="gpt4">GPT-4 (cl100k_base approx)</option>
@@ -131,256 +156,94 @@ export const ContextPackDialog: React.FC<ContextPackDialogProps> = ({
             </select>
           </div>
 
-          <div style={controlGroupStyle}>
-            <label htmlFor="token-budget-input">Target Token Budget</label>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="token-budget-input" className={fieldLabelClass}>
+              Target Token Budget
+            </label>
             <input
               id="token-budget-input"
               type="number"
               placeholder="e.g. 8000"
               value={targetBudget}
               onChange={(e) => setTargetBudget(e.target.value === '' ? '' : Number(e.target.value))}
-              style={inputStyle}
+              className={inputClass}
             />
           </div>
         </div>
 
-        <div style={summaryBoxStyle}>
+        <div className="mt-3 flex flex-wrap justify-between gap-x-4 gap-y-1 rounded-lg bg-mac-toolbar px-3 py-2 text-xs text-mac-text-2">
           <div>
-            <strong>Active Model: </strong>
+            <strong className="text-mac-text">Active Model: </strong>
             <span data-testid="model-label">{modelLabels[model]}</span>
           </div>
           <div>
-            <strong>Total Characters: </strong>
+            <strong className="text-mac-text">Total Characters: </strong>
             <span>{totalChars.toLocaleString()}</span>
           </div>
           <div>
-            <strong>Total Estimated Tokens: </strong>
-            <span style={{ fontWeight: 'bold', color: exceedsBudget ? '#d9534f' : '#2e7d32' }}>
+            <strong className="text-mac-text">Total Estimated Tokens: </strong>
+            <span className={exceedsBudget ? 'font-bold text-mac-danger' : 'font-bold text-mac-success'}>
               {totalTokens.toLocaleString()}
             </span>
           </div>
         </div>
 
         {exceedsBudget && (
-          <div data-testid="budget-warning-banner" style={warningBannerStyle}>
+          <div
+            data-testid="budget-warning-banner"
+            className="mt-3 rounded-lg border border-mac-warning/40 bg-mac-warning/10 px-3 py-2 text-xs text-mac-warning"
+          >
             <strong>Warning: </strong> Total estimated tokens ({totalTokens.toLocaleString()}) exceeds target budget (
             {targetBudget.toLocaleString()}) by {budgetExcess.toLocaleString()} tokens!
           </div>
         )}
 
-        <div style={tableContainerStyle}>
-          <table style={tableStyle}>
-            <thead>
+        <div className="mt-3 overflow-auto rounded-lg border border-mac-hairline">
+          <table className="w-full border-collapse text-xs">
+            <thead className="bg-mac-toolbar">
               <tr>
-                <th style={thStyle}>Source Document</th>
-                <th style={thStyle}>Type</th>
-                <th style={thStyle}>Characters</th>
-                <th style={thStyle}>Est. Tokens</th>
-                <th style={thStyle}>Share</th>
+                <th className={thClass}>Source Document</th>
+                <th className={thClass}>Type</th>
+                <th className={thClass}>Characters</th>
+                <th className={thClass}>Est. Tokens</th>
+                <th className={thClass}>Share</th>
               </tr>
             </thead>
             <tbody>
               {itemsWithEstimate.map((item) => (
-                <tr key={item.id} data-testid={`source-row-${item.id}`} style={trStyle}>
-                  <td style={tdStyle}>
-                    <strong>{item.title}</strong>
+                <tr
+                  key={item.id}
+                  data-testid={`source-row-${item.id}`}
+                  className="border-b border-mac-hairline last:border-b-0"
+                >
+                  <td className={tdClass}>
+                    <strong className="text-mac-text">{item.title}</strong>
                     {item.addedFrom && (
-                      <div style={subTextStyle}>Added via link from: {item.addedFrom}</div>
+                      <div className="mt-0.5 text-[11px] text-mac-text-3">
+                        Added via link from: {item.addedFrom}
+                      </div>
                     )}
                   </td>
-                  <td style={tdStyle}>
+                  <td className={tdClass}>
                     {item.isDependency ? (
-                      <span style={tagStyle}>Dependency</span>
+                      <span className="rounded bg-mac-chip px-1.5 py-0.5 text-[10px] text-mac-text-2">
+                        Dependency
+                      </span>
                     ) : (
-                      <span style={primaryTagStyle}>Seed</span>
+                      <span className="rounded bg-mac-accent-weak px-1.5 py-0.5 text-[10px] text-mac-accent">
+                        Seed
+                      </span>
                     )}
                   </td>
-                  <td style={tdStyle}>{item.charCount.toLocaleString()}</td>
-                  <td style={tdStyle}>{item.estTokens.toLocaleString()}</td>
-                  <td style={tdStyle}>{item.percentage}%</td>
+                  <td className={tdClass}>{item.charCount.toLocaleString()}</td>
+                  <td className={tdClass}>{item.estTokens.toLocaleString()}</td>
+                  <td className={tdClass}>{item.percentage}%</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-
-        <div style={footerStyle}>
-          <button style={btnSecondaryStyle} onClick={onClose}>
-            Close
-          </button>
-          <button style={btnPrimaryStyle} onClick={handleCopyClick}>
-            {copied ? 'Copied!' : 'Copy Context'}
-          </button>
-          <button style={btnSuccessStyle} onClick={handleExportClick}>
-            {exported ? 'Exported!' : 'Export context.md'}
-          </button>
-        </div>
-      </div>
+      </SheetShell>
     </div>
   );
-};
-
-const overlayStyle: React.CSSProperties = {
-  position: 'fixed',
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  display: 'flex',
-  justifyContent: 'center',
-  alignItems: 'center',
-  zIndex: 1000
-};
-
-const modalStyle: React.CSSProperties = {
-  backgroundColor: '#fff',
-  borderRadius: '8px',
-  width: '640px',
-  maxWidth: '90vw',
-  maxHeight: '85vh',
-  display: 'flex',
-  flexDirection: 'column',
-  padding: '24px',
-  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
-  overflow: 'hidden'
-};
-
-const headerStyle: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  borderBottom: '1px solid #eee',
-  paddingBottom: '12px',
-  marginBottom: '16px'
-};
-
-const closeBtnStyle: React.CSSProperties = {
-  background: 'none',
-  border: 'none',
-  fontSize: '24px',
-  cursor: 'pointer'
-};
-
-const controlsRowStyle: React.CSSProperties = {
-  display: 'flex',
-  gap: '16px',
-  marginBottom: '16px'
-};
-
-const controlGroupStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  flex: 1
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: '8px',
-  borderRadius: '4px',
-  border: '1px solid #ccc',
-  marginTop: '4px'
-};
-
-const summaryBoxStyle: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  backgroundColor: '#f8f9fa',
-  padding: '12px 16px',
-  borderRadius: '6px',
-  marginBottom: '16px',
-  fontSize: '14px'
-};
-
-const warningBannerStyle: React.CSSProperties = {
-  backgroundColor: '#fff3cd',
-  color: '#856404',
-  border: '1px solid #ffeeba',
-  padding: '12px',
-  borderRadius: '6px',
-  marginBottom: '16px',
-  fontSize: '14px'
-};
-
-const tableContainerStyle: React.CSSProperties = {
-  flex: 1,
-  overflowY: 'auto',
-  marginBottom: '16px',
-  border: '1px solid #eee',
-  borderRadius: '4px'
-};
-
-const tableStyle: React.CSSProperties = {
-  width: '100%',
-  borderCollapse: 'collapse',
-  fontSize: '14px'
-};
-
-const thStyle: React.CSSProperties = {
-  textAlign: 'left',
-  padding: '10px 12px',
-  borderBottom: '2px solid #ddd',
-  backgroundColor: '#fafafa'
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: '10px 12px',
-  borderBottom: '1px solid #eee'
-};
-
-const trStyle: React.CSSProperties = {};
-
-const tagStyle: React.CSSProperties = {
-  fontSize: '12px',
-  backgroundColor: '#e9ecef',
-  color: '#495057',
-  padding: '2px 6px',
-  borderRadius: '4px'
-};
-
-const primaryTagStyle: React.CSSProperties = {
-  fontSize: '12px',
-  backgroundColor: '#e3f2fd',
-  color: '#0d47a1',
-  padding: '2px 6px',
-  borderRadius: '4px'
-};
-
-const subTextStyle: React.CSSProperties = {
-  fontSize: '12px',
-  color: '#6c757d',
-  marginTop: '2px'
-};
-
-const footerStyle: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'flex-end',
-  gap: '12px',
-  borderTop: '1px solid #eee',
-  paddingTop: '16px'
-};
-
-const btnSecondaryStyle: React.CSSProperties = {
-  padding: '8px 16px',
-  borderRadius: '4px',
-  border: '1px solid #ccc',
-  backgroundColor: '#f8f9fa',
-  cursor: 'pointer'
-};
-
-const btnPrimaryStyle: React.CSSProperties = {
-  padding: '8px 16px',
-  borderRadius: '4px',
-  border: 'none',
-  backgroundColor: '#0066cc',
-  color: '#fff',
-  cursor: 'pointer'
-};
-
-const btnSuccessStyle: React.CSSProperties = {
-  padding: '8px 16px',
-  borderRadius: '4px',
-  border: 'none',
-  backgroundColor: '#2e7d32',
-  color: '#fff',
-  cursor: 'pointer'
 };

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import SheetShell from '../shell/SheetShell';
+import PushButton from '../shell/PushButton';
 
 export interface QuickLookPageData {
   pageIndex: number;
@@ -176,91 +178,122 @@ export function QuickLook({
   const canNext = pageIndex < totalPages - 1;
 
   return (
-    <div
-      data-testid="quick-look-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Quick Look preview of ${fileName}`}
-      className="quick-look-overlay"
-    >
-      <div className="quick-look-header">
-        <span data-testid="quick-look-title">{fileName}</span>
-        {editingInWord && (
-          <span
-            data-testid="quick-look-editing"
-            title={editingSummary ?? 'Editing in Word'}
-            className="quick-look-editing-badge"
-          >
-            Editing in Word
-          </span>
-        )}
-        <button
-          type="button"
-          data-testid="quick-look-close"
-          aria-label="Close preview"
-          onClick={onClose}
-        >
-          Close
-        </button>
-      </div>
-
-      <div data-testid="quick-look-body" className="quick-look-body">
-        {error ? (
-          <p data-testid="quick-look-error" role="alert">
-            {error}
-          </p>
-        ) : page ? (
-          <article data-testid={`quick-look-page-${pageIndex}`} className="quick-look-page">
-            {page.imageUrl && (
-              <img
-                src={page.imageUrl}
-                alt={`Page ${pageIndex + 1} of ${fileName}`}
-                data-testid="quick-look-image"
-              />
+    <div className="fixed inset-0 z-40">
+      <SheetShell
+        title={`Quick Look preview of ${fileName}`}
+        testId="quick-look-dialog"
+        widthClass="max-w-[860px]"
+        onClose={onClose}
+        status={
+          <>
+            <span data-testid="quick-look-title" className="font-medium text-mac-text">
+              {fileName}
+            </span>
+            {editingInWord && (
+              <span
+                data-testid="quick-look-editing"
+                title={editingSummary ?? 'Editing in Word'}
+                className="ml-2 rounded-full bg-mac-warning/15 px-2 py-0.5 text-[10px] font-medium text-mac-warning"
+              >
+                Editing in Word
+              </span>
             )}
-            {page.pageText &&
-              (searchTerms.length > 0 ? (
-                <p data-testid="quick-look-text">
-                  {segments.map((seg) =>
-                    seg.match ? (
-                      <mark key={seg.key} data-testid="quick-look-match">
-                        {seg.text}
-                      </mark>
-                    ) : (
-                      <span key={seg.key}>{seg.text}</span>
-                    ),
-                  )}
-                </p>
-              ) : (
-                <p data-testid="quick-look-text">{page.pageText}</p>
-              ))}
-          </article>
-        ) : (
-          loading && <p data-testid="quick-look-loading">Loading page…</p>
-        )}
-      </div>
-
-      <div className="quick-look-footer">
-        <button
-          type="button"
-          data-testid="quick-look-prev"
-          disabled={!canPrev}
-          onClick={() => canPrev && setPageIndex(pageIndex - 1)}
-        >
-          Previous
-        </button>
-        <span data-testid="quick-look-counter">
-          Page {pageIndex + 1} of {totalPages}
-        </span>
-        <button
-          type="button"
-          data-testid="quick-look-next"
-          disabled={!canNext}
-          onClick={() => canNext && setPageIndex(pageIndex + 1)}
-        >
-          Next
-        </button>
-      </div>
+          </>
+        }
+        footer={
+          <div className="flex w-full items-center justify-between gap-2">
+            <PushButton
+              data-testid="quick-look-prev"
+              disabled={!canPrev}
+              onClick={() => canPrev && setPageIndex(pageIndex - 1)}
+              size="sm"
+            >
+              Previous
+            </PushButton>
+            <span data-testid="quick-look-counter" className="text-[11px] text-mac-text-2">
+              Page {pageIndex + 1} of {totalPages}
+            </span>
+            <span className="flex items-center gap-2">
+              <PushButton
+                data-testid="quick-look-next"
+                disabled={!canNext}
+                onClick={() => canNext && setPageIndex(pageIndex + 1)}
+                size="sm"
+              >
+                Next
+              </PushButton>
+              <PushButton
+                aria-label="Close preview"
+                data-testid="quick-look-close"
+                onClick={onClose}
+                size="sm"
+              >
+                Close
+              </PushButton>
+            </span>
+          </div>
+        }
+      >
+        <div data-testid="quick-look-body">
+          {error ? (
+            <p
+              data-testid="quick-look-error"
+              role="alert"
+              className="rounded-md bg-mac-danger/10 px-3 py-2 text-xs text-mac-danger"
+            >
+              {error}
+            </p>
+          ) : page ? (
+            <article
+              data-testid={`quick-look-page-${pageIndex}`}
+              className="mx-auto my-1 w-full max-w-[640px] rounded-md border border-mac-hairline bg-mac-content p-4 shadow-sm"
+            >
+              {page.imageUrl && (
+                <img
+                  src={page.imageUrl}
+                  alt={`Page ${pageIndex + 1} of ${fileName}`}
+                  data-testid="quick-look-image"
+                  className="w-full rounded"
+                />
+              )}
+              {page.pageText &&
+                (searchTerms.length > 0 ? (
+                  <p
+                    data-testid="quick-look-text"
+                    className="whitespace-pre-wrap text-xs leading-relaxed text-mac-text"
+                  >
+                    {segments.map((seg) =>
+                      seg.match ? (
+                        <mark
+                          key={seg.key}
+                          data-testid="quick-look-match"
+                          className="rounded bg-mac-warning/30 px-0.5"
+                        >
+                          {seg.text}
+                        </mark>
+                      ) : (
+                        <span key={seg.key}>{seg.text}</span>
+                      ),
+                    )}
+                  </p>
+                ) : (
+                  <p
+                    data-testid="quick-look-text"
+                    className="whitespace-pre-wrap text-xs leading-relaxed text-mac-text"
+                  >
+                    {page.pageText}
+                  </p>
+                ))}
+            </article>
+          ) : (
+            loading && (
+              <p data-testid="quick-look-loading" className="p-4 text-xs text-mac-text-3">
+                Loading page…
+              </p>
+            )
+          )}
+        </div>
+      </SheetShell>
     </div>
   );
 }
