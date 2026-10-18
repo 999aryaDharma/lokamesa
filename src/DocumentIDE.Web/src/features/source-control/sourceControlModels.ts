@@ -407,3 +407,88 @@ export interface SourceControlFileVersionResult {
   version: SourceControlFileVersionInfo | null;
   failure: SourceControlFailure | null;
 }
+
+/**
+ * SCM-10 — which destructive operation a review/apply pair describes
+ * (spec 13 §15.1/§15.2). `DiscardWorktree` restores the file from the index;
+ * `RestoreVersion` restores it from a selected commit. Neither touches the
+ * index, HEAD or any other file.
+ */
+export type GitRestoreMode = 'DiscardWorktree' | 'RestoreVersion';
+
+/** SCM-10 — typed outcome of one discard/restore request (spec 13 §15/§20). */
+export type GitRestoreOutcome =
+  | 'Succeeded'
+  | 'ReviewRequired'
+  | 'ReviewStale'
+  | 'RejectedPath'
+  | 'ConflictedPath'
+  | 'UntrackedPath'
+  | 'NoChanges'
+  | 'NoRepository'
+  | 'GitUnavailable'
+  | 'RecoveryBlocked'
+  | 'Failed';
+
+/** SCM-10 — typed outcome of one review read (spec 13 §15.1). */
+export type GitRestoreReviewStatus =
+  | 'Available'
+  | 'RejectedPath'
+  | 'NoRepository'
+  | 'GitUnavailable'
+  | 'Failed';
+
+/** SCM-10 — the reviewed confirmation payload the dialog renders. */
+export interface SourceControlRestoreReviewInfo {
+  mode: GitRestoreMode;
+  path: string;
+  sourceCommit: string | null;
+  targetSource: string;
+  diff: string;
+  isDiffTruncated: boolean;
+  indexChange: GitChangeKind | null;
+  workingTreeChange: GitChangeKind | null;
+  statusCharacters: string;
+  isStaged: boolean;
+  isConflicted: boolean;
+  isUntracked: boolean;
+  hasWorkingTreeChange: boolean;
+  recoveryAvailable: boolean;
+  recoveryDetail: string;
+  currentSizeBytes: number | null;
+  isApplicable: boolean;
+  blockedReason: string | null;
+  /** Opaque token the apply call must echo back; bound to the reviewed state. */
+  reviewToken: string;
+}
+
+/** SCM-10 — typed review response (spec 13 §15.1/§20). */
+export interface SourceControlRestoreReviewResult {
+  status: GitRestoreReviewStatus;
+  isAvailable: boolean;
+  errorCode: string | null;
+  message: string | null;
+  review: SourceControlRestoreReviewInfo | null;
+  failure: SourceControlFailure | null;
+}
+
+/**
+ * SCM-10 — typed discard/restore result. On success `status` is the status the
+ * API re-read from Git, `snapshotId` the HIST-01 recovery snapshot created
+ * before the mutation, and `historyRecorded`/`reindexed` report the Document
+ * IDE History record and reindex step.
+ */
+export interface SourceControlRestoreResult {
+  outcome: GitRestoreOutcome;
+  mode: GitRestoreMode;
+  isSuccess: boolean;
+  errorCode: string | null;
+  message: string | null;
+  operationId: string | null;
+  snapshotId: string | null;
+  recoveryRecorded: boolean;
+  historyRecorded: boolean;
+  reindexed: boolean;
+  status: SourceControlStatusModel | null;
+  failure: SourceControlFailure | null;
+}

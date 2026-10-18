@@ -357,6 +357,7 @@ public sealed class SourceControlController : ControllerBase
     private readonly GitRemoteService _remotes;
     private readonly GitPushService _pushes;
     private readonly GitHistoryService _history;
+    private readonly GitRestoreService _restores;
     private readonly IDocumentRepository _documents;
     private readonly IWorkSessionService _workSessions;
 
@@ -367,6 +368,7 @@ public sealed class SourceControlController : ControllerBase
         GitRemoteService remotes,
         GitPushService pushes,
         GitHistoryService history,
+        GitRestoreService restores,
         IDocumentRepository documents,
         IWorkSessionService workSessions)
     {
@@ -376,6 +378,7 @@ public sealed class SourceControlController : ControllerBase
         _remotes = remotes ?? throw new ArgumentNullException(nameof(remotes));
         _pushes = pushes ?? throw new ArgumentNullException(nameof(pushes));
         _history = history ?? throw new ArgumentNullException(nameof(history));
+        _restores = restores ?? throw new ArgumentNullException(nameof(restores));
         _documents = documents ?? throw new ArgumentNullException(nameof(documents));
         _workSessions = workSessions ?? throw new ArgumentNullException(nameof(workSessions));
     }
@@ -1293,6 +1296,179 @@ public sealed class SourceControlController : ControllerBase
             entry.CommitterTime,
             entry.Summary,
             entry.FileCount);
+
+    // ---------------------------------------------------------------------
+    // SCM-10 - safe Git discard & restore (spec 13 §15/§19/§20/§21/§23).
+    //
+    // Bounded append-only region: a destructive discard/restore is a POST and
+    // is never reachable through the status/refresh GET; the apply routes
+    // require the review token returned by the review route. Nothing here
+    // creates a commit, pushes, pulls, resets or touches any other file.
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Reviews one destructive operation before it can run (spec 13
+    /// §15.1/§15.2): the affected path, current diff, staged state, target Git
+    /// version, recovery availability and the confirmation token. Strictly
+    /// read-only; a rejected path/commit is a typed 400 with nothing run.
+    /// </summary>
+    [HttpPost("discard/review")]
+    public async Task<IActionResult> ReviewDiscard(
+        [FromBody] SourceControlRestoreReviewRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.Path))
+        {
+            return PathRequiredBadRequest("request field");
+        }
+
+        GitRestoreReviewResult result = await _restores.ReviewAsync(
+            request.Path!,
+            request.ChangePath,
+            request.Commit,
+            cancellationToken);
+
+        if (result.Status == GitRestoreReviewStatus.RejectedPath)
+        {
+            return BadRequest(new
+            {
+                errorCode = result.ErrorCode ?? "PathRejected",
+                error = result.Message,
+            });
+        }
+
+        return Ok(ToRestoreReviewResponse(result));
+    }
+
+    /// <summary>
+    /// Discards one file's working-tree changes after an explicit review
+    /// (spec 13 §15.1). The reviewed token is required: without it the request
+    /// is a typed 400 and Git never runs.
+    /// </summary>
+    [HttpPost("discard")]
+    public Task<IActionResult> Discard(
+        [FromBody] SourceControlRestoreRequest? request,
+        CancellationToken cancellationToken) =>
+        RunRestoreActionAsync(request, GitRestoreMode.DiscardWorktree, cancellationToken);
+
+    /// <summary>
+    /// Restores one file's working-tree content from a selected commit after an
+    /// explicit review (spec 13 §15.2). The reviewed token is required; the
+    /// index, HEAD and every other file stay untouched.
+    /// </summary>
+    [HttpPost("restore")]
+    public Task<IActionResult> Restore(
+        [FromBody] SourceControlRestoreRequest? request,
+        CancellationToken cancellationToken) =>
+        RunRestoreActionAsync(request, GitRestoreMode.RestoreVersion, cancellationToken);
+
+    private async Task<IActionResult> RunRestoreActionAsync(
+        SourceControlRestoreRequest? request,
+        GitRestoreMode mode,
+        CancellationToken cancellationToken)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.Path))
+        {
+            return PathRequiredBadRequest("request field");
+        }
+
+        GitRestoreResult result = mode == GitRestoreMode.DiscardWorktree
+            ? await _restores.DiscardAsync(
+                request.Path!,
+                request.ChangePath,
+                request.ReviewToken,
+                cancellationToken)
+            : await _restores.RestoreFromCommitAsync(
+                request.Path!,
+                request.ChangePath,
+                request.Commit,
+                request.ReviewToken,
+                cancellationToken);
+
+        switch (result.Outcome)
+        {
+            // Input rejections: nothing ran, so the client can review or fix
+            // the request rather than reading a misleading result.
+            case GitRestoreOutcome.ReviewRequired:
+            case GitRestoreOutcome.ReviewStale:
+            case GitRestoreOutcome.RejectedPath:
+                return BadRequest(new
+                {
+                    errorCode = result.ErrorCode ?? result.Outcome.ToString(),
+                    error = result.Message,
+                });
+
+            default:
+                return Ok(await ToRestoreResponseAsync(result, cancellationToken));
+        }
+    }
+
+    /// <summary>
+    /// Maps a typed review result onto the privileged API contract
+    /// (spec 13 §15.1/§20).
+    /// </summary>
+    private static SourceControlRestoreReviewResponse ToRestoreReviewResponse(GitRestoreReviewResult result)
+    {
+        GitRestoreReview? review = result.Review;
+        return new SourceControlRestoreReviewResponse(
+            result.Status.ToString(),
+            result.IsAvailable,
+            result.ErrorCode,
+            result.Message,
+            review is null
+                ? null
+                : new SourceControlRestoreReviewInfoResponse(
+                    review.Mode.ToString(),
+                    review.Path,
+                    review.SourceCommit,
+                    review.TargetSource,
+                    review.Diff,
+                    review.IsDiffTruncated,
+                    review.IndexChange?.ToString(),
+                    review.WorkingTreeChange?.ToString(),
+                    review.StatusCharacters,
+                    review.IsStaged,
+                    review.IsConflicted,
+                    review.IsUntracked,
+                    review.HasWorkingTreeChange,
+                    review.RecoveryAvailable,
+                    review.RecoveryDetail,
+                    review.CurrentSizeBytes,
+                    review.IsApplicable,
+                    review.BlockedReason,
+                    review.ReviewToken),
+            ToFailure(result.Failure));
+    }
+
+    /// <summary>
+    /// Maps a typed discard/restore result onto the API contract
+    /// (spec 13 §15/§20): success carries the refreshed status Git re-read after
+    /// the mutation; every deliberate refusal or Git failure stays HTTP 200 with
+    /// a typed body so the pane can render it.
+    /// </summary>
+    private async Task<SourceControlRestoreResponse> ToRestoreResponseAsync(
+        GitRestoreResult result,
+        CancellationToken cancellationToken)
+    {
+        GitStatusResult? refreshed = result.Status;
+        SourceControlStatusResponse? status = refreshed is { IsAvailable: true, Snapshot: not null }
+            ? await MapSnapshotAsync(refreshed.Snapshot, cancellationToken)
+            : null;
+
+        return new SourceControlRestoreResponse(
+            result.Outcome.ToString(),
+            result.Mode.ToString(),
+            result.IsSuccess,
+            result.ErrorCode,
+            result.Message,
+            result.OperationId,
+            result.SnapshotId,
+            result.RecoveryRecorded,
+            result.HistoryRecorded,
+            result.Reindexed,
+            status,
+            ToFailure(result.Failure ?? (refreshed is { IsAvailable: false } ? refreshed.Failure : null)));
+    }
 }
 
 /// <summary>
@@ -1317,4 +1493,83 @@ public sealed record SourceControlPushResponse(
     string? ErrorCode,
     string? Message,
     SourceControlRemoteResponse? Remote,
+    SourceControlFailureResponse? Failure);
+
+// -------------------------------------------------------------------------
+// SCM-10 — safe discard/restore payloads (spec 13 §15/§20)
+// -------------------------------------------------------------------------
+
+/// <summary>
+/// SCM-10 — request body for the review step. <c>Path</c> is the workspace
+/// folder or active-document path used to discover the repository;
+/// <c>ChangePath</c> is the worktree-relative path exactly as Git reported it
+/// (treated as untrusted input); <c>Commit</c> is the version to restore from
+/// and is <c>null</c> when reviewing a working-tree discard.
+/// </summary>
+public sealed record SourceControlRestoreReviewRequest(string? Path, string? ChangePath, string? Commit);
+
+/// <summary>
+/// SCM-10 — the reviewed confirmation payload (spec 13 §15.1/§15.2). It shows
+/// what will be lost — the current diff, staged state, target version and
+/// recovery availability — and carries the token the apply route requires.
+/// </summary>
+public sealed record SourceControlRestoreReviewInfoResponse(
+    string Mode,
+    string Path,
+    string? SourceCommit,
+    string TargetSource,
+    string Diff,
+    bool IsDiffTruncated,
+    string? IndexChange,
+    string? WorkingTreeChange,
+    string StatusCharacters,
+    bool IsStaged,
+    bool IsConflicted,
+    bool IsUntracked,
+    bool HasWorkingTreeChange,
+    bool RecoveryAvailable,
+    string RecoveryDetail,
+    long? CurrentSizeBytes,
+    bool IsApplicable,
+    string? BlockedReason,
+    string ReviewToken);
+
+/// <summary>SCM-10 — typed review response (spec 13 §15.1/§20).</summary>
+public sealed record SourceControlRestoreReviewResponse(
+    string Status,
+    bool IsAvailable,
+    string? ErrorCode,
+    string? Message,
+    SourceControlRestoreReviewInfoResponse? Review,
+    SourceControlFailureResponse? Failure);
+
+/// <summary>
+/// SCM-10 — request body for the destructive apply step. <c>ReviewToken</c> is
+/// required and must be the token the review returned; a missing or stale token
+/// is a typed 400 with nothing run (spec 13 §15/§23).
+/// </summary>
+public sealed record SourceControlRestoreRequest(
+    string? Path,
+    string? ChangePath,
+    string? Commit,
+    string? ReviewToken);
+
+/// <summary>
+/// SCM-10 — typed discard/restore outcome (spec 13 §15/§20). On success
+/// <c>Status</c> carries the status re-read from Git after the mutation,
+/// <c>SnapshotId</c> the HIST-01 recovery snapshot created before it, and the
+/// history/reindex flags report the Document IDE History record and reindex.
+/// </summary>
+public sealed record SourceControlRestoreResponse(
+    string Outcome,
+    string Mode,
+    bool IsSuccess,
+    string? ErrorCode,
+    string? Message,
+    string? OperationId,
+    string? SnapshotId,
+    bool RecoveryRecorded,
+    bool HistoryRecorded,
+    bool Reindexed,
+    SourceControlStatusResponse? Status,
     SourceControlFailureResponse? Failure);
