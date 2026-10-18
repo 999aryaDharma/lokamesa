@@ -185,4 +185,37 @@ describe('FolderObject', () => {
     expect(folder.querySelector('[data-part="folder-front"]')).not.toBeNull();
     expect(folder.querySelector('[data-part="file-sheet"]')).toBeNull();
   });
+
+  it('keeps the picker affordance outside the folder button (no nested interactive control)', () => {
+    render(
+      <FolderObject
+        id="folder-1"
+        title="Specs"
+        containedDocuments={[]}
+        onOpenPicker={() => {}}
+      />,
+    );
+
+    const folder = screen.getByTestId('folder-object');
+    // A real <button> inside a role="button" subtree is a nested interactive
+    // control: AT announces two buttons and only one of them is operable.
+    expect(folder.querySelector('button')).toBeNull();
+
+    const picker = screen.getByTestId('folder-picker-folder-1');
+    expect(picker.tagName).toBe('BUTTON');
+    expect(folder.contains(picker)).toBe(false);
+    expect(folder.parentElement?.contains(picker)).toBe(true);
+  });
+
+  it('exposes selection with aria-pressed, never aria-selected (valid on role=button)', () => {
+    const { rerender } = render(
+      <FolderObject id="folder-1" title="Specs" containedDocuments={[]} />,
+    );
+    const folder = screen.getByTestId('folder-object');
+    expect(folder).not.toHaveAttribute('aria-selected');
+    expect(folder).toHaveAttribute('aria-pressed', 'false');
+
+    rerender(<FolderObject id="folder-1" title="Specs" containedDocuments={[]} isSelected />);
+    expect(screen.getByTestId('folder-object')).toHaveAttribute('aria-pressed', 'true');
+  });
 });

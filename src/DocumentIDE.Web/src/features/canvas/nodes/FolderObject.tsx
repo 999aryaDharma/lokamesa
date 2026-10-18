@@ -19,10 +19,18 @@
  * Gesture decision (recorded in the UI-01 handoff):
  *   - single click on the object body  → open/close
  *   - the object's own `⌄` affordance (`Open documents in <title>`) → the
- *     existing CAN-04 folder picker, so that wiring stays reachable;
- *   - double click → the existing "open all" release (unchanged);
+ *     existing CAN-04 folder picker, so that wiring stays reachable. It is a
+ *     **sibling** of the object button, never nested inside it;
+ *   - double click → the existing "open all" release (unchanged). Stated
+ *     exactly: a real double click is `click, click, dblclick`, so
+ *     `handleClick` runs twice (select + open, then select + close) before
+ *     `handleDoubleClick` (closes again — idempotent — and releases every
+ *     supported file exactly once);
  *   - drag a fanned page out → the existing CAN-04 release semantic for that
  *     one document. Metadata only: canvas drag never physically moves a file.
+ *
+ * Selection is exposed with `aria-pressed` (valid on `role="button"`);
+ * `aria-selected` is not a supported state for a button role.
  *
  * `prefers-reduced-motion` is honoured: the folder still opens and closes, just
  * without the spring/fan tween.
@@ -171,126 +179,136 @@ export function FolderObject({
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      aria-label={`Folder: ${title}`}
-      aria-expanded={open}
-      aria-selected={isSelected}
-      data-testid="folder-object"
-      data-kind="folder"
-      data-object-id={id}
-      data-open={open ? 'true' : 'false'}
-      style={{ position: 'absolute', left: x, top: y, width, height, willChange: 'transform' }}
-      className={[
-        'select-none cursor-pointer transition-colors',
-        isSelected ? 'rounded-lg ring-2 ring-mac-accent/40' : '',
-      ]
-        .filter(Boolean)
-        .join(' ')}
-      onClick={handleClick}
-      onDoubleClick={handleDoubleClick}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          handleClick();
-        }
-      }}
+      data-testid="folder-object-frame"
+      style={{ position: 'absolute', left: x, top: y, width, height }}
+      className="select-none"
     >
-      {/* Fanned pages — the real documents contained in this folder */}
-      {open && pages.length > 0 && (
-        <div data-testid="folder-pages" className="pointer-events-none absolute inset-x-0 top-0">
-          {pages.map((page, index) => (
-            <motion.div
-              key={page.documentId}
-              data-testid={`folder-page-${page.documentId}`}
-              data-part="folder-page"
-              className="pointer-events-auto absolute left-1/2 h-[56px] w-[44px] -translate-x-1/2 cursor-grab rounded-[4px] border border-mac-hairline-strong bg-mac-fill-2 p-0.5"
-              style={{ top: 14, boxShadow: OBJECT_SHADOW, zIndex: 10 + index }}
-              initial={reduceMotion ? false : { opacity: 0, y: 0, rotate: 0 }}
-              animate={{
-                opacity: 1,
-                y: -(PAGE_LIFT + (index % 3) * 10),
-                rotate: PAGE_ROTATIONS[index % PAGE_ROTATIONS.length],
-              }}
-              transition={spring}
-              onMouseDown={(event) => beginPageDrag(page.documentId, event)}
-              onClick={(event) => event.stopPropagation()}
-              title={page.filename}
-            >
-              <FilePreview
-                documentId={page.documentId}
-                title={page.filename}
-                docType={documentIconKind(page.filename)}
-                loadMarkdown={loadMarkdown}
-              />
-            </motion.div>
-          ))}
-        </div>
-      )}
-
-      {open && pages.length === 0 && (
-        <span
-          data-testid="folder-open-empty"
-          className="absolute left-1/2 top-1 -translate-x-1/2 text-[9px] text-mac-text-3"
-        >
-          No documents in this folder
-        </span>
-      )}
-
-      {/* The folder itself: back panel + front panel that tilts back when open */}
       <div
-        className="absolute left-1/2 -translate-x-1/2"
-        style={{ top: 24, width: FOLDER_BODY_WIDTH, height: FOLDER_BODY_HEIGHT, perspective: 400 }}
+        role="button"
+        tabIndex={0}
+        aria-label={`Folder: ${title}`}
+        aria-expanded={open}
+        // `aria-pressed`, not `aria-selected`: the latter is not a supported
+        // state on a button role.
+        aria-pressed={isSelected}
+        data-testid="folder-object"
+        data-kind="folder"
+        data-object-id={id}
+        data-open={open ? 'true' : 'false'}
+        style={{ willChange: 'transform' }}
+        className={[
+          'absolute inset-0 cursor-pointer transition-colors',
+          isSelected ? 'rounded-lg ring-2 ring-mac-accent/40' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            handleClick();
+          }
+        }}
       >
+        {/* Fanned pages — the real documents contained in this folder */}
+        {open && pages.length > 0 && (
+          <div data-testid="folder-pages" className="pointer-events-none absolute inset-x-0 top-0">
+            {pages.map((page, index) => (
+              <motion.div
+                key={page.documentId}
+                data-testid={`folder-page-${page.documentId}`}
+                data-part="folder-page"
+                className="pointer-events-auto absolute left-1/2 h-[56px] w-[44px] -translate-x-1/2 cursor-grab rounded-[4px] border border-mac-hairline-strong bg-mac-fill-2 p-0.5"
+                style={{ top: 14, boxShadow: OBJECT_SHADOW, zIndex: 10 + index }}
+                initial={reduceMotion ? false : { opacity: 0, y: 0, rotate: 0 }}
+                animate={{
+                  opacity: 1,
+                  y: -(PAGE_LIFT + (index % 3) * 10),
+                  rotate: PAGE_ROTATIONS[index % PAGE_ROTATIONS.length],
+                }}
+                transition={spring}
+                onMouseDown={(event) => beginPageDrag(page.documentId, event)}
+                onClick={(event) => event.stopPropagation()}
+                title={page.filename}
+              >
+                <FilePreview
+                  documentId={page.documentId}
+                  title={page.filename}
+                  docType={documentIconKind(page.filename)}
+                  loadMarkdown={loadMarkdown}
+                />
+              </motion.div>
+            ))}
+          </div>
+        )}
+
+        {open && pages.length === 0 && (
+          <span
+            data-testid="folder-open-empty"
+            className="absolute left-1/2 top-1 -translate-x-1/2 text-[9px] text-mac-text-3"
+          >
+            No documents in this folder
+          </span>
+        )}
+
+        {/* The folder itself: back panel + front panel that tilts back when open */}
         <div
-          data-part="folder-body"
-          className="absolute left-0 top-0"
-          style={{
-            width: FOLDER_BODY_WIDTH,
-            height: FOLDER_BODY_HEIGHT,
-            borderRadius: FOLDER_RADIUS,
-            background: 'var(--color-mac-folder)',
-            boxShadow: OBJECT_SHADOW,
-          }}
-        />
-        <motion.div
-          data-part="folder-front"
-          className="absolute left-0"
-          style={{
-            top: 12,
-            width: FOLDER_BODY_WIDTH,
-            height: FOLDER_FRONT_HEIGHT,
-            borderRadius: FOLDER_RADIUS,
-            background: 'var(--color-mac-folder-front)',
-            transformOrigin: 'bottom',
-          }}
-          initial={reduceMotion ? false : { rotateX: 0 }}
-          animate={{ rotateX: open ? -40 : 0 }}
-          transition={spring}
-        />
+          className="absolute left-1/2 -translate-x-1/2"
+          style={{ top: 24, width: FOLDER_BODY_WIDTH, height: FOLDER_BODY_HEIGHT, perspective: 400 }}
+        >
+          <div
+            data-part="folder-body"
+            className="absolute left-0 top-0"
+            style={{
+              width: FOLDER_BODY_WIDTH,
+              height: FOLDER_BODY_HEIGHT,
+              borderRadius: FOLDER_RADIUS,
+              background: 'var(--color-mac-folder)',
+              boxShadow: OBJECT_SHADOW,
+            }}
+          />
+          <motion.div
+            data-part="folder-front"
+            className="absolute left-0"
+            style={{
+              top: 12,
+              width: FOLDER_BODY_WIDTH,
+              height: FOLDER_FRONT_HEIGHT,
+              borderRadius: FOLDER_RADIUS,
+              background: 'var(--color-mac-folder-front)',
+              transformOrigin: 'bottom',
+            }}
+            initial={reduceMotion ? false : { rotateX: 0 }}
+            animate={{ rotateX: open ? -40 : 0 }}
+            transition={spring}
+          />
+        </div>
+
+        {/* Filename label beneath the object */}
+        <span
+          data-part="item-label"
+          className="absolute bottom-1 left-0 w-full truncate px-1 text-center text-[12px] font-medium text-mac-text"
+        >
+          {title}
+        </span>
       </div>
 
-      {/* Existing single-click → picker wiring, kept reachable as its own affordance. */}
+      {/* Existing single-click → picker wiring, kept reachable as its own
+          affordance. A sibling of the object button: a real <button> nested
+          inside `role="button"` is a nested interactive control. */}
       {onOpenPicker && (
         <button
           type="button"
           aria-label={`Open documents in ${title}`}
           data-testid={`folder-picker-${id}`}
           onClick={handlePickerClick}
-          className="absolute rounded text-[10px] leading-none text-mac-text-3 hover:text-mac-text"
+          className="absolute z-20 rounded text-[10px] leading-none text-mac-text-3 hover:text-mac-text"
           style={{ right: 6, top: 76 }}
         >
           ⌄
         </button>
       )}
-
-      {/* Filename label beneath the object */}
-      <span
-        data-part="item-label"
-        className="absolute bottom-1 left-0 w-full truncate px-1 text-center text-[12px] font-medium text-mac-text"
-      >
-        {title}
-      </span>
     </div>
   );
 }

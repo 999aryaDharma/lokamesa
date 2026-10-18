@@ -13,6 +13,13 @@
  * click-arbitration timer is needed: the picker can never swallow the second
  * click of a real double-click. Every CAN-04 contract below is unchanged — only
  * the gesture that reaches the picker changed.
+ *
+ * Gesture sequence, stated exactly: a real double click is
+ * `click, click, dblclick`. `handleClick` therefore runs twice first
+ * (select + open, then select + close) and `handleDoubleClick` runs last
+ * (stops propagation, closes again — idempotent — and releases every supported
+ * file exactly once). The end state is deterministic: closed, selected, one
+ * release, no picker.
  */
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -130,14 +137,18 @@ describe('FolderPicker — CAN-04 required behaviors', () => {
     expect(folderCard()).toHaveAttribute('data-open', 'true');
     expect(screen.getByTestId('folder-page-doc-a')).toBeInTheDocument();
     expect(screen.getByTestId('folder-page-doc-c')).toBeInTheDocument();
+    // …the object is selected like any other canvas object (the pre-timer
+    // CAN-04 assertion, restored: a folder click selects the folder)…
+    expect(useCanvasStore.getState().selectedIds.has(FOLDER_ID)).toBe(true);
     // …the picker is not involved, and nothing is released.
     expect(screen.queryByTestId('folder-picker')).not.toBeInTheDocument();
     expect(onRelease).not.toHaveBeenCalled();
 
-    // Clicking again closes it again.
+    // Clicking again closes it again (still selected).
     fireEvent.click(folderCard());
     expect(folderCard()).toHaveAttribute('data-open', 'false');
     expect(screen.queryByTestId('folder-page-doc-a')).not.toBeInTheDocument();
+    expect(useCanvasStore.getState().selectedIds.has(FOLDER_ID)).toBe(true);
   });
 
   it('Double click opens all supported files', () => {
@@ -154,7 +165,10 @@ describe('FolderPicker — CAN-04 required behaviors', () => {
   it('realistic double click (click, click, dblclick) never opens the picker', () => {
     const { onRelease } = renderCanvas();
 
-    // Real browser sequence for a double click.
+    // Real browser sequence for a double click: click, click, dblclick. Each
+    // click runs handleClick (select + toggle open) *before* the dblclick, so
+    // the folder opens then closes, and handleDoubleClick then closes it again
+    // (idempotent) and releases every supported file exactly once.
     fireEvent.click(folderCard());
     fireEvent.click(folderCard());
 
@@ -173,6 +187,9 @@ describe('FolderPicker — CAN-04 required behaviors', () => {
     expect(screen.queryByTestId('folder-picker')).not.toBeInTheDocument();
     // The double click ends with the folder closed again and no stray picker.
     expect(folderCard()).toHaveAttribute('data-open', 'false');
+    // Selection is unaffected (the clicks selected it, and dblclick never
+    // deselects) — the old `=== false` assertion is now `=== true`.
+    expect(useCanvasStore.getState().selectedIds.has(FOLDER_ID)).toBe(true);
   });
 
   it('Open Selected releases only selected DocumentIds', () => {
