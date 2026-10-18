@@ -127,9 +127,9 @@ Rules:
 | SCM-07 | Git Commit & Commit All | DONE | SCM-06, SCM-05 | feat/git-commit-commit-all | docs/sprints/handoffs/SCM-07-HANDOFF.md |
 | SCM-08 | Git Commit History & File History | DONE | SCM-02, SCM-07 | feat/git-commit-history-file-history (c49288f) | docs/sprints/handoffs/SCM-08-HANDOFF.md |
 | SCM-09 | Document IDE History ↔ Git Correlation | DONE | SCM-07, HIST-01 | feat/document-ide-history-git-correlation (e84fd48) | docs/sprints/handoffs/SCM-09-HANDOFF.md |
-| SCM-10 | Safe Git Discard & Restore | READY | SCM-08, HIST-01, FS-07 |  |  |
+| SCM-10 | Safe Git Discard & Restore | DONE | SCM-08, HIST-01, FS-07 | feat/safe-git-discard-restore (10eb7a6) | docs/sprints/handoffs/SCM-10-HANDOFF.md |
 | SCM-11 | Git Remote State & Fetch | DONE | SCM-02, SCM-07 | feat/git-remote-state-fetch (84e82fc) | docs/sprints/handoffs/SCM-11-HANDOFF.md |
-| SCM-12 | Safe Fast-Forward Pull | BLOCKED | SCM-11, SCM-10 |  |  |
+| SCM-12 | Safe Fast-Forward Pull | READY | SCM-11, SCM-10 |  |  |
 | SCM-13 | Explicit Git Push | DONE | SCM-11, SCM-07 | feat/explicit-git-push (ecb7d02) | docs/sprints/handoffs/SCM-13-HANDOFF.md |
 | SCM-14 | Git Conflict State & Resolution Shell | BLOCKED | SCM-12, SCM-05 |  |  |
 | SCM-15 | Git Worktree Discovery & Open Existing | DONE | SCM-01, FS-03, FND-07 | feat/git-worktree-discovery-open-existing | docs/sprints/handoffs/SCM-15-HANDOFF.md |
