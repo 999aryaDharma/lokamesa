@@ -25,10 +25,16 @@ internal sealed class TestGitRepository : IDisposable
     /// </summary>
     public static TestGitRepository Create(string? directoryName = null)
     {
+        // Each repository gets its own parent directory. Several tests assert
+        // that a path escaping the worktree (e.g. "../outside.md") is rejected
+        // and that the escaping file is untouched; a shared parent would make
+        // those tests write the same file and collide, because xUnit runs
+        // different test classes in parallel.
         string root = Path.Combine(
             Path.GetTempPath(),
             "scm01",
-            directoryName ?? $"repo-{Guid.NewGuid():N}");
+            $"run-{Guid.NewGuid():N}",
+            directoryName ?? "repo");
         Directory.CreateDirectory(root);
 
         RunGitOrThrow(root, "init", "-q", ".");
@@ -112,6 +118,18 @@ internal sealed class TestGitRepository : IDisposable
     {
         try
         {
+            // Delete the whole per-repository run directory, not just the repo:
+            // tests intentionally write an escaping sibling (e.g. outside.md)
+            // there, and leaving it behind would leak temp files.
+            string? runDirectory = Path.GetDirectoryName(RootPath);
+            if (runDirectory is not null
+                && Path.GetFileName(runDirectory).StartsWith("run-", StringComparison.Ordinal)
+                && Directory.Exists(runDirectory))
+            {
+                Directory.Delete(runDirectory, recursive: true);
+                return;
+            }
+
             if (Directory.Exists(RootPath))
             {
                 Directory.Delete(RootPath, recursive: true);

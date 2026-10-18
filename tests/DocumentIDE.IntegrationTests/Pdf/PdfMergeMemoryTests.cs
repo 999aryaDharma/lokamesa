@@ -10,12 +10,25 @@ using Xunit;
 
 namespace DocumentIDE.IntegrationTests.Pdf;
 
+/// <summary>
+/// The peak-memory assertions in <see cref="PdfMergeMemoryTests"/> sample
+/// process-wide <c>GC.GetTotalMemory</c>. They are only meaningful when no other
+/// test class is allocating, so this collection is excluded from parallel runs
+/// (xUnit otherwise runs other classes concurrently and the samples flake under
+/// load).
+/// </summary>
+[CollectionDefinition("ProcessMemory", DisableParallelization = true)]
+public sealed class ProcessMemoryCollectionDefinition
+{
+}
+
 // PDF-03 — Streaming Ordered PDF Merge (P1 performance).
 // Red stage: these tests FAIL before PdfMergeService exists (CS0246).
 // Merge inputs are minimal valid single-page PDFs so order/streaming/
 // no-rasterization properties can be asserted without Word installed.
 // DOCX rendering still flows through PDF-01/PDF-02 services (fake Word
 // renderer writes minimal PDFs keyed by source name in these tests).
+[Collection("ProcessMemory")]
 public sealed class PdfMergeMemoryTests : IDisposable
 {
     private readonly string _tempRoot = Path.Combine(
