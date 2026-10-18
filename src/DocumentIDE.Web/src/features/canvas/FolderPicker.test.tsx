@@ -7,9 +7,12 @@
  * Canvas interactions are workspace metadata only — releasing documents
  * creates workspace objects and NEVER physically moves files.
  *
- * Click arbitration: the single-click picker open is deferred by a short
- * timer so a real double-click never has its second click swallowed by the
- * popover that its own first click opened. Tests therefore use fake timers.
+ * UI-01 (owner directive 2026-10-18): a folder object's *click* now opens the
+ * folder and fans out the documents it really contains. The CAN-04 picker moved
+ * behind the folder's own affordance (`Open documents in <title>`), so no
+ * click-arbitration timer is needed: the picker can never swallow the second
+ * click of a real double-click. Every CAN-04 contract below is unchanged — only
+ * the gesture that reaches the picker changed.
  */
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -17,7 +20,7 @@ import DocumentCanvas from './DocumentCanvas';
 import { useCanvasStore } from './canvasStore';
 import { type CanvasObject } from './types';
 
-// Advance past any reasonable single-click/double-click arbitration window.
+// A window long enough for any deferred animation / settle work to run.
 const CLICK_ARBITRATION_SETTLE_MS = 500;
 
 // ---------------------------------------------------------------------------
@@ -86,9 +89,14 @@ function renderCanvas() {
 
 const folderCard = () => screen.getByLabelText('Folder: BA Agustus');
 
-/** Single click + settle the click/double-click arbitration window. */
+const pickerAffordance = () => screen.getByRole('button', { name: 'Open documents in BA Agustus' });
+
+/**
+ * UI-01: the CAN-04 picker is reached through the folder object's own
+ * affordance (the object's plain click opens/closes the folder).
+ */
 function openFolderPicker() {
-  fireEvent.click(folderCard());
+  fireEvent.click(pickerAffordance());
   act(() => {
     vi.advanceTimersByTime(CLICK_ARBITRATION_SETTLE_MS);
   });
@@ -113,24 +121,23 @@ describe('FolderPicker — CAN-04 required behaviors', () => {
     expect(onRelease).not.toHaveBeenCalled();
   });
 
-  it('single click is deferred, then opens the picker without releasing files', () => {
+  it('a single click opens the folder object instead of dumping files', () => {
     const { onRelease } = renderCanvas();
 
     fireEvent.click(folderCard());
 
-    // Inside the arbitration window the picker is not open yet — otherwise a
-    // real double-click's second click would land on the popover.
+    // The folder object opens and its real documents fan out…
+    expect(folderCard()).toHaveAttribute('data-open', 'true');
+    expect(screen.getByTestId('folder-page-doc-a')).toBeInTheDocument();
+    expect(screen.getByTestId('folder-page-doc-c')).toBeInTheDocument();
+    // …the picker is not involved, and nothing is released.
     expect(screen.queryByTestId('folder-picker')).not.toBeInTheDocument();
     expect(onRelease).not.toHaveBeenCalled();
 
-    // Once the click is confirmed as a single click it selects the folder and
-    // opens the picker.
-    act(() => {
-      vi.advanceTimersByTime(CLICK_ARBITRATION_SETTLE_MS);
-    });
-    expect(screen.getByTestId('folder-picker')).toBeInTheDocument();
-    expect(useCanvasStore.getState().selectedIds.has(FOLDER_ID)).toBe(true);
-    expect(onRelease).not.toHaveBeenCalled();
+    // Clicking again closes it again.
+    fireEvent.click(folderCard());
+    expect(folderCard()).toHaveAttribute('data-open', 'false');
+    expect(screen.queryByTestId('folder-page-doc-a')).not.toBeInTheDocument();
   });
 
   it('Double click opens all supported files', () => {
@@ -160,13 +167,12 @@ describe('FolderPicker — CAN-04 required behaviors', () => {
     expect(onRelease).toHaveBeenCalledTimes(1);
     expect(onRelease).toHaveBeenCalledWith(FOLDER_ID, ['doc-a', 'doc-b', 'doc-c']);
 
-    // The deferred single-click action stays cancelled: no picker, selection
-    // unchanged (no double toggle).
     act(() => {
       vi.advanceTimersByTime(CLICK_ARBITRATION_SETTLE_MS * 2);
     });
     expect(screen.queryByTestId('folder-picker')).not.toBeInTheDocument();
-    expect(useCanvasStore.getState().selectedIds.has(FOLDER_ID)).toBe(false);
+    // The double click ends with the folder closed again and no stray picker.
+    expect(folderCard()).toHaveAttribute('data-open', 'false');
   });
 
   it('Open Selected releases only selected DocumentIds', () => {

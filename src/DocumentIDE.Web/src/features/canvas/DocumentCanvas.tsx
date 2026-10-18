@@ -26,6 +26,7 @@ import { useSearchStore } from '../search/searchStore';
 import { canvasStoreInstance, useCanvasStore } from './canvasStore';
 import FolderPicker, { isSupportedFolderFile, type FolderPickerFile } from './FolderPicker';
 import DocumentNode from './nodes/DocumentNode';
+import FolderObject from './nodes/FolderObject';
 import { applyClick, groupDrag } from './selection/SelectionController';
 import type { CanvasObject } from './types';
 import { ZOOM_MAX, ZOOM_MIN } from './types';
@@ -60,8 +61,16 @@ interface CanvasCardProps {
   isMatch?: boolean;
   isFaded?: boolean;
   onSelect: (id: string) => void;
-  /** CAN-04: single-click handler for folder objects (opens the picker). */
-  onSingleClick?: (id: string) => void;
+  /**
+   * UI-01: the documents that path-belong to this folder object, supplied by the
+   * host (`folderFiles` ← `groupDocumentsByFolder`). A folder fans out exactly
+   * these and nothing else.
+   */
+  folderDocuments?: FolderPickerFile[];
+  /** CAN-04: the folder's "open picker" affordance. */
+  onOpenPicker?: (id: string) => void;
+  /** CAN-04: release one document out of the folder (metadata only). */
+  onReleaseDocument?: (documentId: string) => void;
   onDoubleClick?: (object: CanvasObject) => void;
   /** CAN-07: begin a group drag from this card. */
   onDragStart?: (id: string, event: React.MouseEvent) => void;
@@ -73,7 +82,9 @@ const CanvasCard = memo(function CanvasCard({
   isMatch = false,
   isFaded = false,
   onSelect,
-  onSingleClick,
+  folderDocuments,
+  onOpenPicker,
+  onReleaseDocument,
   onDoubleClick,
   onDragStart,
 }: CanvasCardProps) {
@@ -112,71 +123,22 @@ const CanvasCard = memo(function CanvasCard({
     );
   }
 
+  // UI-01: a folder is an object you can open, not a look-alike card.
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-label={`${object.type === 'folder' ? 'Folder' : 'Document'}: ${object.title}`}
-      aria-selected={isSelected}
-      data-object-id={object.id}
-      style={{
-        position: 'absolute',
-        left: object.x,
-        top: object.y,
-        width: object.width,
-        height: object.height,
-        willChange: 'transform',
-        opacity: isFaded ? 0.35 : 1.0,
-      }}
-      className={[
-        'rounded-lg border select-none cursor-pointer',
-        'bg-white shadow-sm flex flex-col items-start justify-start p-3',
-        'transition-all duration-100',
-        isMatch
-          ? 'border-blue-500 ring-2 ring-blue-400 shadow-md'
-          : isSelected
-          ? 'border-blue-400 ring-2 ring-blue-200 shadow-md'
-          : 'border-slate-200 hover:border-slate-300 hover:shadow-md',
-      ].join(' ')}
-      onClick={() => {
-        if (onSingleClick) {
-          onSingleClick(object.id);
-        } else {
-          onSelect(object.id);
-        }
-      }}
-      onDoubleClick={handleDoubleClick}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          if (onSingleClick) {
-            onSingleClick(object.id);
-          } else {
-            onSelect(object.id);
-          }
-        }
-      }}
-    >
-      {/* Search match pill indicator */}
-      {isMatch && (
-        <span
-          data-testid={`match-badge-${object.id}`}
-          className="absolute top-1.5 right-1.5 text-[9px] font-bold bg-blue-500 text-white px-1.5 py-0.5 rounded shadow-xs"
-        >
-          MATCH
-        </span>
-      )}
-      {/* Object type icon */}
-      <span className="text-xl mb-1" aria-hidden="true">
-        {object.type === 'folder' ? '📁' : '📄'}
-      </span>
-      {/* Title — capped so it doesn't overflow */}
-      <span className="text-sm font-medium text-slate-800 leading-snug line-clamp-2 w-full">
-        {object.title}
-      </span>
-      <span className="text-xs text-slate-400 mt-auto">
-        {object.type === 'folder' ? 'Folder' : 'Document'}
-      </span>
-    </div>
+    <FolderObject
+      id={object.id}
+      title={object.title}
+      x={object.x}
+      y={object.y}
+      width={object.width}
+      height={object.height}
+      isSelected={isSelected}
+      containedDocuments={folderDocuments ?? []}
+      onSelect={onSelect}
+      onOpenPicker={onOpenPicker}
+      onReleaseDocument={onReleaseDocument}
+      onDoubleClick={() => handleDoubleClick()}
+    />
   );
 });
 
@@ -233,15 +195,6 @@ const ZOOM_STEP = 0.1;
 const WHEEL_SENSITIVITY = 0.001;
 
 /**
- * CAN-04: delay used to arbitrate a folder single click vs. double click.
- * Opening the picker synchronously on the first click would swallow the second
- * click of a real double-click (the popover overlays the folder card and
- * intercepts it), so the single-click action is deferred by this window; a
- * dblclick on the same folder cancels it and runs "Open all" instead.
- */
-const FOLDER_CLICK_OPEN_DELAY_MS = 250;
-
-/**
  * MD-01 (gap G7): a document object is Markdown when its explicit docType is
  * `md`, or (when the type is unknown) when its title ends in a Markdown
  * extension. An explicit `docx` is never treated as Markdown.
@@ -295,15 +248,6 @@ export default function DocumentCanvas({
     loadPersistedViewport,
   } = state;
   const [pickerFolderId, setPickerFolderId] = useState<string | null>(null);
-
-  /**
-   * CAN-04: pending deferred single-click action for one folder, cancelled by
-   * a second click / dblclick on the same folder.
-   */
-  const pendingFolderClickRef = useRef<{
-    folderId: string;
-    timer: ReturnType<typeof setTimeout>;
-  } | null>(null);
 
   const isSearchHighlighting = searchState.isSearchActive && searchState.query.trim().length > 0;
   const matchingDocIds = useMemo(() => {
@@ -522,44 +466,19 @@ export default function DocumentCanvas({
     };
   }, [upsertObject, workspaceId]);
 
-  // CAN-04: cancel a pending deferred folder single-click action (if any).
-  // Called when the second click of a double click arrives, on dblclick, and
-  // on unmount.
-  const cancelPendingFolderClick = useCallback(() => {
-    if (pendingFolderClickRef.current) {
-      clearTimeout(pendingFolderClickRef.current.timer);
-      pendingFolderClickRef.current = null;
-    }
-  }, []);
-
-  useEffect(() => cancelPendingFolderClick, [cancelPendingFolderClick]);
-
-  // CAN-04: single click on a folder opens the lightweight picker instead of
-  // dumping every file onto the canvas. The action is deferred by a short
-  // window so a real double-click keeps its second click on the card (the
-  // popover would otherwise intercept it) and cancels the deferred open.
-  const handleFolderSingleClick = useCallback(
+  // ---------------------------------------------------------------------------
+  // CAN-04 / UI-01: the folder object's *picker affordance* opens the
+  // lightweight picker instead of dumping every file onto the canvas. The
+  // object's own click now opens/closes the folder (the documents fan out), so
+  // the picker needs no single-vs-double-click arbitration: it sits behind an
+  // explicit control, and `onOpenPicker` can open it synchronously.
+  // ---------------------------------------------------------------------------
+  const handleFolderPickerOpen = useCallback(
     (id: string) => {
-      // Second click of a real double click: cancel the deferred single-click
-      // action; the dblclick handler performs "Open all" instead. Selection is
-      // therefore never toggled twice for one double click.
-      if (pendingFolderClickRef.current?.folderId === id) {
-        cancelPendingFolderClick();
-        return;
-      }
-
-      cancelPendingFolderClick();
-
-      pendingFolderClickRef.current = {
-        folderId: id,
-        timer: setTimeout(() => {
-          pendingFolderClickRef.current = null;
-          toggleSelect(id);
-          setPickerFolderId(id);
-        }, FOLDER_CLICK_OPEN_DELAY_MS),
-      };
+      toggleSelect(id);
+      setPickerFolderId(id);
     },
-    [cancelPendingFolderClick, toggleSelect],
+    [toggleSelect],
   );
 
   const handlePickerClose = useCallback(() => {
@@ -593,10 +512,9 @@ export default function DocumentCanvas({
   const handleCardDoubleClick = useCallback(
     async (obj: CanvasObject) => {
       if (obj.type === 'folder') {
-        // CAN-04: double-click is the intentional "Open all" fast path. Any
-        // deferred single-click open is cancelled so the picker never opens and
-        // the folder's selection state is left unchanged (no double toggle).
-        cancelPendingFolderClick();
+        // CAN-04: double-click is the intentional "Open all" fast path. The
+        // picker never opens and the folder's selection state is left
+        // unchanged (no double toggle).
         setPickerFolderId(null);
         onReleaseDocuments?.(obj.id, supportedFolderDocumentIds(obj.id));
         return;
@@ -616,7 +534,7 @@ export default function DocumentCanvas({
         }
       }
     },
-    [cancelPendingFolderClick, onOpenMarkdownDocument, onReleaseDocuments, supportedFolderDocumentIds],
+    [onOpenMarkdownDocument, onReleaseDocuments, supportedFolderDocumentIds],
   );
 
   // ---------------------------------------------------------------------------
@@ -625,7 +543,7 @@ export default function DocumentCanvas({
   return (
     <div
       className="relative w-full h-full overflow-hidden"
-      style={{ background: '#F8FAFC' }}
+      style={{ background: 'var(--color-mac-canvas)' }}
       onWheel={onWheel}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
@@ -639,7 +557,7 @@ export default function DocumentCanvas({
         className="absolute inset-0 w-full h-full"
         style={{
           backgroundImage:
-            'radial-gradient(circle, #CBD5E1 1px, transparent 1px)',
+            'radial-gradient(circle, var(--color-mac-hairline-strong) 1px, transparent 1px)',
           backgroundSize: '24px 24px',
           cursor: 'default',
         }}
@@ -670,7 +588,13 @@ export default function DocumentCanvas({
                 isMatch={isMatch}
                 isFaded={isFaded}
                 onSelect={handleObjectSelect}
-                onSingleClick={obj.type === 'folder' ? handleFolderSingleClick : undefined}
+                folderDocuments={obj.type === 'folder' ? folderFiles?.[obj.id] : undefined}
+                onOpenPicker={obj.type === 'folder' ? handleFolderPickerOpen : undefined}
+                onReleaseDocument={
+                  obj.type === 'folder'
+                    ? (documentId) => onReleaseDocuments?.(obj.id, [documentId])
+                    : undefined
+                }
                 onDoubleClick={handleCardDoubleClick}
                 onDragStart={obj.type === 'document' ? beginObjectDrag : undefined}
               />

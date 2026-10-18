@@ -14,22 +14,29 @@ describe('DocumentNode', () => {
 
     const filenameEl = screen.getByText('Quarterly_Report_2026.docx');
     expect(filenameEl).toBeInTheDocument();
-    expect(screen.getByTestId('document-paper-sheet')).toBeInTheDocument();
-    // Type decoration is visually restrained
-    expect(screen.getByText('DOCX')).toBeInTheDocument();
+    const sheet = screen.getByTestId('document-paper-sheet');
+    expect(sheet).toBeInTheDocument();
+    // UI-01: the file object carries its type as an accent colour on the sheet
+    // (Finder icon-view convention), not as a text badge.
+    expect(sheet).toHaveAttribute('data-kind', 'docx');
+    expect(sheet.querySelector('[data-part="file-sheet"]')).not.toBeNull();
+    expect(sheet.querySelector('[data-part="type-accent"]')).not.toBeNull();
   });
 
-  it('renders markdown document with restrained MD badge', () => {
+  it('renders markdown document with its markdown type accent', () => {
     render(
       <DocumentNode
         id="doc-2"
         title="README.md"
         docType="md"
+        loadMarkdown={async (documentId) => ({ documentId, source: '# README' })}
       />
     );
 
     expect(screen.getByText('README.md')).toBeInTheDocument();
-    expect(screen.getByText('MD')).toBeInTheDocument();
+    const sheet = screen.getByTestId('document-paper-sheet');
+    expect(sheet).toHaveAttribute('data-kind', 'md');
+    expect(sheet.querySelector('[data-part="type-accent"]')).not.toBeNull();
   });
 
   it('renders visibly distinct missing document state', () => {

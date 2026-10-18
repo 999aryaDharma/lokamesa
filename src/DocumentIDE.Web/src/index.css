@@ -39,6 +39,10 @@
   --color-mac-warning: #ff9f0a;
   --color-mac-danger: #ff3b30;
 
+  /* Node objects (owner directive 2026-10-18 — Finder icon view) */
+  --color-mac-folder: #3e8ef7;
+  --color-mac-folder-front: #7cb6ff;
+
   /* Typography */
   --font-sans: Inter, "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI",
     system-ui, sans-serif;
