@@ -1,6 +1,28 @@
-import React, { memo, useState, useCallback } from 'react';
+/**
+ * CAN-03 / UI-01 — document *file object* on the canvas.
+ *
+ * Owner directive (2026-10-18): on the canvas a folder and a file must read as
+ * two different objects, the way Finder's icon view does — never as two
+ * look-alike boxes.
+ *
+ *   file object → a white sheet with a coloured type accent bar, a folded
+ *                 corner, a faint page-1 content preview, and the exact
+ *                 filename beneath it.
+ *
+ * The preview is *content-derived* real document content (`FilePreview`); there
+ * is no page-image pipeline in this repo yet, so the sheet shows the source
+ * text faintly rather than a rendered page.
+ *
+ * Persisted object geometry (`x/y/width/height`) is unchanged: the frame keeps
+ * the size the canvas store and assisted placement already use, and the object
+ * is drawn inside it. Nothing here mutates a file.
+ */
+import React, { memo, useCallback } from 'react';
+import { NODE_ICON_COLORS } from '../../shell/NodeIcon';
+import type { MarkdownDocument } from '../../markdown/markdownApi';
+import FilePreview, { type FilePreviewThumbnailState } from './FilePreview';
 
-export type ThumbnailState = 'loading' | 'ready' | 'stale' | 'missing' | 'failed';
+export type ThumbnailState = FilePreviewThumbnailState;
 export type DocType = 'docx' | 'md' | 'unknown';
 
 export interface DocumentNodeProps {
@@ -23,6 +45,8 @@ export interface DocumentNodeProps {
   onDoubleClick?: (id: string) => void;
   /** CAN-07: pointer-down hook so the canvas can start a group drag. */
   onMouseDown?: (event: React.MouseEvent) => void;
+  /** Injectable markdown loader for the faint preview (tests / host seam). */
+  loadMarkdown?: (documentId: string) => Promise<MarkdownDocument>;
 }
 
 /**
@@ -42,42 +66,11 @@ function inferDocType(title: string, explicitType?: DocType): DocType {
   return 'unknown';
 }
 
-/**
- * Low-detail paper layout fallback preview (simulated document page lines).
- * Designed for visual recognition without creating excessive visual noise or full text reading.
- */
-function LowDetailPaperLayout({ docType }: { docType: DocType }) {
-  return (
-    <div
-      data-testid="document-low-detail-fallback"
-      className="w-full flex-1 bg-slate-50 border border-slate-100 rounded p-2.5 flex flex-col gap-1.5 overflow-hidden select-none pointer-events-none opacity-80"
-    >
-      {/* Title bar placeholder */}
-      <div className="h-2 w-3/4 bg-slate-300 rounded" />
-      {/* Heading accent */}
-      <div className={`h-1.5 w-1/2 rounded ${docType === 'docx' ? 'bg-blue-300' : 'bg-emerald-300'}`} />
-      
-      {/* Simulated paragraph 1 */}
-      <div className="flex flex-col gap-1 mt-1">
-        <div className="h-1 w-full bg-slate-200 rounded" />
-        <div className="h-1 w-5/6 bg-slate-200 rounded" />
-        <div className="h-1 w-4/5 bg-slate-200 rounded" />
-      </div>
+/** Sheet-face metrics from the design brief. */
+const SHEET_WIDTH = 52;
+const SHEET_HEIGHT = 66;
+const SHEET_ACCENT_HEIGHT = 7;
 
-      {/* Simulated paragraph 2 */}
-      <div className="flex flex-col gap-1 mt-1">
-        <div className="h-1 w-full bg-slate-200 rounded" />
-        <div className="h-1 w-11/12 bg-slate-200 rounded" />
-        <div className="h-1 w-2/3 bg-slate-200 rounded" />
-      </div>
-    </div>
-  );
-}
-
-/**
- * CAN-03: Document Paper Object & Thumbnail Shell
- * Renders DOCX/Markdown documents as paper-sheet objects with exact filename and cached low-detail preview.
- */
 const DocumentNode = memo(function DocumentNode({
   id,
   title,
@@ -87,30 +80,27 @@ const DocumentNode = memo(function DocumentNode({
   height = 220,
   isSelected = false,
   isMissing = false,
+  isFaded = false,
+  isMatch = false,
   docType: explicitDocType,
   thumbnailState = 'ready',
   thumbnailUrl,
+  thumbnailContent,
   statusText,
   onSelect,
   onDoubleClick,
   onMouseDown,
+  loadMarkdown,
 }: DocumentNodeProps) {
-  const [imgFailed, setImgFailed] = useState(false);
-
   const docType = inferDocType(title, explicitDocType);
   const effectiveMissing = isMissing || thumbnailState === 'missing';
-  const effectiveState: ThumbnailState = effectiveMissing
-    ? 'missing'
-    : imgFailed
-    ? 'failed'
-    : thumbnailState;
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
       onSelect?.(id);
     },
-    [onSelect, id]
+    [onSelect, id],
   );
 
   const handleDoubleClick = useCallback(
@@ -118,21 +108,8 @@ const DocumentNode = memo(function DocumentNode({
       e.stopPropagation();
       onDoubleClick?.(id);
     },
-    [onDoubleClick, id]
+    [onDoubleClick, id],
   );
-
-  const handleImageError = useCallback(() => {
-    setImgFailed(true);
-  }, []);
-
-  // Determine badge styling based on docType
-  const badgeText = docType === 'docx' ? 'DOCX' : docType === 'md' ? 'MD' : 'FILE';
-  const badgeBg =
-    docType === 'docx'
-      ? 'bg-blue-50 text-blue-700 border-blue-200'
-      : docType === 'md'
-      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-      : 'bg-slate-100 text-slate-600 border-slate-200';
 
   return (
     <div
@@ -141,6 +118,8 @@ const DocumentNode = memo(function DocumentNode({
       aria-label={`Document: ${title}`}
       aria-selected={isSelected}
       data-testid="document-paper-sheet"
+      data-part="file-object"
+      data-kind={docType}
       data-missing={effectiveMissing ? 'true' : 'false'}
       data-object-id={id}
       style={{
@@ -150,16 +129,18 @@ const DocumentNode = memo(function DocumentNode({
         width,
         height,
         willChange: 'transform',
+        opacity: isFaded ? 0.35 : 1,
       }}
       className={[
-        'rounded border select-none cursor-pointer',
-        'bg-white shadow flex flex-col p-2.5 gap-2 relative transition-all duration-100',
-        effectiveMissing
-          ? 'border-amber-400 bg-amber-50/40 ring-1 ring-amber-300 border-dashed'
+        'select-none cursor-pointer transition-colors',
+        isMatch
+          ? 'rounded-lg ring-2 ring-mac-accent/60'
           : isSelected
-          ? 'border-blue-500 ring-2 ring-blue-200 shadow-md'
-          : 'border-slate-200 hover:border-slate-300 hover:shadow-md',
-      ].join(' ')}
+            ? 'rounded-lg ring-2 ring-mac-accent/40'
+            : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
       onMouseDown={onMouseDown}
@@ -169,80 +150,93 @@ const DocumentNode = memo(function DocumentNode({
         }
       }}
     >
-      {/* Paper fold accent (top right) */}
-      <div
-        className="absolute top-0 right-0 w-3.5 h-3.5 bg-slate-100 border-b border-l border-slate-300 rounded-bl-sm pointer-events-none opacity-60"
-        aria-hidden="true"
-      />
-
-      {/* Header: Filename & Restrained Type Badge */}
-      <div className="flex items-start justify-between gap-1 w-full pt-0.5">
+      {isMatch && (
         <span
+          data-testid={`match-badge-${id}`}
+          className="absolute top-1 right-1 z-10 rounded bg-mac-accent px-1 py-0.5 text-[9px] font-bold text-white shadow-xs"
+        >
+          MATCH
+        </span>
+      )}
+
+      {/* The object: sheet face on top, filename label beneath */}
+      <div
+        className="absolute left-1/2 flex -translate-x-1/2 flex-col items-center"
+        style={{ top: 30, width: 140 }}
+      >
+        <div
+          data-part="file-sheet"
+          className="relative overflow-hidden"
+          style={{
+            width: SHEET_WIDTH,
+            height: SHEET_HEIGHT,
+            borderRadius: 5,
+            background: '#FFFFFF',
+            border: '1px solid #D9D9DE',
+            boxShadow: '0 2px 6px #0000001F',
+          }}
+        >
+          {/* Type accent: the only colour that distinguishes file kinds. */}
+          <div
+            data-part="type-accent"
+            aria-hidden="true"
+            style={{
+              height: SHEET_ACCENT_HEIGHT,
+              background: effectiveMissing ? NODE_ICON_COLORS.unknown : NODE_ICON_COLORS[docType],
+              borderTopLeftRadius: 4,
+              borderTopRightRadius: 4,
+            }}
+          />
+
+          {/* Folded corner */}
+          <div
+            data-part="file-fold"
+            aria-hidden="true"
+            className="pointer-events-none absolute top-0 right-0"
+            style={{
+              width: 14,
+              height: 14,
+              background: '#E6E6E9',
+              borderTopRightRadius: 5,
+            }}
+          />
+
+          {/* Faint page-1 content preview (real content when available) */}
+          <div
+            className="absolute inset-x-0 bottom-0"
+            style={{ top: SHEET_ACCENT_HEIGHT }}
+          >
+            <FilePreview
+              documentId={id}
+              title={title}
+              docType={docType}
+              thumbnailUrl={thumbnailUrl}
+              thumbnailContent={thumbnailContent}
+              thumbnailState={thumbnailState}
+              isMissing={effectiveMissing}
+              loadMarkdown={loadMarkdown}
+            />
+          </div>
+        </div>
+
+        <span
+          data-part="item-label"
           data-testid="document-filename"
-          className="text-xs font-semibold text-slate-800 leading-snug break-words line-clamp-2 pr-2"
+          className="mt-1.5 w-full truncate text-center text-[12px] leading-4 font-medium text-mac-text"
           title={title}
         >
           {title}
         </span>
-        <span
-          className={`text-[10px] font-mono font-bold px-1 py-0.5 rounded border shrink-0 ${badgeBg}`}
-        >
-          {badgeText}
-        </span>
-      </div>
 
-      {/* Body: Thumbnail Shell Area */}
-      <div className="flex-1 w-full relative flex items-center justify-center overflow-hidden">
-        {effectiveMissing ? (
-          /* Visibly distinct missing state */
-          <div
-            data-testid="document-missing-badge"
-            className="flex flex-col items-center justify-center p-2 text-center text-amber-700 bg-amber-100/70 border border-amber-300 rounded w-full h-full gap-1"
+        {(statusText || effectiveMissing) && (
+          <span
+            data-part="item-status"
+            className="mt-0.5 w-full truncate text-center text-[10px] leading-3 text-mac-text-3"
           >
-            <span className="text-base" aria-hidden="true">⚠️</span>
-            <span className="text-[11px] font-medium leading-tight">File missing</span>
-          </div>
-        ) : effectiveState === 'loading' ? (
-          /* Loading skeleton */
-          <div
-            data-testid="document-thumbnail-loading"
-            className="w-full h-full bg-slate-100 rounded animate-pulse p-2 flex flex-col gap-1.5"
-          >
-            <div className="h-2 w-3/4 bg-slate-200 rounded" />
-            <div className="h-1.5 w-1/2 bg-slate-200 rounded" />
-            <div className="h-1 w-full bg-slate-200 rounded mt-2" />
-            <div className="h-1 w-5/6 bg-slate-200 rounded" />
-          </div>
-        ) : thumbnailUrl && effectiveState !== 'failed' ? (
-          /* Cached image thumbnail */
-          <div className="relative w-full h-full flex items-center justify-center">
-            <img
-              src={thumbnailUrl}
-              alt={`Thumbnail for ${title}`}
-              data-testid="document-thumbnail-img"
-              onError={handleImageError}
-              className="max-w-full max-h-full object-contain rounded border border-slate-100"
-            />
-            {effectiveState === 'stale' && (
-              <span
-                data-testid="document-stale-badge"
-                title="Stale preview"
-                className="absolute top-1 right-1 w-2 h-2 bg-amber-400 rounded-full ring-1 ring-white"
-              />
-            )}
-          </div>
-        ) : (
-          /* Low-detail fallback paper structure */
-          <LowDetailPaperLayout docType={docType} />
+            {effectiveMissing ? 'Missing' : statusText}
+          </span>
         )}
       </div>
-
-      {/* Footer / Status decoration (optional, restrained) */}
-      {(statusText || effectiveMissing) && (
-        <div className="text-[10px] text-slate-500 truncate w-full pt-0.5 border-t border-slate-100 flex items-center justify-between">
-          <span>{effectiveMissing ? 'Missing' : statusText}</span>
-        </div>
-      )}
     </div>
   );
 });

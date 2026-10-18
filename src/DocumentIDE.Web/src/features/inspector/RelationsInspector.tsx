@@ -56,23 +56,23 @@ export const RelationsInspector: React.FC<RelationsInspectorProps> = ({
 
       {/* 1. References (Outbound explicit links) */}
       <section className="references-section">
-        <h3 className="font-medium text-gray-700 mb-2">
+        <h3 className="font-medium text-mac-text mb-2">
           References ({relations.references.length})
         </h3>
         {relations.references.length === 0 ? (
-          <p className="text-xs text-gray-400 italic">No outbound references</p>
+          <p className="text-xs text-mac-text-3 italic">No outbound references</p>
         ) : (
           <ul className="space-y-1">
             {relations.references.map((item) => (
               <li
                 key={item.relationId}
-                className="flex items-center justify-between p-1.5 rounded hover:bg-gray-100 cursor-pointer"
+                className="flex items-center justify-between p-1.5 rounded hover:bg-mac-chip cursor-pointer"
                 onClick={() => handleNavigate(item.targetDocumentId)}
               >
                 <span className="truncate font-medium">
                   {item.targetDocumentName || item.rawTarget || item.targetDocumentId}
                 </span>
-                <span className="text-xs px-1.5 py-0.5 rounded bg-gray-200 text-gray-600">
+                <span className="text-xs px-1.5 py-0.5 rounded bg-gray-200 text-mac-text-2">
                   {item.relationType}
                 </span>
               </li>
@@ -83,23 +83,23 @@ export const RelationsInspector: React.FC<RelationsInspectorProps> = ({
 
       {/* 2. Referenced By (Inbound explicit links / Backlinks) */}
       <section className="backlinks-section">
-        <h3 className="font-medium text-gray-700 mb-2">
+        <h3 className="font-medium text-mac-text mb-2">
           Referenced By ({relations.backlinks.length})
         </h3>
         {relations.backlinks.length === 0 ? (
-          <p className="text-xs text-gray-400 italic">No inbound backlinks</p>
+          <p className="text-xs text-mac-text-3 italic">No inbound backlinks</p>
         ) : (
           <ul className="space-y-1">
             {relations.backlinks.map((item) => (
               <li
                 key={item.relationId}
-                className="flex items-center justify-between p-1.5 rounded hover:bg-gray-100 cursor-pointer"
+                className="flex items-center justify-between p-1.5 rounded hover:bg-mac-chip cursor-pointer"
                 onClick={() => handleNavigate(item.sourceDocumentId)}
               >
                 <span className="truncate font-medium">
                   {item.sourceDocumentName || item.sourceDocumentId}
                 </span>
-                <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+                <span className="text-xs px-1.5 py-0.5 rounded bg-mac-accent-weak text-mac-accent">
                   {item.relationType}
                 </span>
               </li>
@@ -111,19 +111,19 @@ export const RelationsInspector: React.FC<RelationsInspectorProps> = ({
       {/* 3. Unresolved / Ambiguous Links */}
       {relations.unresolvedLinks.length > 0 && (
         <section className="unresolved-section border-t pt-4">
-          <h3 className="font-medium text-amber-700 mb-2 flex items-center gap-1">
+          <h3 className="font-medium text-mac-warning mb-2 flex items-center gap-1">
             <span>⚠ Unresolved / Ambiguous Links</span> ({relations.unresolvedLinks.length})
           </h3>
           <ul className="space-y-1">
             {relations.unresolvedLinks.map((item) => (
               <li
                 key={item.relationId}
-                className="p-1.5 rounded bg-amber-50 text-amber-900 border border-amber-200"
+                className="p-1.5 rounded bg-mac-warning/10 text-amber-900 border border-mac-warning/40"
               >
                 <div className="font-medium truncate">
                   {item.targetDocumentName || item.rawTarget || item.targetDocumentId}
                 </div>
-                <div className="text-xs text-amber-700 flex justify-between mt-0.5">
+                <div className="text-xs text-mac-warning flex justify-between mt-0.5">
                   <span>{item.isAmbiguous ? 'Ambiguous match' : 'Missing target'}</span>
                   <span>{item.relationType}</span>
                 </div>
@@ -139,7 +139,7 @@ export const RelationsInspector: React.FC<RelationsInspectorProps> = ({
           Potentially Related ({relations.inferredRelations.length})
         </h3>
         {relations.inferredRelations.length === 0 ? (
-          <p className="text-xs text-gray-400 italic">No semantic suggestions</p>
+          <p className="text-xs text-mac-text-3 italic">No semantic suggestions</p>
         ) : (
           <ul className="space-y-1">
             {relations.inferredRelations.map((item) => {

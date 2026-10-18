@@ -163,10 +163,10 @@ export function SharePanel({
     <section
       data-testid="share-panel"
       aria-label="Share management"
-      className="w-96 max-w-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col h-full overflow-y-auto"
+      className="w-96 max-w-full bg-mac-content dark:bg-slate-900 border-r border-mac-hairline dark:border-slate-800 flex flex-col h-full overflow-y-auto"
     >
-      <header className="flex items-center justify-between px-3 py-2 border-b border-slate-200">
-        <h2 className="text-sm font-semibold text-slate-800">Shares</h2>
+      <header className="flex items-center justify-between px-3 py-2 border-b border-mac-hairline">
+        <h2 className="text-sm font-semibold text-mac-text">Shares</h2>
         <div className="flex items-center gap-2">
           {!isCreating && (
             <button
@@ -175,7 +175,7 @@ export function SharePanel({
                 setError(null);
                 setIsCreating(true);
               }}
-              className="text-xs px-2 py-0.5 rounded border border-slate-300 hover:bg-slate-100"
+              className="text-xs px-2 py-0.5 rounded border border-mac-hairline-strong hover:bg-mac-chip"
             >
               New share
             </button>
@@ -185,7 +185,7 @@ export function SharePanel({
               type="button"
               aria-label="Close shares"
               onClick={onClose}
-              className="text-slate-400 hover:text-slate-600 text-lg leading-none"
+              className="text-mac-text-3 hover:text-mac-text-2 text-lg leading-none"
             >
               &times;
             </button>
@@ -194,14 +194,14 @@ export function SharePanel({
       </header>
 
       {error && (
-        <p role="alert" className="px-3 py-2 text-xs text-red-700 bg-red-50 border-b border-red-200">
+        <p role="alert" className="px-3 py-2 text-xs text-mac-danger bg-mac-danger/10 border-b border-mac-danger/40">
           {error}
         </p>
       )}
 
       <div className="p-3">
         {isLoading ? (
-          <p className="text-xs text-slate-400">Loading shares…</p>
+          <p className="text-xs text-mac-text-3">Loading shares…</p>
         ) : isCreating ? (
           <ShareDialog
             availableDocuments={availableDocuments}
@@ -233,7 +233,7 @@ export function SharePanel({
             }
           />
         ) : (
-          <p className="text-xs text-slate-400">No shares yet.</p>
+          <p className="text-xs text-mac-text-3">No shares yet.</p>
         )}
       </div>
     </section>

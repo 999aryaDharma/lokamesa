@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { BatchExportProgress } from './BatchExportProgress';
 import { MergeOrderDialog } from './MergeOrderDialog';
+import PushButton from '../shell/PushButton';
 
 export interface PdfSelectableDocument {
   id: string;
@@ -140,29 +141,32 @@ export function PdfActions({
   return (
     <section aria-label="PDF export actions">
       {actions.length === 0 ? (
-        <p>Select one or more DOCX documents to export.</p>
+        <p className="text-xs text-mac-text-3">Select one or more DOCX documents to export.</p>
       ) : null}
-      {actions.includes('export-single') && exportable.length === 1 ? (
-        <button
-          onClick={() => onExportSingle?.(exportable[0].id)}
-          type="button"
-        >
-          Export PDF
-        </button>
-      ) : null}
-      {actions.includes('export-separate') ? (
-        <button
-          onClick={() => onExportSeparate?.(exportable.map((doc) => doc.id))}
-          type="button"
-        >
-          Export as separate PDFs
-        </button>
-      ) : null}
-      {actions.includes('merge-pdf') ? (
-        <button onClick={openMerge} type="button">
-          Merge to PDF
-        </button>
-      ) : null}
+      <div className="mt-2 flex flex-wrap gap-2">
+        {actions.includes('export-single') && exportable.length === 1 ? (
+          <PushButton
+            onClick={() => onExportSingle?.(exportable[0].id)}
+            size="sm"
+            variant="primary"
+          >
+            Export PDF
+          </PushButton>
+        ) : null}
+        {actions.includes('export-separate') ? (
+          <PushButton
+            onClick={() => onExportSeparate?.(exportable.map((doc) => doc.id))}
+            size="sm"
+          >
+            Export as separate PDFs
+          </PushButton>
+        ) : null}
+        {actions.includes('merge-pdf') ? (
+          <PushButton onClick={openMerge} size="sm">
+            Merge to PDF
+          </PushButton>
+        ) : null}
+      </div>
 
       {mergeOpen ? (
         <MergeOrderDialog
@@ -178,40 +182,49 @@ export function PdfActions({
       ) : null}
 
       {collisions && collisions.length > 0 ? (
-        <fieldset>
-          <legend>Output file already exists</legend>
-          <p>
+        <fieldset className="mt-3 rounded-lg border border-mac-hairline bg-mac-content p-3">
+          <legend className="px-1 text-[11px] font-semibold text-mac-text-2">
+            Output file already exists
+          </legend>
+          <p className="text-xs text-mac-text-2">
             {collisions[0].sourceName} would overwrite {collisions[0].targetPath}.
             Choose how to proceed. Existing files are never overwritten silently.
           </p>
-          {(['Overwrite', 'Rename', 'Skip', 'Cancel'] as CollisionDecision[]).map(
-            (decision) => (
-              <label key={decision}>
-                <input
-                  checked={collisionDecision === decision}
-                  name="pdf-collision-decision"
-                  onChange={() => setCollisionDecision(decision)}
-                  type="radio"
-                  value={decision}
-                />
-                {decision}
-              </label>
-            ),
-          )}
-          <label>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+            {(['Overwrite', 'Rename', 'Skip', 'Cancel'] as CollisionDecision[]).map(
+              (decision) => (
+                <label key={decision} className="flex items-center gap-1.5 text-xs text-mac-text">
+                  <input
+                    checked={collisionDecision === decision}
+                    className="accent-mac-accent"
+                    name="pdf-collision-decision"
+                    onChange={() => setCollisionDecision(decision)}
+                    type="radio"
+                    value={decision}
+                  />
+                  {decision}
+                </label>
+              ),
+            )}
+          </div>
+          <label className="mt-2 flex items-center gap-1.5 text-xs text-mac-text">
             <input
               checked={applyToRemaining}
+              className="accent-mac-accent"
               onChange={(event) => setApplyToRemaining(event.target.checked)}
               type="checkbox"
             />
             Apply choice to remaining collisions
           </label>
-          <button
-            onClick={() => onCollisionResolve?.(collisionDecision, applyToRemaining)}
-            type="button"
-          >
-            Apply collision decision
-          </button>
+          <div className="mt-3">
+            <PushButton
+              onClick={() => onCollisionResolve?.(collisionDecision, applyToRemaining)}
+              size="sm"
+              variant="primary"
+            >
+              Apply collision decision
+            </PushButton>
+          </div>
         </fieldset>
       ) : null}
 
@@ -228,11 +241,12 @@ export function PdfActions({
       ) : null}
 
       {results && results.length > 0 ? (
-        <ul aria-label="PDF export results">
+        <ul aria-label="PDF export results" className="mt-2 space-y-1">
           {results.map((result) => (
-            <li key={result.documentId}>
-              <span>{result.sourceName}</span> <span>{result.status}</span>
-              {result.message ? <span>{result.message}</span> : null}
+            <li key={result.documentId} className="text-[11px] text-mac-text-2">
+              <span className="text-mac-text">{result.sourceName}</span>{' '}
+              <span>{result.status}</span>
+              {result.message ? <span> {result.message}</span> : null}
             </li>
           ))}
         </ul>

@@ -88,8 +88,8 @@ function hasStageableIndexEntry(change: SourceControlChangeEntry): boolean {
 }
 
 const actionButtonClassName =
-  'px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg ' +
-  'hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-50 ' +
+  'px-3 py-1.5 text-sm font-medium text-mac-text bg-mac-content border border-mac-hairline-strong rounded-lg ' +
+  'hover:bg-mac-chip focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-50 ' +
   'transition-colors';
 
 export default function ChangeActions({
@@ -179,7 +179,7 @@ export default function ChangeActions({
       {errorMessage && (
         <div
           role="alert"
-          className="p-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg"
+          className="p-2 text-xs text-mac-danger bg-mac-danger/10 border border-mac-danger/40 rounded-lg"
         >
           {errorMessage}
         </div>

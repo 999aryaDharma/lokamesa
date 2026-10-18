@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import SheetShell from '../shell/SheetShell';
+import PushButton from '../shell/PushButton';
 
 export interface MergeOrderFile {
   id: string;
@@ -49,16 +51,37 @@ export function MergeOrderDialog({
   const indexOf = (id: string) => order.indexOf(id);
 
   return (
-    <section aria-label="Merge document order" role="dialog">
-      <p>
+    // `scrim={false}`: this sheet is rendered inline inside the already-mounted
+    // PDF panel, so it must stay non-modal (a scrim would change behaviour).
+    <SheetShell
+      title="Merge document order"
+      scrim={false}
+      widthClass="max-w-[420px]"
+      className="mt-2"
+      footer={
+        <div className="flex w-full justify-end gap-2">
+          <PushButton variant="primary" onClick={() => onConfirm([...order])}>
+            Merge in this order
+          </PushButton>
+          {onCancel ? <PushButton onClick={onCancel}>Cancel</PushButton> : null}
+        </div>
+      }
+    >
+      <p className="text-[11px] text-mac-text-2">
         {visible.length} of {files.length} documents in merge order
       </p>
-      <ol>
+      <ol className="mt-2 space-y-1">
         {visible.map((file, visibleIndex) => (
           <li
             key={file.id}
             aria-label={`${visibleIndex + 1}. ${file.name}`}
             data-testid={`merge-order-item-${file.id}`}
+            className={[
+              'flex items-center gap-2 rounded-md border border-mac-hairline bg-mac-content px-2 py-1 text-xs',
+              draggedId === file.id ? 'opacity-60' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
             draggable
             onDragStart={(event) => {
               setDraggedId(file.id);
@@ -78,42 +101,34 @@ export function MergeOrderDialog({
               setDraggedId(null);
             }}
           >
-            <span>
+            <span className="flex-1 truncate text-mac-text">
               {visibleIndex + 1}. {file.name}
             </span>
-            <button
+            <PushButton
               aria-label={`Move ${file.name} up`}
               disabled={visibleIndex === 0}
               onClick={() => {
                 const current = indexOf(file.id);
                 move(current, current - 1);
               }}
-              type="button"
+              size="sm"
             >
               Up
-            </button>
-            <button
+            </PushButton>
+            <PushButton
               aria-label={`Move ${file.name} down`}
               disabled={visibleIndex === visible.length - 1}
               onClick={() => {
                 const current = indexOf(file.id);
                 move(current, current + 1);
               }}
-              type="button"
+              size="sm"
             >
               Down
-            </button>
+            </PushButton>
           </li>
         ))}
       </ol>
-      <button onClick={() => onConfirm([...order])} type="button">
-        Merge in this order
-      </button>
-      {onCancel ? (
-        <button onClick={onCancel} type="button">
-          Cancel
-        </button>
-      ) : null}
-    </section>
+    </SheetShell>
   );
 }

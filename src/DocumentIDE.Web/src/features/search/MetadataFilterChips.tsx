@@ -35,7 +35,7 @@ export const MetadataFilterChips: React.FC<MetadataFilterChipsProps> = ({
           <span
             key={chipKey}
             data-testid={`active-chip-${filter.field}-${filter.value}`}
-            className="inline-flex items-center gap-1 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 text-xs px-2.5 py-1 font-medium border border-blue-300 dark:border-blue-700"
+            className="inline-flex items-center gap-1 rounded-full bg-mac-accent-weak dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 text-xs px-2.5 py-1 font-medium border border-blue-300 dark:border-blue-700"
           >
             <span>{displayLabel}</span>
             {filter.count !== undefined && (
@@ -48,7 +48,7 @@ export const MetadataFilterChips: React.FC<MetadataFilterChipsProps> = ({
                 type="button"
                 aria-label={`Remove filter ${filter.field}:${filter.value}`}
                 onClick={() => onRemoveFilter(filter.field, filter.value)}
-                className="ml-1 hover:text-blue-600 dark:hover:text-blue-300 focus:outline-none cursor-pointer"
+                className="ml-1 hover:text-mac-accent dark:hover:text-blue-300 focus:outline-none cursor-pointer"
               >
                 &times;
               </button>
@@ -61,14 +61,14 @@ export const MetadataFilterChips: React.FC<MetadataFilterChipsProps> = ({
         <button
           type="button"
           onClick={onClearAll}
-          className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 underline cursor-pointer ml-1"
+          className="text-xs text-mac-text-3 hover:text-mac-text dark:text-gray-400 dark:hover:text-gray-200 underline cursor-pointer ml-1"
         >
           Clear all
         </button>
       )}
 
       {availableFilters.length > 0 && (
-        <div className="flex items-center gap-1.5 ml-2 border-l border-gray-200 dark:border-gray-700 pl-2">
+        <div className="flex items-center gap-1.5 ml-2 border-l border-mac-hairline dark:border-gray-700 pl-2">
           {availableFilters.map((filter) => {
             const chipKey = `avail-${filter.field}:${filter.value}`;
             return (
@@ -77,7 +77,7 @@ export const MetadataFilterChips: React.FC<MetadataFilterChipsProps> = ({
                 type="button"
                 data-testid={`available-chip-${filter.field}-${filter.value}`}
                 onClick={() => onAddFilter?.(filter.field, filter.value)}
-                className="inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 text-xs px-2.5 py-1 cursor-pointer transition-colors"
+                className="inline-flex items-center gap-1 rounded-full bg-mac-chip dark:bg-gray-800 text-mac-text dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 text-xs px-2.5 py-1 cursor-pointer transition-colors"
               >
                 <span>{filter.field}:{filter.value}</span>
                 {filter.count !== undefined && (

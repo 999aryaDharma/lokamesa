@@ -1,3 +1,5 @@
+import PushButton from '../shell/PushButton';
+
 export interface BatchExportProgressProps {
   completed: number;
   total: number;
@@ -23,27 +25,44 @@ export function BatchExportProgress({
   const isDone = safeTotal > 0 && safeCompleted >= safeTotal;
 
   return (
-    <section aria-label="Batch PDF export progress" role="region">
+    <section
+      aria-label="Batch PDF export progress"
+      role="region"
+      className="mt-2 rounded-lg border border-mac-hairline bg-mac-content p-3"
+    >
       <div
         aria-valuemax={safeTotal}
         aria-valuemin={0}
         aria-valuenow={safeCompleted}
         role="progressbar"
+        className="flex items-center gap-2"
       >
-        {percentage}%
+        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-mac-chip">
+          <div
+            className="h-full rounded-full bg-mac-accent transition-[width]"
+            style={{ width: `${percentage}%` }}
+          />
+        </div>
+        <span className="text-[11px] tabular-nums text-mac-text-2">{percentage}%</span>
       </div>
-      <p>
+      <p className="mt-2 text-xs text-mac-text">
         {safeCompleted} of {safeTotal} files
       </p>
-      {currentFileName ? <p aria-live="polite">{currentFileName}</p> : null}
-      <p>
+      {currentFileName ? (
+        <p aria-live="polite" className="truncate text-[11px] text-mac-text-2">
+          {currentFileName}
+        </p>
+      ) : null}
+      <p className="mt-1 text-[11px] text-mac-text-2">
         {succeeded} PDFs generated / {skipped} skipped / {failed} failed
       </p>
-      {onCancel && !isDone ? (
-        <button onClick={onCancel} type="button">
-          Cancel
-        </button>
-      ) : null}
+      <div className="mt-3 flex gap-2">
+        {onCancel && !isDone ? (
+          <PushButton onClick={onCancel} size="sm">
+            Cancel
+          </PushButton>
+        ) : null}
+      </div>
     </section>
   );
 }

@@ -119,14 +119,14 @@ const SummaryRow: React.FC<SummaryRowProps> = ({
 
   return (
     <div className="summary-row flex justify-between gap-2">
-      <span className="text-slate-500 dark:text-slate-400">{label}</span>
+      <span className="text-mac-text-3 dark:text-slate-400">{label}</span>
       {isClickable ? (
         <button
           type="button"
           data-testid={filterTestId}
           onClick={handleClick}
           title={`Filter by ${label.replace(' (summary)', '').toLowerCase()}`}
-          className="font-medium text-blue-700 dark:text-blue-300 hover:underline cursor-pointer text-right"
+          className="font-medium text-mac-accent dark:text-blue-300 hover:underline cursor-pointer text-right"
         >
           {value ?? 'Not available'}
         </button>
@@ -166,18 +166,18 @@ export const DocxInspector: React.FC<DocxInspectorProps> = ({
       <aside
         data-testid="docx-inspector"
         aria-label="DOCX inspector"
-        className="docx-inspector border-l border-slate-200 dark:border-slate-800 p-4 space-y-4 text-sm w-full max-w-sm"
+        className="docx-inspector border-l border-mac-hairline dark:border-slate-800 p-4 space-y-4 text-sm w-full max-w-sm"
       >
-        <header className="border-b border-slate-200 dark:border-slate-800 pb-2">
+        <header className="border-b border-mac-hairline dark:border-slate-800 pb-2">
           <h2 className="text-base font-semibold truncate">{metadata.filename}</h2>
         </header>
-        <div className="docx-inspector-error rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-3 space-y-1">
-          <p className="font-semibold text-red-700 dark:text-red-300">Metadata unavailable</p>
+        <div className="docx-inspector-error rounded-md bg-mac-danger/10 dark:bg-red-900/20 border border-mac-danger/40 dark:border-red-800 p-3 space-y-1">
+          <p className="font-semibold text-mac-danger dark:text-red-300">Metadata unavailable</p>
           {metadata.errorCode && (
-            <code className="block text-[11px] text-red-600 dark:text-red-400">{metadata.errorCode}</code>
+            <code className="block text-[11px] text-mac-danger dark:text-red-400">{metadata.errorCode}</code>
           )}
           {metadata.errorMessage && (
-            <p className="text-xs text-red-700 dark:text-red-300">{metadata.errorMessage}</p>
+            <p className="text-xs text-mac-danger dark:text-red-300">{metadata.errorMessage}</p>
           )}
         </div>
       </aside>
@@ -199,27 +199,27 @@ export const DocxInspector: React.FC<DocxInspectorProps> = ({
     <aside
       data-testid="docx-inspector"
       aria-label="DOCX inspector"
-      className="docx-inspector border-l border-slate-200 dark:border-slate-800 p-4 space-y-4 text-sm w-full max-w-sm"
+      className="docx-inspector border-l border-mac-hairline dark:border-slate-800 p-4 space-y-4 text-sm w-full max-w-sm"
     >
-      <header className="border-b border-slate-200 dark:border-slate-800 pb-2">
+      <header className="border-b border-mac-hairline dark:border-slate-800 pb-2">
         <h2 className="text-base font-semibold truncate">{metadata.filename}</h2>
         {metadata.filePath && (
-          <p className="text-[11px] text-slate-400 dark:text-slate-500 break-all">{metadata.filePath}</p>
+          <p className="text-[11px] text-mac-text-3 dark:text-slate-500 break-all">{metadata.filePath}</p>
         )}
         {(fileSizeText || modifiedText) && (
-          <p className="flex gap-2 text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+          <p className="flex gap-2 text-[11px] text-mac-text-3 dark:text-slate-500 mt-0.5">
             {fileSizeText && <span>{fileSizeText}</span>}
             {modifiedText && <span>{modifiedText}</span>}
           </p>
         )}
         {metadata.status === 'stale' && (
-          <p className="docx-inspector-stale text-[11px] text-amber-700 dark:text-amber-400 mt-1">
+          <p className="docx-inspector-stale text-[11px] text-mac-warning dark:text-amber-400 mt-1">
             Derived metadata may be stale
           </p>
         )}
       </header>
 
-      <section className="docx-inspector-counts flex flex-wrap gap-x-3 gap-y-1 text-slate-700 dark:text-slate-300">
+      <section className="docx-inspector-counts flex flex-wrap gap-x-3 gap-y-1 text-mac-text dark:text-slate-300">
         {counts.map((count) => (
           <span key={count} className="font-medium">
             {count}
@@ -264,13 +264,13 @@ export const DocxInspector: React.FC<DocxInspectorProps> = ({
           onApplyMetadataFilter={onApplyMetadataFilter}
         />
         <div className="summary-row flex justify-between gap-2">
-          <span className="text-slate-500 dark:text-slate-400">Header</span>
+          <span className="text-mac-text-3 dark:text-slate-400">Header</span>
           <span data-testid="docx-header-state" className="font-medium">
             {metadata.headerPresent ? 'Present' : 'None'}
           </span>
         </div>
         <div className="summary-row flex justify-between gap-2">
-          <span className="text-slate-500 dark:text-slate-400">Footer</span>
+          <span className="text-mac-text-3 dark:text-slate-400">Footer</span>
           <span data-testid="docx-footer-state" className="font-medium">
             {metadata.footerPresent ? 'Present' : 'None'}
           </span>
@@ -278,11 +278,11 @@ export const DocxInspector: React.FC<DocxInspectorProps> = ({
       </section>
 
       <section className="docx-inspector-headings">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-mac-text-3 dark:text-slate-400 mb-1">
           Detected headings ({metadata.headings.length})
         </h3>
         {metadata.headings.length === 0 ? (
-          <p className="text-xs text-slate-400 italic">No headings detected</p>
+          <p className="text-xs text-mac-text-3 italic">No headings detected</p>
         ) : (
           <ul className="space-y-1">
             {metadata.headings.map((heading, index) => (
@@ -297,7 +297,7 @@ export const DocxInspector: React.FC<DocxInspectorProps> = ({
                     data-testid={`docx-filter-heading-${index}`}
                     onClick={() => handleHeadingClick(heading.text)}
                     title="Filter by heading"
-                    className="hover:underline cursor-pointer text-blue-700 dark:text-blue-300"
+                    className="hover:underline cursor-pointer text-mac-accent dark:text-blue-300"
                   >
                     {heading.text}
                   </button>

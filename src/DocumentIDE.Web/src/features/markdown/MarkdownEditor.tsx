@@ -119,16 +119,16 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
 
   return (
     <section className="markdown-editor flex flex-col h-full w-full" aria-label="Markdown editor">
-      <header className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-2">
-        <span className="text-xs font-semibold text-slate-700 truncate" data-testid="markdown-title">
+      <header className="flex items-center gap-2 border-b border-mac-hairline bg-mac-content px-3 py-2">
+        <span className="text-xs font-semibold text-mac-text truncate" data-testid="markdown-title">
           {documentId ?? 'Markdown'}
         </span>
-        <div role="group" aria-label="Editor mode" className="inline-flex rounded border border-slate-200 overflow-hidden">
+        <div role="group" aria-label="Editor mode" className="inline-flex rounded border border-mac-hairline overflow-hidden">
           <button
             type="button"
             aria-pressed={mode === 'edit'}
             onClick={() => setMode('edit')}
-            className={`px-2 py-0.5 text-xs ${mode === 'edit' ? 'bg-slate-200' : 'bg-white'}`}
+            className={`px-2 py-0.5 text-xs ${mode === 'edit' ? 'bg-mac-chip' : 'bg-mac-content'}`}
           >
             Edit
           </button>
@@ -136,7 +136,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
             type="button"
             aria-pressed={mode === 'preview'}
             onClick={() => setMode('preview')}
-            className={`px-2 py-0.5 text-xs border-l border-slate-200 ${mode === 'preview' ? 'bg-slate-200' : 'bg-white'}`}
+            className={`px-2 py-0.5 text-xs border-l border-mac-hairline ${mode === 'preview' ? 'bg-mac-chip' : 'bg-mac-content'}`}
           >
             Preview
           </button>
@@ -144,13 +144,13 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
             type="button"
             aria-pressed={mode === 'split'}
             onClick={() => setMode('split')}
-            className={`px-2 py-0.5 text-xs border-l border-slate-200 ${mode === 'split' ? 'bg-slate-200' : 'bg-white'}`}
+            className={`px-2 py-0.5 text-xs border-l border-mac-hairline ${mode === 'split' ? 'bg-mac-chip' : 'bg-mac-content'}`}
           >
             Split
           </button>
         </div>
 
-        <span className="text-[11px] text-slate-500" role="status" data-testid="markdown-status">
+        <span className="text-[11px] text-mac-text-3" role="status" data-testid="markdown-status">
           {status}
         </span>
         {isDirty && (
@@ -166,12 +166,12 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
             type="button"
             onClick={() => void handleSave()}
             disabled={!isDirty || isSaving || !documentId}
-            className="px-2 py-1 text-xs rounded bg-blue-600 text-white disabled:opacity-40"
+            className="px-2 py-1 text-xs rounded bg-mac-accent text-white disabled:opacity-40"
           >
             Save (Ctrl+S)
           </button>
           {onClose && (
-            <button type="button" onClick={onClose} className="px-2 py-1 text-xs rounded border border-slate-300">
+            <button type="button" onClick={onClose} className="px-2 py-1 text-xs rounded border border-mac-hairline-strong">
               Close
             </button>
           )}
@@ -179,7 +179,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
       </header>
 
       {error && (
-        <p role="alert" className="px-3 py-1 text-xs text-red-700 bg-red-50 border-b border-red-200">
+        <p role="alert" className="px-3 py-1 text-xs text-mac-danger bg-mac-danger/10 border-b border-mac-danger/40">
           {error}
         </p>
       )}
@@ -198,8 +198,8 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
           <pre
             data-testid="markdown-preview"
             aria-label="Markdown preview"
-            className={`flex-1 min-w-0 h-full w-full p-3 text-sm overflow-auto bg-slate-50 ${
-              mode === 'split' ? 'border-l border-slate-200' : ''
+            className={`flex-1 min-w-0 h-full w-full p-3 text-sm overflow-auto bg-mac-canvas ${
+              mode === 'split' ? 'border-l border-mac-hairline' : ''
             }`}
           >
             {source}

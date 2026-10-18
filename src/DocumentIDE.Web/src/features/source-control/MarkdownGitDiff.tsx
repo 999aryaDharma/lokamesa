@@ -62,13 +62,13 @@ interface MarkdownGitDiffProps {
 const NO_NEWLINE_MARKER = '\\ No newline at end of file';
 
 const lineKindClass: Record<GitDiffLineKindView, string> = {
-  context: 'text-slate-700',
+  context: 'text-mac-text',
   added: 'bg-emerald-50 text-emerald-900',
-  removed: 'bg-red-50 text-red-900',
+  removed: 'bg-mac-danger/10 text-red-900',
 };
 
 function panelClass(extra: string): string {
-  return `w-full max-w-3xl p-4 text-sm bg-white border border-slate-200 rounded-xl shadow-sm ${extra}`;
+  return `w-full max-w-3xl p-4 text-sm bg-mac-content border border-mac-hairline rounded-xl shadow-sm ${extra}`;
 }
 
 function lineSign(kind: GitDiffLineKindView): string {
@@ -89,7 +89,7 @@ export default function MarkdownGitDiff({
 }: MarkdownGitDiffProps) {
   if (isLoading) {
     return (
-      <div data-testid="markdown-diff-loading" className={panelClass('text-slate-500')}>
+      <div data-testid="markdown-diff-loading" className={panelClass('text-mac-text-3')}>
         Loading diff...
       </div>
     );
@@ -99,7 +99,7 @@ export default function MarkdownGitDiff({
     return (
       <div
         data-testid="markdown-diff-git-unavailable"
-        className={panelClass('text-slate-600')}
+        className={panelClass('text-mac-text-2')}
       >
         Git is not available on this machine. Install Git to review changes.
       </div>
@@ -108,7 +108,7 @@ export default function MarkdownGitDiff({
 
   if (status === 'no-repository') {
     return (
-      <div data-testid="markdown-diff-no-repository" className={panelClass('text-slate-600')}>
+      <div data-testid="markdown-diff-no-repository" className={panelClass('text-mac-text-2')}>
         This folder is not inside a Git repository.
       </div>
     );
@@ -118,7 +118,7 @@ export default function MarkdownGitDiff({
     return (
       <div
         role="alert"
-        className={panelClass('text-red-700 bg-red-50 border-red-200')}
+        className={panelClass('text-mac-danger bg-mac-danger/10 border-mac-danger/40')}
       >
         {failureMessage ??
           (status === 'path-rejected'
@@ -130,7 +130,7 @@ export default function MarkdownGitDiff({
 
   if (!diff) {
     return (
-      <div role="alert" className={panelClass('text-red-700 bg-red-50 border-red-200')}>
+      <div role="alert" className={panelClass('text-mac-danger bg-mac-danger/10 border-mac-danger/40')}>
         {failureMessage ?? 'No diff data was provided.'}
       </div>
     );
@@ -138,8 +138,8 @@ export default function MarkdownGitDiff({
 
   if (diff.isBinary) {
     return (
-      <div data-testid="markdown-diff-binary" className={panelClass('text-slate-600 space-y-1')}>
-        <p className="font-medium text-slate-700">Binary change</p>
+      <div data-testid="markdown-diff-binary" className={panelClass('text-mac-text-2 space-y-1')}>
+        <p className="font-medium text-mac-text">Binary change</p>
         <p>
           {diff.path} differs between {diff.leftLabel} and {diff.rightLabel}; the content
           is not text, so no line diff is shown.
@@ -150,7 +150,7 @@ export default function MarkdownGitDiff({
 
   if (diff.hunks.length === 0) {
     return (
-      <div data-testid="markdown-diff-empty" className={panelClass('text-slate-500')}>
+      <div data-testid="markdown-diff-empty" className={panelClass('text-mac-text-3')}>
         No changes between {diff.leftLabel} and {diff.rightLabel} for {diff.path}.
       </div>
     );
@@ -162,15 +162,15 @@ export default function MarkdownGitDiff({
     <div data-testid="markdown-diff" className="w-full max-w-3xl space-y-2">
       <div
         data-testid="markdown-diff-target"
-        className="text-sm font-medium text-slate-700"
+        className="text-sm font-medium text-mac-text"
       >
         {diff.leftLabel} ↔ {diff.rightLabel}
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+      <div className="bg-mac-content border border-mac-hairline rounded-xl shadow-sm overflow-hidden">
         <div
           data-testid="markdown-diff-file-header"
-          className="px-3 py-2 bg-slate-50 border-b border-slate-200 font-mono text-xs text-slate-700"
+          className="px-3 py-2 bg-mac-canvas border-b border-mac-hairline font-mono text-xs text-mac-text"
         >
           <div>{`--- ${diff.leftExists ? `${diff.leftLabel}:${diff.path}` : '/dev/null'}`}</div>
           <div>{`+++ ${diff.rightExists ? `${diff.rightLabel}:${diff.path}` : '/dev/null'}`}</div>
@@ -195,10 +195,10 @@ export default function MarkdownGitDiff({
                     data-testid={`markdown-diff-line-${index}`}
                     className={`flex items-stretch ${lineKindClass[line.kind]}`}
                   >
-                    <span className="w-10 shrink-0 px-2 text-right text-slate-400 select-none">
+                    <span className="w-10 shrink-0 px-2 text-right text-mac-text-3 select-none">
                       {line.oldLineNumber ?? ''}
                     </span>
-                    <span className="w-10 shrink-0 px-2 text-right text-slate-400 select-none">
+                    <span className="w-10 shrink-0 px-2 text-right text-mac-text-3 select-none">
                       {line.newLineNumber ?? ''}
                     </span>
                     <span className="pl-2 pr-3 whitespace-pre-wrap break-words">
@@ -206,7 +206,7 @@ export default function MarkdownGitDiff({
                       {line.content}
                     </span>
                     {line.noNewlineAtEndOfFile && (
-                      <span className="pr-3 text-slate-400 italic">{NO_NEWLINE_MARKER}</span>
+                      <span className="pr-3 text-mac-text-3 italic">{NO_NEWLINE_MARKER}</span>
                     )}
                   </div>
                 );

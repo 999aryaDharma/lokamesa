@@ -37,35 +37,35 @@ export const MissingResourceCard: React.FC<MissingResourceCardProps> = ({
     <div
       role="group"
       aria-label={`${isFolder ? 'Missing folder' : 'Missing file'}: ${displayName}`}
-      className="flex flex-col items-center rounded-lg border border-dashed border-slate-300 bg-white p-4 text-center dark:border-slate-600 dark:bg-slate-800"
+      className="flex flex-col items-center rounded-lg border border-dashed border-mac-hairline-strong bg-mac-content p-4 text-center dark:border-slate-600 dark:bg-slate-800"
     >
       <div
         aria-hidden="true"
-        className="flex h-12 w-12 items-center justify-center rounded bg-slate-100 text-2xl dark:bg-slate-700"
+        className="flex h-12 w-12 items-center justify-center rounded bg-mac-chip text-2xl dark:bg-slate-700"
       >
         {isFolder ? '📁' : '📄'}
       </div>
-      <p className="mt-2 max-w-full truncate text-sm font-semibold text-slate-900 dark:text-white">
+      <p className="mt-2 max-w-full truncate text-sm font-semibold text-mac-text dark:text-white">
         {displayName}
       </p>
-      <p className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+      <p className="mt-1 flex items-center gap-1 text-xs font-medium text-mac-warning dark:text-amber-300">
         <span aria-hidden="true">⚠</span> {label}
       </p>
-      <p className="mt-1 max-w-full break-all text-[11px] text-slate-500 dark:text-slate-400">
+      <p className="mt-1 max-w-full break-all text-[11px] text-mac-text-3 dark:text-slate-400">
         {lastKnownPath}
       </p>
       <div className="mt-3 flex gap-2">
         <button
           type="button"
           onClick={() => onLocate(resourceId)}
-          className="rounded border border-blue-600 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950"
+          className="rounded border border-blue-600 px-3 py-1 text-xs font-medium text-mac-accent hover:bg-mac-accent-weak dark:text-blue-300 dark:hover:bg-blue-950"
         >
           {locateLabel}
         </button>
         <button
           type="button"
           onClick={() => onRemove(resourceId)}
-          className="rounded border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+          className="rounded border border-mac-hairline-strong px-3 py-1 text-xs font-medium text-mac-text-2 hover:bg-mac-chip dark:border-slate-600 dark:text-slate-300 dark:hover:bg-mac-text"
         >
           {removeLabel}
         </button>

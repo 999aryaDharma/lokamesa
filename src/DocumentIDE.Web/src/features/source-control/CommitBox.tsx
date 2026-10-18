@@ -74,13 +74,13 @@ function failureMessage(result: SourceControlCommitResult): string {
 }
 
 const actionButtonClassName =
-  'px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg ' +
-  'hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-50 ' +
+  'px-3 py-1.5 text-sm font-medium text-mac-text bg-mac-content border border-mac-hairline-strong rounded-lg ' +
+  'hover:bg-mac-chip focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-50 ' +
   'transition-colors';
 
 const primaryButtonClassName =
-  'px-3 py-1.5 text-sm font-medium text-white bg-slate-700 border border-slate-700 rounded-lg ' +
-  'hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-50 ' +
+  'px-3 py-1.5 text-sm font-medium text-white bg-mac-text border border-slate-700 rounded-lg ' +
+  'hover:bg-mac-text focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-50 ' +
   'transition-colors';
 
 export default function CommitBox({
@@ -135,7 +135,7 @@ export default function CommitBox({
     <div data-testid="commit-box" className="space-y-2">
       <label
         htmlFor="commit-message"
-        className="block text-xs font-semibold uppercase tracking-wide text-slate-500"
+        className="block text-xs font-semibold uppercase tracking-wide text-mac-text-3"
       >
         Commit message
       </label>
@@ -147,7 +147,7 @@ export default function CommitBox({
         disabled={busy || gitUnavailable}
         onChange={(event) => setMessage(event.target.value)}
         placeholder="Describe the change"
-        className="w-full px-2 py-1 text-sm text-slate-800 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-50"
+        className="w-full px-2 py-1 text-sm text-mac-text bg-mac-content border border-mac-hairline-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-50"
       />
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -172,7 +172,7 @@ export default function CommitBox({
       {lastCommit && (
         <div
           data-testid="commit-last-commit"
-          className="p-2 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg"
+          className="p-2 text-xs text-mac-text-2 bg-mac-canvas border border-mac-hairline rounded-lg"
         >
           Committed <span className="font-mono">{lastCommit.shortId}</span>: {lastCommit.summary}
         </div>
@@ -181,7 +181,7 @@ export default function CommitBox({
       {errorMessage && (
         <div
           role="alert"
-          className="p-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg"
+          className="p-2 text-xs text-mac-danger bg-mac-danger/10 border border-mac-danger/40 rounded-lg"
         >
           {errorMessage}
         </div>

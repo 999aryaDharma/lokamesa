@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useCanvasStore } from '../canvas/canvasStore';
 import type { CanvasObject } from '../canvas/types';
+import NodeIcon, { documentIconKind, type NodeIconKind } from '../shell/NodeIcon';
 
 function useCanvasState() {
   return useSyncExternalStore(
@@ -60,6 +61,12 @@ interface ListRow {
   name: string;
   typeLabel: TypeLabel;
   statusLabel: string;
+  /**
+   * UI-01 (owner directive): list rows carry a small folder/file icon — the
+   * Finder convention for lists — so a folder and a file are never the same
+   * look-alike row.
+   */
+  kind: NodeIconKind;
 }
 
 type TypeFilter = 'all' | 'docx' | 'md' | 'folder';
@@ -118,6 +125,7 @@ export default function DocumentList() {
         name: obj.title,
         typeLabel,
         statusLabel: deriveStatusLabel(obj),
+        kind: obj.type === 'folder' ? 'folder' : documentIconKind(obj.title, obj.docType),
       });
     }
     const direction = sortDirection === 'asc' ? 1 : -1;
@@ -168,10 +176,10 @@ export default function DocumentList() {
         type="button"
         onClick={() => handleSort(key)}
         aria-label={`Sort by ${key}`}
-        className="inline-flex items-center gap-1 cursor-pointer hover:text-slate-700 transition-colors"
+        className="inline-flex items-center gap-1 cursor-pointer transition-colors hover:text-mac-text"
       >
         {label}
-        <span aria-hidden="true" className="text-[9px] text-slate-400">
+        <span aria-hidden="true" className="text-[9px] text-mac-text-3">
           {sortKey === key ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
         </span>
       </button>
@@ -192,29 +200,29 @@ export default function DocumentList() {
     <section
       data-testid="list-view"
       aria-label="Document list"
-      className="w-full h-full overflow-auto bg-white"
+      className="w-full h-full overflow-auto bg-mac-content"
     >
-      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white/95 px-3 py-2">
+      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-mac-hairline bg-mac-content/95 px-3 py-2">
         <input
           type="search"
           value={nameFilter}
           onChange={(e) => setNameFilter(e.target.value)}
           aria-label="Filter documents"
           placeholder="Filter by name..."
-          className="w-56 px-2 py-1 text-xs bg-slate-50 border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-900 placeholder-slate-400"
+          className="w-56 rounded border border-mac-hairline-strong bg-mac-canvas px-2 py-1 text-xs text-mac-text placeholder:text-mac-text-3 focus:outline-none focus:ring-1 focus:ring-mac-accent"
         />
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
           aria-label="Filter by type"
-          className="px-2 py-1 text-xs bg-slate-50 border border-slate-300 rounded text-slate-700"
+          className="rounded border border-mac-hairline-strong bg-mac-canvas px-2 py-1 text-xs text-mac-text-2"
         >
           <option value="all">All types</option>
           <option value="docx">DOCX</option>
           <option value="md">MD</option>
           <option value="folder">Folder</option>
         </select>
-        <span data-testid="list-selection-count" className="text-[11px] text-slate-500">
+        <span data-testid="list-selection-count" className="text-[11px] text-mac-text-2">
           {selectedVisibleCount} of {rows.length} selected
         </span>
         <button
@@ -222,15 +230,15 @@ export default function DocumentList() {
           onClick={clearSelection}
           aria-label="Clear selection"
           disabled={selectedIds.size === 0}
-          className="px-2 py-0.5 text-[11px] rounded bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-40 cursor-pointer transition-colors"
+          className="cursor-pointer rounded bg-mac-chip px-2 py-0.5 text-[11px] text-mac-text-2 transition-colors hover:text-mac-text disabled:opacity-40"
         >
           Clear selection
         </button>
       </div>
 
       <table className="w-full text-left text-xs border-collapse">
-        <thead className="bg-slate-50 text-slate-500">
-          <tr className="border-b border-slate-200">
+        <thead className="bg-mac-canvas text-mac-text-3">
+          <tr className="border-b border-mac-hairline">
             <th scope="col" className="w-8 px-2 py-1.5">
               <input
                 ref={selectAllRef}
@@ -264,8 +272,8 @@ export default function DocumentList() {
                     toggleSelect(row.id);
                   }
                 }}
-                className={`border-b border-slate-100 cursor-pointer ${
-                  isSelected ? 'bg-blue-50/60' : 'hover:bg-slate-50'
+                className={`border-b border-mac-hairline cursor-pointer ${
+                  isSelected ? 'bg-mac-accent-weak' : 'hover:bg-mac-canvas'
                 }`}
               >
                 <td className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
@@ -277,11 +285,14 @@ export default function DocumentList() {
                     className="cursor-pointer"
                   />
                 </td>
-                <td className="px-2 py-1.5 text-slate-800 font-medium truncate max-w-0 w-1/2">
-                  {row.name}
+                <td className="px-2 py-1.5 text-mac-text font-medium truncate max-w-0 w-1/2">
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <NodeIcon kind={row.kind} />
+                    <span className="truncate">{row.name}</span>
+                  </span>
                 </td>
-                <td className="px-2 py-1.5 text-slate-600">{row.typeLabel}</td>
-                <td className="px-2 py-1.5 text-slate-600">{row.statusLabel}</td>
+                <td className="px-2 py-1.5 text-mac-text-2">{row.typeLabel}</td>
+                <td className="px-2 py-1.5 text-mac-text-2">{row.statusLabel}</td>
               </tr>
             );
           })}
@@ -289,11 +300,11 @@ export default function DocumentList() {
       </table>
 
       {objects.length === 0 ? (
-        <p data-testid="list-empty" className="p-4 text-center text-xs text-slate-400">
+        <p data-testid="list-empty" className="p-4 text-center text-xs text-mac-text-3">
           No documents in this workspace yet
         </p>
       ) : rows.length === 0 ? (
-        <p data-testid="list-no-matches" className="p-4 text-center text-xs text-slate-400">
+        <p data-testid="list-no-matches" className="p-4 text-center text-xs text-mac-text-3">
           No documents match the current filter
         </p>
       ) : null}

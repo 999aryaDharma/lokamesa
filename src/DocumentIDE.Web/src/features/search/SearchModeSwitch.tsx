@@ -23,7 +23,7 @@ export const SearchModeSwitch: React.FC<SearchModeSwitchProps> = ({
     <div
       role="radiogroup"
       aria-label="Search Mode Switch"
-      className="inline-flex items-center p-0.5 bg-slate-100 dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700 text-xs select-none"
+      className="inline-flex items-center p-0.5 bg-mac-chip dark:bg-slate-800 rounded-md border border-mac-hairline dark:border-slate-700 text-xs select-none"
     >
       <button
         type="button"
@@ -34,8 +34,8 @@ export const SearchModeSwitch: React.FC<SearchModeSwitchProps> = ({
         data-testid="mode-exact-btn"
         className={`px-2 py-1 rounded transition-colors font-medium cursor-pointer ${
           mode === 'exact'
-            ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs'
-            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+            ? 'bg-mac-content dark:bg-slate-700 text-mac-text dark:text-slate-100 shadow-xs'
+            : 'text-mac-text-3 dark:text-slate-400 hover:text-mac-text dark:hover:text-slate-200'
         }`}
       >
         Exact
@@ -50,8 +50,8 @@ export const SearchModeSwitch: React.FC<SearchModeSwitchProps> = ({
         data-testid="mode-fuzzy-btn"
         className={`px-2 py-1 rounded transition-colors font-medium cursor-pointer ${
           mode === 'fuzzy'
-            ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs'
-            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+            ? 'bg-mac-content dark:bg-slate-700 text-mac-text dark:text-slate-100 shadow-xs'
+            : 'text-mac-text-3 dark:text-slate-400 hover:text-mac-text dark:hover:text-slate-200'
         }`}
       >
         Fuzzy
