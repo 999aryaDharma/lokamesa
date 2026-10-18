@@ -131,13 +131,13 @@ Rules:
 | SCM-11 | Git Remote State & Fetch | DONE | SCM-02, SCM-07 | feat/git-remote-state-fetch (84e82fc) | docs/sprints/handoffs/SCM-11-HANDOFF.md |
 | SCM-12 | Safe Fast-Forward Pull | DONE | SCM-11, SCM-10 | feat/safe-fast-forward-pull (8c4dc21) | docs/sprints/handoffs/SCM-12-HANDOFF.md |
 | SCM-13 | Explicit Git Push | DONE | SCM-11, SCM-07 | feat/explicit-git-push (ecb7d02) | docs/sprints/handoffs/SCM-13-HANDOFF.md |
-| SCM-14 | Git Conflict State & Resolution Shell | READY | SCM-12, SCM-05 |  |  |
+| SCM-14 | Git Conflict State & Resolution Shell | DONE | SCM-12, SCM-05 | feat/git-conflict-state-resolution-shell (f12d5c3) | docs/sprints/handoffs/SCM-14-HANDOFF.md |
 | SCM-15 | Git Worktree Discovery & Open Existing | DONE | SCM-01, FS-03, FND-07 | feat/git-worktree-discovery-open-existing | docs/sprints/handoffs/SCM-15-HANDOFF.md |
 | SCM-16 | Safe Git Worktree Create & Remove | DONE | SCM-15, FS-07 | feat/safe-git-worktree-create-remove | docs/sprints/handoffs/SCM-16-HANDOFF.md |
 | SCM-17 | Source Control Regression & Release Hardening | BLOCKED | SCM-04, SCM-05, SCM-09, SCM-12, SCM-13, SCM-14, SCM-16, QA-02 |  |  |
-| SCM-18 | Worktree API Surface | READY | SCM-15, SCM-16 |  |  |
+| SCM-18 | Worktree API Surface | DONE | SCM-15, SCM-16 | feat/worktree-api-surface (a0474c3) | docs/sprints/handoffs/SCM-18-HANDOFF.md |
 | UI-01 | macOS Three-Pane Shell Redesign | DONE | - | feat/ui-01-macos-shell-redesign (0d6893b) | docs/sprints/handoffs/UI-01-HANDOFF.md |
 | UI-02 | Document Preview Content API (DOCX) | DONE | - | feat/ui-02-document-preview-content-api (bbcf67e) | docs/sprints/handoffs/UI-02-HANDOFF.md |
-| UI-03 | macOS Screen Slicing (remaining screens) | BLOCKED | SCM-14, SCM-18 |  |  |
+| UI-03 | macOS Screen Slicing (remaining screens) | READY | SCM-14, SCM-18 |  |  |
 
 **REL-03 review notes (2026-10-16) — product verdict BLOCKED.** `docs/quality/v1-readiness-report.md` maps all 22 spec-12 completion gates; 16 PASS, 6 FAIL. Blockers: (1) graph view is a placeholder (GR-03 steps 1/3/4/5 unmet, §27.2/§89 not deliverable); (2) batch Apply unreachable (`BatchPreviewPanel.tsx:147` disabled; no apply/undo route); (3) `/api/word/open` 404 in the shipped desktop host (`BatchPreviewHostTests.cs:91`); (4) no `/api/search` endpoint + search UI unmounted; (5) share lifecycle unwired (SHR-11 callback deferral, no create/revoke endpoints); (6) workspace/canvas bootstrap not wired (canvas never populated outside tests); (7) Markdown editor is a stub and unmounted; (8) E2E administrative workflow test missing (spec 11 §20/§27). Integration sprints are required before V1; gap list G1–G9 with file:line evidence is in the report and handoff.
