@@ -169,7 +169,7 @@ export interface SourceControlCommitResult {
 }
 
 /**
- * SCM-09 — typed outcome of one work-session/correlation request
+ * SCM-09 - typed outcome of one work-session/correlation request
  * (spec 13 §13/§20/§24). `SessionRequired`/`DocumentRequired`/`CommitRequired`
  * are input rejections where nothing ran; `SessionNotFound` and
  * `StoreUnavailable` are execution outcomes the pane renders instead of
@@ -322,5 +322,88 @@ export interface SourceControlPushResult {
   errorCode: string | null;
   message: string | null;
   remote: SourceControlRemoteModel | null;
+  failure: SourceControlFailure | null;
+}
+
+/**
+ * SCM-08 - typed status of one read-only Git history request (spec 13
+ * §12/§20). `Available` means Git answered (the page may still be empty);
+ * everything else is an inspectable typed state.
+ */
+export type GitHistoryStatus =
+  | 'Available'
+  | 'NoRepository'
+  | 'GitUnavailable'
+  | 'InvalidRequest'
+  | 'PathRejected'
+  | 'NotFound'
+  | 'Failed';
+
+/** SCM-08 — one commit as Git reports it (spec 13 §12). */
+export interface SourceControlHistoryCommit {
+  /** Full commit object id. */
+  commitId: string;
+  /** Git's abbreviated commit id. */
+  shortId: string;
+  authorName: string;
+  authorEmail: string;
+  /** Git's strict ISO-8601 committer time; never localized. */
+  committerTime: string;
+  /** Commit subject. */
+  summary: string;
+  /** Number of files Git reports for this commit (pathspec-limited for file history). */
+  fileCount: number;
+}
+
+/**
+ * SCM-08 — one page of commits plus the window it came from, so the pane can
+ * lazily append the next page (spec 13 §25).
+ */
+export interface SourceControlHistoryPage {
+  commits: SourceControlHistoryCommit[];
+  skip: number;
+  limit: number;
+  hasMore: boolean;
+  /** Skip to pass for the next page; null when the history is exhausted. */
+  nextSkip: number | null;
+}
+
+/**
+ * SCM-08 — typed history payload. `source` is always `'Git'`: Git history is a
+ * separate authority from Document IDE History (spec 13 §4.3/§12).
+ */
+export interface SourceControlHistoryResult {
+  status: GitHistoryStatus;
+  source: string;
+  errorCode: string | null;
+  message: string | null;
+  isAvailable: boolean;
+  page: SourceControlHistoryPage | null;
+  failure: SourceControlFailure | null;
+}
+
+/**
+ * SCM-08 — one document version read back from a commit (spec 13 §12).
+ * `content` is null for a binary blob, and also for a blob over the served
+ * bound: such a version is flagged `isTruncated` and is never read, so the pane
+ * shows its true `sizeBytes` without a text preview.
+ */
+export interface SourceControlFileVersionInfo {
+  commitId: string;
+  path: string;
+  content: string | null;
+  isBinary: boolean;
+  isTruncated: boolean;
+  sizeBytes: number;
+}
+
+/** SCM-08 — typed document-version payload (spec 13 §12/§20). */
+export interface SourceControlFileVersionResult {
+  status: GitHistoryStatus;
+  source: string;
+  errorCode: string | null;
+  message: string | null;
+  isAvailable: boolean;
+  version: SourceControlFileVersionInfo | null;
   failure: SourceControlFailure | null;
 }

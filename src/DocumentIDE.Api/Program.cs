@@ -115,6 +115,15 @@ builder.Services.AddSingleton(sp => new GitPushService(
     sp.GetRequiredService<GitRepositoryService>(),
     sp.GetRequiredService<GitRemoteService>()));
 
+// SCM-08: read-only Git history service (commit history, file history and
+// document-version inspection). Every read goes through the same controlled
+// runner and `log`/`show` are in its read-only vocabulary, so nothing here
+// joins the per-worktree mutation queue and no read mutates the repository
+// (spec 13 §9.4/§12/§19/§20).
+builder.Services.AddSingleton(sp => new GitHistoryService(
+    sp.GetRequiredService<IGitProcessRunner>(),
+    sp.GetRequiredService<GitRepositoryService>()));
+
 builder.Services.AddScoped<PdfExportService>();
 builder.Services.AddScoped<BatchPdfExportService>();
 builder.Services.AddScoped<PdfMergeService>();

@@ -157,6 +157,69 @@ public sealed record SourceControlCommitResponse(
     SourceControlStatusResponse? Status,
     SourceControlFailureResponse? Failure);
 
+// -------------------------------------------------------------------------
+// SCM-08 — Git commit/file history and document-version payloads (spec 13
+// §9.4/§12/§20/§25)
+// -------------------------------------------------------------------------
+
+/// <summary>SCM-08 — one commit as Git reports it (spec 13 §12).</summary>
+public sealed record SourceControlHistoryCommitResponse(
+    string CommitId,
+    string ShortId,
+    string AuthorName,
+    string AuthorEmail,
+    string CommitterTime,
+    string Summary,
+    int FileCount);
+
+/// <summary>
+/// SCM-08 — one page of commits plus the window it came from, so the pane can
+/// lazily append the next page (spec 13 §25).
+/// </summary>
+public sealed record SourceControlHistoryPageResponse(
+    IReadOnlyList<SourceControlHistoryCommitResponse> Commits,
+    int Skip,
+    int Limit,
+    bool HasMore,
+    int? NextSkip);
+
+/// <summary>
+/// SCM-08 — typed history payload (spec 13 §12/§20). <c>Source</c> is always
+/// <c>"Git"</c>: it marks the data as Git-derived so the pane keeps Git History
+/// visibly separate from Document IDE History (spec 13 §4.3/§12).
+/// </summary>
+public sealed record SourceControlHistoryResponse(
+    string Status,
+    string Source,
+    string? ErrorCode,
+    string? Message,
+    bool IsAvailable,
+    SourceControlHistoryPageResponse? Page,
+    SourceControlFailureResponse? Failure);
+
+/// <summary>
+/// SCM-08 — one document version read back from a commit (spec 13 §12).
+/// <c>Content</c> is <c>null</c> for a binary blob or for a blob larger than the
+/// served bound (which is never read); <c>SizeBytes</c> is always the true size.
+/// </summary>
+public sealed record SourceControlFileVersionInfoResponse(
+    string CommitId,
+    string Path,
+    string? Content,
+    bool IsBinary,
+    bool IsTruncated,
+    long SizeBytes);
+
+/// <summary>SCM-08 — typed document-version payload (spec 13 §12/§20).</summary>
+public sealed record SourceControlFileVersionResponse(
+    string Status,
+    string Source,
+    string? ErrorCode,
+    string? Message,
+    bool IsAvailable,
+    SourceControlFileVersionInfoResponse? Version,
+    SourceControlFailureResponse? Failure);
+
 /// <summary>
 /// SCM-09 — request body that starts a Document IDE work session (spec 13
 /// §13/§24). <c>Path</c> is the workspace folder or active-document path used
@@ -293,6 +356,7 @@ public sealed class SourceControlController : ControllerBase
     private readonly GitCommitService _commits;
     private readonly GitRemoteService _remotes;
     private readonly GitPushService _pushes;
+    private readonly GitHistoryService _history;
     private readonly IDocumentRepository _documents;
     private readonly IWorkSessionService _workSessions;
 
@@ -302,6 +366,7 @@ public sealed class SourceControlController : ControllerBase
         GitCommitService commits,
         GitRemoteService remotes,
         GitPushService pushes,
+        GitHistoryService history,
         IDocumentRepository documents,
         IWorkSessionService workSessions)
     {
@@ -310,6 +375,7 @@ public sealed class SourceControlController : ControllerBase
         _commits = commits ?? throw new ArgumentNullException(nameof(commits));
         _remotes = remotes ?? throw new ArgumentNullException(nameof(remotes));
         _pushes = pushes ?? throw new ArgumentNullException(nameof(pushes));
+        _history = history ?? throw new ArgumentNullException(nameof(history));
         _documents = documents ?? throw new ArgumentNullException(nameof(documents));
         _workSessions = workSessions ?? throw new ArgumentNullException(nameof(workSessions));
     }
@@ -1066,6 +1132,167 @@ public sealed class SourceControlController : ControllerBase
             result.Message,
             ToRemoteResponse(result.Remote),
             ToFailure(result.Failure));
+
+    // ---------------------------------------------------------------------
+    // SCM-08 - Git history, file history and document-version inspection
+    // (spec 13 §9.4/§12/§18/§20/§25). Read-only: nothing here mutates the
+    // repository, and there is no branch-management, push, pull or remote
+    // surface.
+    // ---------------------------------------------------------------------
+
+    /// <summary>Marks the payload as Git-derived, not Document IDE history (spec 13 §4.3).</summary>
+    private const string GitHistorySource = "Git";
+
+    /// <summary>
+    /// One page of the repository's commit history, newest first
+    /// (<c>git log</c>, spec 13 §9.4/§12). A path outside Git stays a valid
+    /// source and yields a typed <c>NoRepository</c> state (HTTP 200).
+    /// </summary>
+    [HttpGet("history")]
+    public async Task<IActionResult> GetHistory(
+        [FromQuery] string? path,
+        [FromQuery] int? skip,
+        [FromQuery] int? limit,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return PathRequiredBadRequest("query parameter");
+        }
+
+        GitHistoryResult result = await _history.GetHistoryAsync(
+            path,
+            new GitHistoryQuery(skip ?? 0, limit ?? GitHistoryQuery.DefaultLimit),
+            cancellationToken);
+        return ToHistoryResponse(result);
+    }
+
+    /// <summary>
+    /// One page of the commits that touched one selected document
+    /// (<c>git log -- &lt;path&gt;</c>, spec 13 §9.4/§12). The document path is
+    /// untrusted input and must be the worktree-relative path Git reported.
+    /// </summary>
+    [HttpGet("file-history")]
+    public async Task<IActionResult> GetFileHistory(
+        [FromQuery] string? path,
+        [FromQuery] string? file,
+        [FromQuery] int? skip,
+        [FromQuery] int? limit,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return PathRequiredBadRequest("query parameter");
+        }
+
+        GitHistoryResult result = await _history.GetFileHistoryAsync(
+            path,
+            file,
+            new GitHistoryQuery(skip ?? 0, limit ?? GitHistoryQuery.DefaultLimit),
+            cancellationToken);
+        return ToHistoryResponse(result);
+    }
+
+    /// <summary>
+    /// The selected document as it was committed in one selected commit
+    /// (<c>git show &lt;commit&gt;:&lt;path&gt;</c>, spec 13 §12). Strictly
+    /// read-only: the working tree, the index and HEAD are untouched.
+    /// </summary>
+    [HttpGet("file-version")]
+    public async Task<IActionResult> GetFileVersion(
+        [FromQuery] string? path,
+        [FromQuery] string? file,
+        [FromQuery] string? commit,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return PathRequiredBadRequest("query parameter");
+        }
+
+        GitFileVersionResult result = await _history.GetFileVersionAsync(path, file, commit, cancellationToken);
+        return ToFileVersionResponse(result);
+    }
+
+    /// <summary>
+    /// Maps a typed history result onto the privileged API contract
+    /// (spec 13 §12/§20/§25): a rejected request is a typed HTTP 400 with
+    /// nothing run; every Git-reported state stays HTTP 200 so the pane renders
+    /// it instead of an error page.
+    /// </summary>
+    private IActionResult ToHistoryResponse(GitHistoryResult result)
+    {
+        if (result.Status is GitHistoryStatus.InvalidRequest or GitHistoryStatus.PathRejected)
+        {
+            return BadRequest(new
+            {
+                errorCode = result.ErrorCode ?? result.Status.ToString(),
+                error = result.Message,
+            });
+        }
+
+        GitHistoryPage? page = result.Page;
+        return Ok(new SourceControlHistoryResponse(
+            result.Status.ToString(),
+            GitHistorySource,
+            result.ErrorCode,
+            result.Message,
+            result.IsAvailable,
+            page is null
+                ? null
+                : new SourceControlHistoryPageResponse(
+                    page.Commits.Select(ToHistoryCommit).ToArray(),
+                    page.Skip,
+                    page.Limit,
+                    page.HasMore,
+                    page.NextSkip),
+            ToFailure(result.Failure)));
+    }
+
+    /// <summary>
+    /// Maps a typed document-version result onto the privileged API contract
+    /// with the same rejection/typed-state split as the history routes
+    /// (spec 13 §12/§20).
+    /// </summary>
+    private IActionResult ToFileVersionResponse(GitFileVersionResult result)
+    {
+        if (result.Status is GitHistoryStatus.InvalidRequest or GitHistoryStatus.PathRejected)
+        {
+            return BadRequest(new
+            {
+                errorCode = result.ErrorCode ?? result.Status.ToString(),
+                error = result.Message,
+            });
+        }
+
+        GitFileVersion? version = result.Version;
+        return Ok(new SourceControlFileVersionResponse(
+            result.Status.ToString(),
+            GitHistorySource,
+            result.ErrorCode,
+            result.Message,
+            result.IsAvailable,
+            version is null
+                ? null
+                : new SourceControlFileVersionInfoResponse(
+                    version.CommitId,
+                    version.Path,
+                    version.Content,
+                    version.IsBinary,
+                    version.IsTruncated,
+                    version.SizeBytes),
+            ToFailure(result.Failure)));
+    }
+
+    private static SourceControlHistoryCommitResponse ToHistoryCommit(GitHistoryEntry entry) =>
+        new(
+            entry.CommitId,
+            entry.ShortId,
+            entry.AuthorName,
+            entry.AuthorEmail,
+            entry.CommitterTime,
+            entry.Summary,
+            entry.FileCount);
 }
 
 /// <summary>
