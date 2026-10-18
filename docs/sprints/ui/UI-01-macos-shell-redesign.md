@@ -39,6 +39,11 @@ keep the current behavior and apply only the visual treatment.
 
 — (none; this is a parallel UI track against the current `integration/parallel-batches` tip. Does not depend on or block any SCM-\* sprint.)
 
+**Soft dependency:** the `.docx` faint page-1 preview consumes the read-only route delivered by
+`docs/sprints/ui/UI-02-document-preview-content-api.md`. Until UI-02 lands, the DOCX sheet must
+use the existing `LowDetailPaperLayout` fallback — **this sprint must not add a backend route**.
+The `.md` preview needs no new route (`GET /api/documents/{documentId}/markdown` already exists).
+
 **Hard rule:** Do not start downstream work on top of this branch until it is reviewed and merged.
 
 ## Required Reading
@@ -66,7 +71,7 @@ Also inspect, before writing any code:
 2. **Per-screen restyle**, matching the 12 reference screens:
    - 01 Canvas, 02 List, 03 Graph — surfaces + their inspectors (relations
      inspector, selection inspector, edge legend). **Canvas nodes must be
-     folder/file *objects*, not look-alike cards** — see "Node objects" below.
+     folder/file *objects*, not look-alike cards**; a folder opens on click and fans out the documents it really contains, each sheet showing a faint real-content preview — see "Node objects" below.
    - 04 Batch operations — centred sheet (scrim, shadow, header, scroll body,
      footer secondary+primary) replacing the current panel chrome.
    - 05 Source control (+ 06 DOCX diff, 07 Worktrees) — sidebar change
@@ -128,6 +133,70 @@ Required test: a canvas rendering test asserts a folder object and a file object
 distinct (e.g. different testids / different type markers), so the two can never silently
 regress into the same card.
 
+### Folder interaction — open, fan out, release (owner directive 2026-10-18)
+
+The folder object is **interactive**, not a static glyph. Owner reference:
+`uselayouts.com/docs/components/folder-interaction` ("Folder Interaction — a folder
+management system with drag-and-drop-like feel"). Reproduce the behaviour with our own code,
+tokens and data — do not paste the reference implementation verbatim.
+
+- **Closed** is the default state (the folder object as drawn).
+- **Click the folder → open**: the folder front tilts back (`rotateX ≈ -40°`, origin bottom) and
+  the documents **inside that folder** fan out as pages rotated `≈ -8° / 0° / +9°` and
+  translated up (`y ≈ -55 … -75`). Click again closes. Spring: `duration 0.5-0.6`,
+  `bounce 0.12-0.2`, `stiffness 160-190`, `damping 21-24`.
+- **The fanned pages are real documents**: the ones that path-belong to that folder. Reuse the
+  existing grouping (`groupDocumentsByFolder` / `isWithinFolder`, separator-bounded containment)
+  — do not invent a second membership rule and do not use decorative placeholders. A folder with
+  no contained documents opens to an empty state (no fabricated pages).
+- **Drag a page out = the existing CAN-04 "release" semantic** (surface the referenced document as
+  its own canvas object). This is metadata only: **canvas drag never physically moves a file**.
+  Preserve the existing release wiring; do not add a new mutation path.
+- **Animation library: `motion`** (owner decision, 2026-10-18). This is the first runtime UI
+  dependency beyond `react`/`react-dom`. Add it to `src/DocumentIDE.Web/package.json` with
+  `npm install motion --prefix src/DocumentIDE.Web` so `package-lock.json` is updated in the same
+  commit; do not hand-edit the lockfile.
+- Reduced motion: honour `prefers-reduced-motion` — when set, the folder still opens/closes but
+  without the spring/fan tween (a plain state change). Not a behaviour change, a11y only.
+- Keep the existing folder testids/accessible names (`aria-label="Folder: <title>"`) and keep the
+  existing single-click→picker wiring; the open action must not silently replace it. Decide and
+  document in the handoff which gesture performs which action (e.g. the object opens on click and
+  the existing picker affordance remains reachable), and prove both are still reachable by test.
+
+### Faint page-1 preview on a file object (owner directive 2026-10-18)
+
+A file object's sheet shows a **faint preview of that document's real content** — the current
+simulated grey lines are not acceptable as the end state.
+
+- `.md` → render from the real source already served by `GET /api/documents/{documentId}/markdown`.
+- `.docx` → render from `UI-02`'s read-only structure route when available; until then keep the
+  `LowDetailPaperLayout` fallback (no backend change in this sprint).
+- Rendering: faint (low opacity) and clipped to the sheet face so the filename label stays legible.
+  It must read as content, not decoration. Pages fanned out of an open folder get the same
+  treatment (each page previews its own document).
+- **Honest limit to state in the handoff:** this is a *content-derived* preview, **not** a rendered
+  page image. A true page-1 raster needs the Word → temp PDF → page-image pipeline that exists in
+  no shipped host (the same missing pipeline that blocks `QuickLook`/WORD-04) and is a separate
+  later sprint. The existing `thumbnailUrl` / `thumbnailContent` / `thumbnailState` props are the
+  seam a future renderer will feed, so the node needs no redesign then.
+
+Required tests (Red → Green → Refactor each):
+- [ ] Clicking a folder object opens it (fanned pages present) and clicking again closes it; with
+      `prefers-reduced-motion` the open/close still works.
+- [ ] The fanned pages are exactly the documents that belong to that folder (fixture with one
+      folder holding ≥2 documents plus one document outside it — the outsider must not appear).
+- [ ] Releasing a fanned page out preserves the existing CAN-04 semantics (metadata only; assert no
+      filesystem mutation path is invoked).
+- [ ] A `.md` file object renders a faint preview derived from real source content; the fallback
+      path is still used when content is unavailable (loading/failed/missing states).
+
+### Dependency note
+
+`motion` is added only to the web app; no backend/project file changes. If the repo's build embeds
+production web assets, run the existing frontend build to confirm the dependency is bundled (the
+sprint's own `npx vitest run` / `npx tsc -b` / `npx oxlint` gates plus the existing web-asset
+embedding test cover this).
+
 ## Out of Scope (non-goals)
 
 - Changing any API contract, route, or payload shape.
@@ -143,7 +212,10 @@ regress into the same card.
 - Implementing `QuickLook`/WORD-04 (still deliberately unimplemented; screen
   12's Quick Look dialog is restyled as a dialog shell only, not wired to a
   real page-render source).
-- Any backend (`DocumentIDE.Api`/`Core`/`Infrastructure`) change.
+- Any backend (`DocumentIDE.Api`/`Core`/`Infrastructure`) change. In particular the read-only
+  `.docx` preview-content route is **UI-02's** deliverable
+  (`docs/sprints/ui/UI-02-document-preview-content-api.md`) — do not add it here; use the existing
+  low-detail fallback until it lands.
 - Adding features/behaviors not present in either the current app or the
   12-screen design.
 - Editing `docs/quality/v1-readiness-report.md`, `scripts/verify-release.ps1`,
@@ -169,6 +241,8 @@ may be updated for new DOM structure, not for new behavior):
 - [ ] All existing `App.test.tsx` cases.
 - [ ] Every colocated component test under `features/**` touched by the
       restyle continues to pass (behaviorally) after the DOM-structure update.
+- [ ] Every test required by the "Node objects", "Folder interaction" and
+      "Faint page-1 preview" sections above.
 
 New tests required by this sprint (Red → Green → Refactor per behavior):
 
@@ -214,7 +288,10 @@ Before completion, explicitly confirm:
 
 - `src/DocumentIDE.Web/src/App.tsx` (shell rewrite)
 - `src/DocumentIDE.Web/src/features/shell/*` (new: `Toolbar.tsx`, `Sidebar.tsx`, `Inspector.tsx`, and shared primitives: `SegmentedControl.tsx`, `SheetShell.tsx`, `SourceListRow.tsx`, `InspectorCard.tsx`, `SearchField.tsx`, `DepthStepper.tsx`, `PushButton.tsx` — each with a colocated test)
+- `src/DocumentIDE.Web/src/features/canvas/nodes/FolderObject.tsx` (new: interactive folder object — open/close, fanned real documents, release-on-drag) + colocated test
+- `src/DocumentIDE.Web/src/features/canvas/nodes/FilePreview.tsx` (new: faint content-derived page-1 preview + fallback) + colocated test
 - `src/DocumentIDE.Web/src/index.css` — add the `mac-*` design tokens as a Tailwind v4 `@theme` block (see "Styling mechanism" below)
+- `src/DocumentIDE.Web/package.json` + `src/DocumentIDE.Web/package-lock.json` — add `motion` (`npm install motion --prefix src/DocumentIDE.Web`)
 - Restyled, not relocated: every component listed in "In Scope" item 2, plus their colocated tests
 - `docs/sprints/handoffs/UI-01-HANDOFF.md`
 
@@ -268,6 +345,12 @@ name must remain reachable). Do not "solve" a failing gate by renaming it away.
 - [ ] Zero regressions: full existing frontend suite passes (`npx vitest run`),
       `npx tsc -b` exit 0, `npx oxlint` exit 0.
 - [ ] `App.shell.test.tsx` passes unmodified in intent.
+- [ ] Canvas folder and file objects are structurally distinct; the folder opens on click and fans
+      out the **real** documents contained in it; releasing a fanned page preserves the existing
+      CAN-04 semantics with no filesystem mutation.
+- [ ] File objects (and fanned pages) show a faint preview derived from **real** content — `.md`
+      from the existing markdown route, `.docx` via UI-02 when present, with the low-detail
+      fallback intact otherwise.
 - [ ] No backend file changed; no API contract changed.
 - [ ] Handoff documents every DOM-structure test adjustment and why it is
       presentational, not behavioral.
