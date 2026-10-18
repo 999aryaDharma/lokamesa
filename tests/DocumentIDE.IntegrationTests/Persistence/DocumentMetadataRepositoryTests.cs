@@ -234,9 +234,9 @@ public class DocumentMetadataRepositoryTests : IDisposable
         await coordinator.ReindexDocumentAsync(doc.Id);
 
         Assert.Equal("ready", (await _docRepo.GetByIdAsync(doc.Id))!.IndexStatus);
-        // The docx parser's searchable body is currently the file name (placeholder
-        // until deep DOCX parsing lands); the file name is a durable FTS column, so a
-        // hit proves the search row exists.
+        // The DOCX parse indexes the document's real body text plus the durable
+        // filename column; a filename hit proves the search row exists and was
+        // written by the completed indexing pass.
         Assert.Contains(
             await new FtsIndex(_appDb).SearchAsync("sample"),
             r => r.DocumentId == doc.Id);
