@@ -117,7 +117,7 @@ Rules:
 | BAT-07 | Regex Advanced Replace | DONE | BAT-06 | fix/bat-07-regex-advanced-replace (f8e220f) | docs/sprints/handoffs/BAT-07-HANDOFF.md |
 | REL-02 | Release Verification Pipeline | DONE | REL-01, QA-01, QA-02, QA-04, QA-05, QA-06, QA-07 | chore/rel-02-release-verification-pipeline | docs/sprints/handoffs/REL-02-HANDOFF.md |
 | REL-03 | V1 Readiness Gate | REVIEW | REL-02, SHR-11, CTX-04, AI-04, PDF-04 | chore/rel-03-v1-readiness-gate | docs/sprints/handoffs/REL-03-HANDOFF.md |
-| REL-04 | Release Gate Integrity & Markdown Preview Sanitizer Coverage | READY | REL-02 | fix/rel-04-release-gate-integrity | docs/sprints/handoffs/REL-04-HANDOFF.md |
+| REL-04 | Release Gate Integrity & Markdown Preview Sanitizer Coverage | DONE | REL-02 | fix/rel-04-release-gate-integrity (0d7ef2a) | docs/sprints/handoffs/REL-04-HANDOFF.md |
 | SCM-01 | Git Capability & Controlled Process Runner | DONE | FND-03, FND-07, FS-02 | feat/git-capability-controlled-process-runner | docs/sprints/handoffs/SCM-01-HANDOFF.md |
 | SCM-02 | Git Repository, Worktree & Status Domain | DONE | SCM-01, FS-03 | feat/git-repository-worktree-status-domain | docs/sprints/handoffs/SCM-02-HANDOFF.md |
 | SCM-03 | Source Control Changes Pane | DONE | SCM-02, FND-07 | feat/source-control-changes-pane | docs/sprints/handoffs/SCM-03-HANDOFF.md |
@@ -135,7 +135,7 @@ Rules:
 | SCM-15 | Git Worktree Discovery & Open Existing | DONE | SCM-01, FS-03, FND-07 | feat/git-worktree-discovery-open-existing | docs/sprints/handoffs/SCM-15-HANDOFF.md |
 | SCM-16 | Safe Git Worktree Create & Remove | DONE | SCM-15, FS-07 | feat/safe-git-worktree-create-remove | docs/sprints/handoffs/SCM-16-HANDOFF.md |
 | SCM-17 | Source Control Regression & Release Hardening | BLOCKED | SCM-04, SCM-05, SCM-09, SCM-12, SCM-13, SCM-14, SCM-16, QA-02 |  |  |
-| UI-01 | macOS Three-Pane Shell Redesign | IN_PROGRESS | — | feat/ui-01-macos-shell-redesign |  |
-| UI-02 | Document Preview Content API (DOCX) | READY | — | feat/ui-02-document-preview-content-api |  |
+| UI-01 | macOS Three-Pane Shell Redesign | DONE | - | feat/ui-01-macos-shell-redesign (0d6893b) | docs/sprints/handoffs/UI-01-HANDOFF.md |
+| UI-02 | Document Preview Content API (DOCX) | DONE | - | feat/ui-02-document-preview-content-api (bbcf67e) | docs/sprints/handoffs/UI-02-HANDOFF.md |
 
 **REL-03 review notes (2026-10-16) — product verdict BLOCKED.** `docs/quality/v1-readiness-report.md` maps all 22 spec-12 completion gates; 16 PASS, 6 FAIL. Blockers: (1) graph view is a placeholder (GR-03 steps 1/3/4/5 unmet, §27.2/§89 not deliverable); (2) batch Apply unreachable (`BatchPreviewPanel.tsx:147` disabled; no apply/undo route); (3) `/api/word/open` 404 in the shipped desktop host (`BatchPreviewHostTests.cs:91`); (4) no `/api/search` endpoint + search UI unmounted; (5) share lifecycle unwired (SHR-11 callback deferral, no create/revoke endpoints); (6) workspace/canvas bootstrap not wired (canvas never populated outside tests); (7) Markdown editor is a stub and unmounted; (8) E2E administrative workflow test missing (spec 11 §20/§27). Integration sprints are required before V1; gap list G1–G9 with file:line evidence is in the report and handoff.

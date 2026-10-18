@@ -123,11 +123,18 @@ Required:
 - list rows / sidebar rows / SCM change rows / inspector reference rows get a small folder-or-file
   **icon** (Finder convention: objects on spatial surfaces, small icons in lists).
 
-Non-negotiable: this is a *shape* change only. The existing accessible names, testids, gesture
-wiring (`aria-label="Document: <title>"`, `data-testid="document-paper-sheet"`,
-`aria-label="Folder: <title>"`, single-click folder → picker, double-click document → open) and
-the no-physical-move rule must survive. Prefer keeping the existing testids/labels and swapping
-the visual body, so the G-gate tests stay meaningful.
+Non-negotiable: this is a *shape* change only. The existing accessible names, testids and the
+no-physical-move rule must survive (`aria-label="Document: <title>"`,
+`data-testid="document-paper-sheet"`, `aria-label="Folder: <title>"`, double-click document → open).
+Prefer keeping the existing testids/labels and swapping the visual body, so the G-gate tests stay
+meaningful.
+
+**Amended 2026-10-18 (controller, review finding F7).** The gesture clause
+"single-click folder → picker" written above is **superseded** by the *Folder interaction* owner
+directive (2026-10-18) below: a single click now **opens the folder**, and the CAN-04 picker moves
+behind an explicit `⌄` affordance on the object. This is a deliberate, owner-directed, dated
+shipped-behaviour change — the single exception to the Out-of-Scope gesture rule in this document.
+It is recorded in the UI-01 handoff (§4, §6.12) and in the V1 release notes.
 
 Required test: a canvas rendering test asserts a folder object and a file object are structurally
 distinct (e.g. different testids / different type markers), so the two can never silently
@@ -158,10 +165,13 @@ tokens and data — do not paste the reference implementation verbatim.
   commit; do not hand-edit the lockfile.
 - Reduced motion: honour `prefers-reduced-motion` — when set, the folder still opens/closes but
   without the spring/fan tween (a plain state change). Not a behaviour change, a11y only.
-- Keep the existing folder testids/accessible names (`aria-label="Folder: <title>"`) and keep the
-  existing single-click→picker wiring; the open action must not silently replace it. Decide and
-  document in the handoff which gesture performs which action (e.g. the object opens on click and
-  the existing picker affordance remains reachable), and prove both are still reachable by test.
+- **Gesture decision (owner directive 2026-10-18; recorded 2026-10-18, review finding F7):** the
+  folder object **opens on single click** and closes on the next click. The CAN-04 picker does
+  **not** disappear — it moves to an explicit `⌄` affordance on the object. Both actions must stay
+  reachable and be proven reachable by test, and the handoff must state the exact sequence the DOM
+  actually produces (the shipped sequence is `click, click, dblclick`). This supersedes the earlier
+  "single-click→picker" wiring; the change is deliberate and owner-directed, and is recorded in the
+  release notes.
 
 ### Faint page-1 preview on a file object (owner directive 2026-10-18)
 
@@ -202,7 +212,11 @@ embedding test cover this).
 - Changing any API contract, route, or payload shape.
 - Changing any gesture semantics already proven by a passing test (e.g. what
   a click vs. double-click does, what triggers a fetch, drag-never-moves-file,
-  destructive-op review gating, Word COM concurrency=1).
+  destructive-op review gating, Word COM concurrency=1) — **except** the single
+  owner-directed folder-gesture change recorded in the *Folder interaction*
+  section above (single click opens the folder; the CAN-04 picker moves behind
+  the `⌄` affordance). That one exception is explicit, dated, proven by test and
+  recorded in the release notes; no other gesture may change.
 - Mounting `SourceControlController`/the SCM pane into the shipped desktop
   host or `App.tsx` for the first time — that is the SCM-surface-reachability
   gap lane (tracked separately under the SCM program). This sprint restyles
