@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { attachFolderSource, fetchFolderSources } from './workspaceApi';
+import { attachFolderSource, fetchFolderSources, reconcileWorkspace } from './workspaceApi';
 
 export interface FolderSource {
   id: string;
@@ -80,6 +80,11 @@ export default function AddFolderSource({
 
     try {
       const result = await attachFolderSource(workspaceId, trimmedPath);
+
+      // Attaching a folder only records the folder_sources row; the discovered
+      // documents stay invisible (and unsearchable) until the workspace is
+      // reconciled and reindexed. The server route does both in one call.
+      await reconcileWorkspace(workspaceId);
 
       const card: AttachedFolderCard = {
         folderSource: {

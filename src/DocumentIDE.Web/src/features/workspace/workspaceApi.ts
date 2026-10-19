@@ -86,6 +86,32 @@ export interface AttachFolderSourceResult {
 }
 
 /**
+ * Reconcile a workspace against the filesystem, then index it (FS-04 + IDX-06).
+ *
+ * Attaching a folder only records the `folder_sources` row; the newly discovered
+ * documents only appear (and become searchable) after reconciliation. The server
+ * route reconciles and reindexes in one call, so the shipped shell must invoke it
+ * after every attach and on startup.
+ */
+export async function reconcileWorkspace(
+  workspaceId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<void> {
+  const { base, token } = apiBase();
+  const response = await fetchImpl(
+    `${base}/api/workspaces/${encodeURIComponent(workspaceId)}/reconcile`,
+    {
+      method: 'POST',
+      headers: { 'X-DocumentIDE-Session-Token': token },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to reconcile workspace (${response.status}).`);
+  }
+}
+
+/**
  * Attach a local folder source (FS-01).
  *
  * This must go through the injected API base and session token, exactly like

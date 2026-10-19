@@ -86,6 +86,52 @@ describe('AddFolderSource Component', () => {
     ).toBe('session-abc');
   });
 
+  it('reconciles the workspace after a successful attach so the folder is indexed', async () => {
+    const mockResponse = {
+      folderSource: {
+        id: 'fs-123',
+        workspaceId: 'test-ws',
+        canonicalPath: 'C:\\Users\\User\\Documents',
+        displayName: 'Documents',
+        availabilityStatus: 'available',
+      },
+      supportedFileCount: 5,
+    };
+    const calls: Array<{ url: string; method: string }> = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      calls.push({ url: String(url), method: init?.method ?? 'GET' });
+      if (String(url).endsWith('/folder-sources') && init?.method === 'POST') {
+        return { ok: true, json: async () => mockResponse } as Response;
+      }
+      if (String(url).endsWith('/reconcile')) {
+        return { ok: true, json: async () => ({ workspaceId: 'test-ws' }) } as Response;
+      }
+      return { ok: true, json: async () => [] } as Response;
+    });
+
+    render(<AddFolderSource workspaceId="test-ws" />);
+
+    fireEvent.change(screen.getByPlaceholderText(/enter local folder path/i), {
+      target: { value: 'C:\\Users\\User\\Documents' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /attach folder/i }));
+
+    await waitFor(() => {
+      expect(
+        calls.some((c) => c.url === 'http://127.0.0.1:5311/api/workspaces/test-ws/reconcile'),
+      ).toBe(true);
+    });
+
+    // Reconcile must run after the attach POST (documents are only searchable
+    // once the workspace has been reconciled).
+    const attachIndex = calls.findIndex(
+      (c) => c.url.endsWith('/folder-sources') && c.method === 'POST',
+    );
+    const reconcileIndex = calls.findIndex((c) => c.url.endsWith('/reconcile'));
+    expect(attachIndex).toBeGreaterThanOrEqual(0);
+    expect(reconcileIndex).toBeGreaterThan(attachIndex);
+  });
+
   it('displays error message when API call fails', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
       if (init?.method === 'POST') {
