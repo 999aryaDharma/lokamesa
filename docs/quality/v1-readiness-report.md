@@ -2,6 +2,26 @@
 
 **Verdict:** GO
 
+> **This verdict is historical and must not be cited as current evidence.**
+> A post-release full-code scan (`docs/quality/v1.0.1-scan-findings.md`) found the GO was **not
+> supported by the shipped code**. Five BLOCKERs were open at the recorded commit — a dead indexing
+> pipeline, an unauthenticated ShareHost, stop/revoke that never reached the viewer, graph edges that
+> were never produced, and a public share path that could not work end-to-end — because surfaces were
+> mounted over engines that were never wired.
+>
+> All five BLOCKERs are now fixed and each has a regression test that failed before the fix:
+>
+> | BLOCKER | Fix commit |
+> |---|---|
+> | B1 reconcile → index + attach flow | `d2b7215` |
+> | B2/B3 ShareHost token auth + cross-process stop/revoke | `6599b7a` |
+> | B4 graph relations produced during reconcile | `0b157c5` |
+> | B5 public share path reachable end-to-end | `d4ba333` |
+>
+> Rows that were contradicted are corrected inline and marked **[corrected]**. Re-run
+> `scripts/verify-release.ps1` on the hotfix branch to re-gate. Remaining MAJOR/MINOR gaps are listed
+> in the scan findings; they are not addressed by these four commits.
+
 **Gate run:** `pwsh -File scripts/verify-release.ps1` · commit `08766d49960d4b09a437f7efec43eaeb8a4db7d2` · branch `integration/parallel-batches` · `workingTreeDirty=false` · **19/19 gates passed, 0 failed, 0 environment-gated** · packaged artifacts verified · machine report at `artifacts/release-verify/verification-report.json` (`verdict: PASSED`).
 
 **Two defects were found and fixed after an earlier green run, and are part of the evidence above.**
@@ -44,13 +64,13 @@ Every gate below is `PASS` with evidence from the run above or from the named te
 | Filesystem remains source of truth. | PASS | Reviewed physical-operation API + containment (`PhysicalFileOperationsIntegrationTests`, `ReparsePointContainmentTests`); canvas drag never moves files; source mutation uses snapshot → temp → validate → atomic replace and fails closed when recovery cannot be created (`RecoveryStorageTests`, `SafeApplyTests`). |
 | Named workspaces persist. | PASS | `WorkspaceRepository`/`FolderSourceRepository` + migrations, reopen and reconciliation tests (`StartupReconciliationTests`, `FolderSourceTests`); workspace bootstrap populates the shipped shell. |
 | Canvas placement preserves spatial memory. | PASS | `CanvasPositionTests`, CAN-06 persistence/pinning, `usePersistedPosition`; positions are keyed by stable document id, not path. |
-| Search is incremental/realtime. | PASS | `SearchController` (`GET /api/search`) is reachable from the desktop host (allow-list) and `SearchPanel` is mounted; `IncrementalIndexCoordinatorIntegrationTests`, `FtsIndexTests`, `ExactSearchTests`, plus search UI tests. |
+| Search is incremental/realtime. | PASS **[corrected — B1]** | Historical claim was false: attach/reconcile never called the indexer, so `search_content` stayed empty. Fixed in `d2b7215`: reconcile now runs `IncrementalIndexCoordinator.ReindexWorkspaceAsync` and the attach flow calls it. Evidence: `ReconciliationIndexingHostTests`, `WorkspaceAttachHostTests`; `SearchController` reachable, `SearchPanel` mounted. |
 | DOCX opens in Word. | PASS | `WordController` is on the desktop host allow-list; the Word/COM suite executed on this machine (77 Word-filtered tests, 0 failed); `openInWord` is the inspector's primary action on screens 05/06. |
 | Markdown edits internally. | PASS | The editor is no longer a stub (no placeholder markers) and is mounted; `MarkdownEditor` + `MarkdownPreview` (21 tests, including the sanitizer suite) and the markdown round-trip tests. |
 | Search & Replace is deterministic, recursive, previewable, undoable. | PASS | `POST {planId}/apply` and `POST {planId}/undo` exist and the apply control is enabled; engine/review/strict-mutation/undo verified by `SearchReplaceOperationTests`, `SafeApplyTests`, `BatchSafetyRegressionTests`, `UndoTests`; operation history is listed in screen 10 (`GET api/history/operations`). |
 | 30-day recovery works. | PASS | `RecoveryStorageTests` (budget, 80% warning, fail-closed), `CrashRecoveryTests`, QA-07 startup repair in both hosts; undo reachable through the batch plan flow. |
 | PDF single/batch/merge works. | PASS | `PdfController` exposes `export`, `export-batch`, `merge`, `merge-pdfs`; `PdfExportPanel` is mounted; `SinglePdfExportTests`, `BatchPdfExportTests`, `PdfMergeMemoryTests`. |
-| Graph distinguishes explicit vs inferred. | PASS | Real rendering: `<svg>` edges, solid lines for explicit and `strokeDasharray="6 4"` for inferred, orthogonal `<path>`; scope controls and legend tested (`DocumentGraph` tests, `Qa06GraphPerformanceGate`). |
+| Graph distinguishes explicit vs inferred. | PASS **[corrected — B4]** | Historical claim was false: nothing wrote the `relations` table, so the graph always returned `edges: []`. Fixed in `0b157c5` (`MarkdownRelationIndexer` derives explicit relations during reconcile). Evidence: `GraphRelationHostTests`; `DocumentGraph` explicit vs inferred styling tests; `Qa06GraphPerformanceGate`. |
 | Public share cannot mutate local files. | PASS | ShareHost serves GET-only viewer routes; `ShareHostDependencyTests`, `PublicShareAttackSurfaceTests`, `ShareWebSecurityTests`; QA-05 audit DONE. |
 | Security suite passes. | PASS | SecurityGate 162/162 in this run; the gate additionally proves no release-blocking suite contains a skipped test. |
 | Golden DOCX regression suite passes. | PASS | GoldenGate 39/39 (QA-01 corpus). |
@@ -66,7 +86,7 @@ Every gate below is `PASS` with evidence from the run above or from the named te
 | SQLite WAL concurrency test passes | PASS | `SqliteConcurrencyTests` (WAL + busy_timeout, reads during writes). |
 | destructive batch fails closed without recovery capacity | PASS | `RecoveryStorageTests` capacity fail-closed; `BatchSafetyRegressionTests`; QA-07. |
 | hostile DOCX resource tests pass | PASS | `DocxResourceBudgetTests`, `DocxChallengerStressTests`, `DocxPreflightUnitTests` (ZIP budgets, DTD prohibited). |
-| share CSP/token/rate-limit tests pass | PASS | `ShareWebSecurityTests`, `ShareTokenTests`, `DownloadPermissionTests`; SHR-08 + QA-05. |
+| share CSP/token/rate-limit tests pass | PASS **[corrected — B2]** | Historical row cited `ShareTokenTests.cs`, which was a **0-byte file** (no tests) at the recorded commit. Fixed in `6599b7a`: the file now contains real token tests and the ShareHost gate is fail-closed. Evidence: `ShareTokenTests`, `ShareWebSecurityTests`, `DownloadPermissionTests`, `ShareViewerRouteTests`; SHR-08 + QA-05. |
 | canvas/graph/PDF performance regressions pass | PASS | PerformanceGate 3/3; `Qa06GraphPerformanceGate`, `Qa06CanvasPerformanceGate`, `PdfMergeMemoryTests` (now in a non-parallel collection so its process-wide measurement is meaningful). |
 
 ## 3. Master-spec product acceptance
@@ -76,13 +96,13 @@ Every gate below is `PASS` with evidence from the run above or from the named te
 | §82 Core File Safety | PASS | No rewrite on open, drag never moves files, failed strict edit leaves the original valid, preview before apply, undo snapshot before mutation, Recycle Bin default. |
 | §83 Workspace | PASS | Workspaces can be created, attached and loaded in the shipped shell; canvas bootstrap populates real documents. |
 | §84 Canvas | PASS | Folder/file objects, picker, open-folder fan-out with real contained documents, positions persisted. |
-| §85 DOCX | PASS | Inspect/index/open-in-Word/document-aware diff all reachable; QuickLook page rendering remains out of V1 by design (see residual risks). |
+| §85 DOCX | PASS (partial) | Inspect/index/open-in-Word/document-aware diff reachable; QuickLook page rendering remains out of V1 by design (see residual risks). **[note]** `DocxInspector`/`RelationsInspector` are not mounted (scan MINOR), so "Inspect reachable" is via the other inspector surfaces. |
 | §86 Markdown | PASS | Editing surface real and mounted; preview/sanitizer/wikilink/backlink tests pass; graph participation renders. |
-| §87 Search | PASS | `/api/search` reachable, UI mounted, ranking/filters/fuzzy verified. |
+| §87 Search | PASS **[corrected — B1]** | Historical claim was not supported at `08766d4` (index never populated). After `d2b7215` the reconciliation pipeline makes attached content searchable; `/api/search` reachable, UI mounted, ranking/filters/fuzzy verified. |
 | §88 Search & Replace | PASS | Apply/undo reachable, reviewed plan required, strict mutation and history listing. |
-| §89 Graph | PASS | Explicit vs inferred rendering with legend; scope controls. |
-| §90 Sharing | PASS | Create/stop/revoke reachable through the owner share surface; serving side token/CSP/rate-limit verified. |
-| §97 Definition of Done | PASS | Every listed capability is deliverable end-to-end in the shipped desktop app. |
+| §89 Graph | PASS **[corrected — B4]** | Historical claim was false (edges never produced). After `0b157c5` reconcile derives explicit relations; explicit vs inferred rendering with legend and scope controls. |
+| §90 Sharing | PASS **[corrected — B5]** | Historical claim was false: there was no ShareHost viewer route, no transport registration and no launcher, and the owner link was a relative path. After `d4ba333` the owner starts ShareHost + ngrok, returns an absolute `/share/{id}?token=…` URL and a real `tunnelError`, and ShareHost serves the read-only viewer index. Evidence: `ShareViewerRouteTests`, `SharePublicLinkHostTests`, `PublicPathLauncherTests`, `PublicSharePathRegistrationTests`, `ShareLifecycleHostTests`. |
+| §97 Definition of Done | PASS **[corrected]** | Historical claim was false: the pipeline, graph and public share were not deliverable end-to-end. After B1–B5 they are, with regression tests; remaining MAJOR/MINOR gaps are tracked in `docs/quality/v1.0.1-scan-findings.md`. |
 
 ## 4. Former integration gaps — closed
 
@@ -132,7 +152,7 @@ These are implemented behaviours with a documented limitation — none blocks V1
 | Risk | Handling |
 |---|---|
 | Quick Look (WORD-04) is not implemented | Reported as absent, not stubbed; negative test prevents a placeholder. Needs the Word → temp PDF → page-image pipeline. |
-| Share viewer-side stop/revoke is not enforced cross-process | Token hash is persisted, but the in-memory token service means an already-open viewer may keep reading until its token expires; documented since SHR-08. |
+| ~~Share viewer-side stop/revoke is not enforced cross-process~~ **Fixed (B2/B3, `6599b7a`)** | ShareHost now authorizes every request against the on-disk `access.json` policy; stop (past expiry), revoke (cleared hash) and regenerate (rotated hash) rewrite it, so a stopped/revoked link fails immediately in the separate process. Evidence: `ShareHostTestSupport`, `SnapshotShareTests`, `RevokedShare_Fails_OnEveryPublicRoute`. |
 | Operation-history listing is at-most-once | If the database write fails after a successful mutation, the failure surfaces as `409` and the operation is absent from the listing; the per-file JSONL audit still exists. Making it transactional needs an outbox. |
 | SCM service registration exists in two places | `Program.cs` and `SourceControlServiceRegistration.AddSourceControlServices` both wire the SCM services (the latter is used by the desktop host). Consolidation is a recorded cleanup, not a behaviour risk. |
 | History records predating HIST-04 are not backfilled | The listing shows operations recorded from now on; legacy undo still inserts a row from its real result. |
