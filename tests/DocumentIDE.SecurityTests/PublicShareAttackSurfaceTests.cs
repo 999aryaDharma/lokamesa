@@ -35,6 +35,7 @@ public sealed class PublicShareAttackSurfaceTests
     private readonly WebApplicationFactory<ShareHostApp::Program> _factory;
     private readonly ShareTokenService _tokenService = new();
     private readonly List<string> _createdShareRoots = new();
+    private readonly Dictionary<string, string> _tokensByShare = new(StringComparer.Ordinal);
 
     public PublicShareAttackSurfaceTests(WebApplicationFactory<ShareHostApp::Program> factory)
     {
@@ -59,15 +60,16 @@ public sealed class PublicShareAttackSurfaceTests
     {
         var shareA = CreateShareWithManifest(documentId: "doc-a", displayName: "a.md");
         var shareB = CreateShareWithManifest(documentId: "doc-b", displayName: "b.md");
-        using var client = _factory.CreateClient();
+        using var clientA = WithToken(_factory.CreateClient(), _tokensByShare[shareA]);
+        using var clientB = WithToken(_factory.CreateClient(), _tokensByShare[shareB]);
 
-        var crossAB = await client.GetAsync($"/share/{shareA}/documents/doc-b");
-        var crossBA = await client.GetAsync($"/share/{shareB}/documents/doc-a");
+        var crossAB = await clientA.GetAsync($"/share/{shareA}/documents/doc-b");
+        var crossBA = await clientB.GetAsync($"/share/{shareB}/documents/doc-a");
 
         Assert.Equal(HttpStatusCode.NotFound, crossAB.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, crossBA.StatusCode);
 
-        var manifestA = await client.GetAsync($"/share/{shareA}/manifest");
+        var manifestA = await clientA.GetAsync($"/share/{shareA}/manifest");
         Assert.Equal(HttpStatusCode.OK, manifestA.StatusCode);
         var manifestBody = await manifestA.Content.ReadAsStringAsync();
         Assert.Contains("doc-a", manifestBody);
@@ -75,12 +77,14 @@ public sealed class PublicShareAttackSurfaceTests
     }
 
     [Fact]
-    public async Task UnknownShareId_ReturnsNotFound_WithoutLeakingPaths()
+    public async Task UnknownShareId_ReturnsUnauthorized_WithoutLeakingPaths()
     {
         using var client = _factory.CreateClient();
         var response = await client.GetAsync($"/share/qa05-unknown-{Guid.NewGuid():N}/manifest");
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        // B2 fail-closed: an unknown share has no access policy, so the gate
+        // denies before the route runs — this also avoids leaking existence.
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         var body = await response.Content.ReadAsStringAsync();
         Assert.DoesNotContain("LocalApplicationData", body, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("DocumentIDE", body);
@@ -112,7 +116,7 @@ public sealed class PublicShareAttackSurfaceTests
     public async Task ArtifactTraversal_Payloads_NeverSucceed(string encodedPayload)
     {
         var shareId = CreateShareWithManifest();
-        using var client = _factory.CreateClient();
+        using var client = WithToken(_factory.CreateClient(), _tokensByShare[shareId]);
 
         var response = await client.GetAsync($"/share/{shareId}/artifacts/{encodedPayload}");
 
@@ -172,7 +176,7 @@ public sealed class PublicShareAttackSurfaceTests
     public async Task PublicManifest_ExposesNoPhysicalPaths()
     {
         var shareId = CreateShareWithManifest(documentId: "doc-1", displayName: "notes.md");
-        using var client = _factory.CreateClient();
+        using var client = WithToken(_factory.CreateClient(), _tokensByShare[shareId]);
 
         var response = await client.GetAsync($"/share/{shareId}/manifest");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -199,7 +203,7 @@ public sealed class PublicShareAttackSurfaceTests
         var root = EnsureShareRoot(shareId);
         File.WriteAllText(Path.Combine(root, "preview.html"), payload);
 
-        using var client = _factory.CreateClient();
+        using var client = WithToken(_factory.CreateClient(), _tokensByShare[shareId]);
         var response = await client.GetAsync($"/share/{shareId}/artifacts/preview.html");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -212,7 +216,7 @@ public sealed class PublicShareAttackSurfaceTests
     public async Task CspBaseline_IsPresent_OnSuccessAndErrorResponses()
     {
         var shareId = CreateShareWithManifest();
-        using var client = _factory.CreateClient();
+        using var client = WithToken(_factory.CreateClient(), _tokensByShare[shareId]);
 
         var ok = await client.GetAsync($"/share/{shareId}/manifest");
         var notFound = await client.GetAsync($"/share/{shareId}/documents/no-such-doc");
@@ -240,7 +244,7 @@ public sealed class PublicShareAttackSurfaceTests
         Directory.CreateDirectory(Path.Combine(root, "originals"));
         File.WriteAllText(Path.Combine(root, "originals", "doc.md"), "private-bytes");
 
-        using var client = _factory.CreateClient();
+        using var client = WithToken(_factory.CreateClient(), _tokensByShare[shareId]);
         var response = await client.GetAsync($"/share/{shareId}/documents/doc-1/download-original");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
@@ -254,7 +258,7 @@ public sealed class PublicShareAttackSurfaceTests
         Directory.CreateDirectory(Path.Combine(root, "originals"));
         File.WriteAllText(Path.Combine(root, "originals", "doc.md"), "private-bytes");
 
-        using var client = _factory.CreateClient();
+        using var client = WithToken(_factory.CreateClient(), _tokensByShare[shareId]);
         var response = await client.GetAsync($"/share/{shareId}/artifacts/originals/doc.md");
 
         Assert.True(
@@ -271,7 +275,7 @@ public sealed class PublicShareAttackSurfaceTests
         Directory.CreateDirectory(Path.Combine(root, "pdfs"));
         File.WriteAllText(Path.Combine(root, "pdfs", "doc.pdf"), "private-pdf-bytes");
 
-        using var client = _factory.CreateClient();
+        using var client = WithToken(_factory.CreateClient(), _tokensByShare[shareId]);
         var response = await client.GetAsync($"/share/{shareId}/documents/doc-1/download-pdf");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
@@ -292,7 +296,7 @@ public sealed class PublicShareAttackSurfaceTests
 
         var shareId = CreateShareWithManifest();
         var clientIp = $"198.19.{Random.Shared.Next(1, 254)}.{Random.Shared.Next(1, 254)}";
-        using var client = factory.CreateClient();
+        using var client = WithToken(factory.CreateClient(), _tokensByShare[shareId]);
 
         for (var i = 0; i < 5; i++)
         {
@@ -318,7 +322,7 @@ public sealed class PublicShareAttackSurfaceTests
         var shareId = CreateShareWithManifest();
         var root = _tokenService.GetShareRootPath(shareId);
         File.WriteAllText(Path.Combine(root, "preview.html"), "<h1>was public</h1>");
-        using var client = _factory.CreateClient();
+        using var client = WithToken(_factory.CreateClient(), _tokensByShare[shareId]);
 
         var before = await client.GetAsync($"/share/{shareId}/manifest");
         Assert.Equal(HttpStatusCode.OK, before.StatusCode);
@@ -327,11 +331,13 @@ public sealed class PublicShareAttackSurfaceTests
         Directory.Delete(root, recursive: true);
         _createdShareRoots.Remove(root);
 
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/share/{shareId}/manifest")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/share/{shareId}/documents")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/share/{shareId}/documents/doc-1")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/share/{shareId}/artifacts/preview.html")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/share/{shareId}/documents/doc-1/download-original")).StatusCode);
+        // B2 fail-closed: with the package (and its access policy) gone the gate
+        // denies every route — a withdrawn share cannot keep serving.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync($"/share/{shareId}/manifest")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync($"/share/{shareId}/documents")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync($"/share/{shareId}/documents/doc-1")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync($"/share/{shareId}/artifacts/preview.html")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync($"/share/{shareId}/documents/doc-1/download-original")).StatusCode);
     }
 
     // Step 6: ShareHost architecture dependencies. ShareHost lacks privileged services.
@@ -405,7 +411,7 @@ public sealed class PublicShareAttackSurfaceTests
     public async Task NoMutationEndpoints_AreAvailablePublicly(string method)
     {
         var shareId = CreateShareWithManifest();
-        using var client = _factory.CreateClient();
+        using var client = WithToken(_factory.CreateClient(), _tokensByShare[shareId]);
 
         foreach (var url in new[]
                  {
@@ -473,7 +479,19 @@ public sealed class PublicShareAttackSurfaceTests
     {
         var root = _tokenService.EnsureShareRootExists(shareId);
         _createdShareRoots.Add(root);
+        // B2: register the access policy so the fail-closed gate authorizes the viewer.
+        var token = _tokenService.GenerateToken();
+        _tokenService.WriteAccessPolicy(
+            ShareTokenService.PolicyFor(shareId, _tokenService.ComputeHash(token), expiresAt: null));
+        _tokensByShare[shareId] = token;
         return root;
+    }
+
+    /// <summary>Attaches the share's token to the client's requests.</summary>
+    private static HttpClient WithToken(HttpClient client, string token)
+    {
+        client.DefaultRequestHeaders.TryAddWithoutValidation("X-Share-Token", token);
+        return client;
     }
 
     private static Task<HttpResponseMessage> SendAsAsync(HttpClient client, string url, string clientIp)

@@ -128,6 +128,7 @@ public class ShareHostDependencyTests : IClassFixture<WebApplicationFactory<Prog
         var shareId = "test-share-123";
         var tokenService = new ShareTokenService();
         var shareRoot = tokenService.EnsureShareRootExists(shareId);
+        IssueAccessToken(client, tokenService, shareId);
 
         try
         {
@@ -180,6 +181,7 @@ public class ShareHostDependencyTests : IClassFixture<WebApplicationFactory<Prog
         var shareId = "test-share-traversal";
         var tokenService = new ShareTokenService();
         var shareRoot = tokenService.EnsureShareRootExists(shareId);
+        IssueAccessToken(client, tokenService, shareId);
 
         try
         {
@@ -208,6 +210,7 @@ public class ShareHostDependencyTests : IClassFixture<WebApplicationFactory<Prog
         var shareId = "test-share-perms";
         var tokenService = new ShareTokenService();
         var shareRoot = tokenService.EnsureShareRootExists(shareId);
+        IssueAccessToken(client, tokenService, shareId);
 
         try
         {
@@ -245,8 +248,20 @@ public class ShareHostDependencyTests : IClassFixture<WebApplicationFactory<Prog
         }
     }
 
-    private static string FindRepoRoot(string startDir)
+    /// <summary>
+    /// B2 — registers the on-disk access policy for a hand-written share package
+    /// and attaches the matching token to the client, mirroring how the owner
+    /// process authorizes a viewer. Without this the fail-closed gate denies 401.
+    /// </summary>
+    private static void IssueAccessToken(HttpClient client, ShareTokenService tokens, string shareId)
     {
+        var token = tokens.GenerateToken();
+        tokens.WriteAccessPolicy(
+            ShareTokenService.PolicyFor(shareId, tokens.ComputeHash(token), expiresAt: null));
+        client.DefaultRequestHeaders.TryAddWithoutValidation("X-Share-Token", token);
+    }
+
+    private static string FindRepoRoot(string startDir)    {
         var dir = new DirectoryInfo(startDir);
         while (dir != null)
         {

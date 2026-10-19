@@ -31,10 +31,10 @@ builder.Services.AddShareRateLimits();
 var app = builder.Build();
 app.UseViewerSecurityHeaders();
 app.UseRateLimiter();
-app.UseWhen(context => context.Request.Headers.ContainsKey("X-Share-Token"), appBuilder =>
-{
-    appBuilder.UseMiddleware<ShareTokenMiddleware>();
-});
+// B2: every share-scoped request is authorized against the on-disk access
+// policy, unconditionally (fail-closed). Requests without a shareId route
+// value (the health route) pass through.
+app.UseMiddleware<ShareTokenMiddleware>();
 
 app.MapGet("/", () => Results.Ok(new { status = "DocumentIDE ShareHost Active", service = "ShareHost" }));
 
@@ -120,6 +120,16 @@ app.MapGet("/share/{shareId}/artifacts/{*relativePath}", (string shareId, string
     try
     {
         var artifactPath = tokenService.GetArtifactPath(shareId, relativePath);
+
+        // B2: the access policy carries the token hash and must never be served,
+        // not even to an authorized viewer.
+        if (string.Equals(
+                Path.GetFileName(artifactPath),
+                ShareTokenService.AccessFileName,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return Results.Problem(statusCode: 403, detail: "Access denied: protected artifact");
+        }
 
         if (!File.Exists(artifactPath))
         {

@@ -287,6 +287,11 @@ public sealed class SnapshotSharePublisher
             }
         }
 
+        // B2: publish the auth policy alongside the frozen manifest so the
+        // separate ShareHost process can authorize viewers without the owner DB.
+        _tokens.WriteAccessPolicy(
+            ShareTokenService.PolicyFor(share.Id, share.TokenHash, share.ExpiresAt));
+
         return new SnapshotPublishResult(share.Id, shareRoot, manifest, artifacts);
     }
 

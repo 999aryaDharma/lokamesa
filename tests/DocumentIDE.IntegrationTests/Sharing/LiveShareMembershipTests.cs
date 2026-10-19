@@ -26,6 +26,7 @@ public sealed class LiveShareMembershipTests
     private readonly ShareTokenService _tokens = new();
     private readonly List<string> _createdShareRoots = new();
     private readonly FakeMarkdownRenderer _markdown = new();
+    private string? _token;
 
     public LiveShareMembershipTests(WebApplicationFactory<ShareHostApp::Program> factory)
     {
@@ -120,7 +121,7 @@ public sealed class LiveShareMembershipTests
         Assert.Contains("Member v2 CHANGED", stored);
 
         // The public ShareHost serves the refreshed member content live.
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
         var preview = await client.GetAsync($"/share/{share.Id}/documents/doc-1/preview");
         Assert.Equal(HttpStatusCode.OK, preview.StatusCode);
         Assert.Contains("Member v2 CHANGED", await preview.Content.ReadAsStringAsync());
@@ -158,7 +159,7 @@ public sealed class LiveShareMembershipTests
         Assert.Equal(2, afterAdd);
         Assert.Equal(2, ReadManifest(share.Id).Documents.Count);
 
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
         var addedPreview = await client.GetAsync($"/share/{share.Id}/documents/doc-2/preview");
         Assert.Equal(HttpStatusCode.OK, addedPreview.StatusCode);
 
@@ -273,7 +274,7 @@ public sealed class LiveShareMembershipTests
 
     private Share NewLiveShare()
     {
-        return new Share
+        var share = new Share
         {
             Id = $"shr05-{Guid.NewGuid():N}",
             Mode = ShareMode.Live,
@@ -281,6 +282,9 @@ public sealed class LiveShareMembershipTests
             AllowOriginalDownload = false,
             AllowPdfDownload = false
         };
+        // B2: owner-issued token; the publisher writes the matching access policy.
+        _token = ShareHostTestSupport.IssueTokenFor(_tokens, share);
+        return share;
     }
 
     private LivePublishResult PublishTracked(

@@ -22,6 +22,7 @@ public sealed class SnapshotShareTests
     private readonly ShareTokenService _tokens = new();
     private readonly List<string> _createdShareRoots = new();
     private readonly FakeMarkdownRenderer _markdown = new();
+    private string? _token;
 
     public SnapshotShareTests(WebApplicationFactory<ShareHostApp::Program> factory)
     {
@@ -157,7 +158,7 @@ public sealed class SnapshotShareTests
             new SnapshotSourceDocument("doc-member", "member.md", ".md", MarkdownSource: "# Member")
         });
 
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
 
         Assert.Equal(HttpStatusCode.NotFound,
             (await client.GetAsync($"/share/{result.ShareId}/documents/doc-nonmember")).StatusCode);
@@ -175,7 +176,7 @@ public sealed class SnapshotShareTests
             new SnapshotSourceDocument("doc-1", "notes.md", ".md", MarkdownSource: "# Frozen")
         });
 
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
 
         var preview = await client.GetAsync($"/share/{result.ShareId}/documents/doc-1/preview");
         Assert.Equal(HttpStatusCode.OK, preview.StatusCode);
@@ -234,7 +235,7 @@ public sealed class SnapshotShareTests
 
     private Share NewSnapshotShare()
     {
-        return new Share
+        var share = new Share
         {
             Id = $"shr04-{Guid.NewGuid():N}",
             Mode = ShareMode.Snapshot,
@@ -242,6 +243,10 @@ public sealed class SnapshotShareTests
             AllowOriginalDownload = false,
             AllowPdfDownload = false
         };
+        // B2: the owner issues a token at create time; the publisher writes the
+        // matching access policy so the ShareHost can authorize the viewer.
+        _token = ShareHostTestSupport.IssueTokenFor(_tokens, share);
+        return share;
     }
 
     private SnapshotPublishResult PublishTracked(

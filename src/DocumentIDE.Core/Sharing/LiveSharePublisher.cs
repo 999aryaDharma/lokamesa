@@ -126,6 +126,8 @@ public sealed class LiveSharePublisher
             }
 
             WriteManifestAtomically(manifestPath, manifest);
+            _tokens.WriteAccessPolicy(
+                ShareTokenService.PolicyFor(share.Id, share.TokenHash, share.ExpiresAt));
             return new LivePublishResult(share.Id, shareRoot, manifest, artifacts);
         }
     }
@@ -480,6 +482,9 @@ public sealed class LiveSharePublisher
         manifest.LiveRevision = ReadRevision(share) + 1;
         var manifestPath = Path.Combine(_tokens.GetShareRootPath(share.Id), "manifest.json");
         WriteManifestAtomically(manifestPath, manifest);
+        // B2: keep the on-disk auth policy in step with every live manifest rewrite.
+        _tokens.WriteAccessPolicy(
+            ShareTokenService.PolicyFor(share.Id, share.TokenHash, share.ExpiresAt));
         return manifest.LiveRevision;
     }
 

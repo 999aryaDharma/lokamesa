@@ -26,6 +26,7 @@ public sealed class DownloadPermissionTests
     private readonly ShareTokenService _tokens = new();
     private readonly List<string> _createdShareRoots = new();
     private readonly FakeMarkdownRenderer _markdown = new();
+    private string? _token;
 
     public DownloadPermissionTests(WebApplicationFactory<ShareHostApp::Program> factory)
     {
@@ -71,7 +72,7 @@ public sealed class DownloadPermissionTests
         Assert.False(result.Manifest.AllowOriginalDownload);
         Assert.False(Directory.Exists(Path.Combine(result.ShareRoot, "originals")));
 
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
 
         // Direct URL: UI hiding is not the boundary, the route itself denies.
         var download = await client.GetAsync($"/share/{result.ShareId}/documents/doc-1/download-original");
@@ -97,7 +98,7 @@ public sealed class DownloadPermissionTests
         Assert.False(result.Manifest.AllowPdfDownload);
         Assert.False(Directory.Exists(Path.Combine(result.ShareRoot, "pdfs")));
 
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
 
         var download = await client.GetAsync($"/share/{result.ShareId}/documents/doc-1/download-pdf");
         Assert.Equal(HttpStatusCode.Forbidden, download.StatusCode);
@@ -147,7 +148,7 @@ public sealed class DownloadPermissionTests
             new SnapshotSourceDocument("doc-1", "notes.md", ".md", MarkdownSource: "# Frozen")
         });
 
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
 
         // OFF: denied even though the document is a member.
         var denied = await client.GetAsync($"/share/{result.ShareId}/documents/doc-1/download-original");
@@ -181,7 +182,7 @@ public sealed class DownloadPermissionTests
         Assert.Equal(originalBytes,
             File.ReadAllBytes(_tokens.GetArtifactPath(result.ShareId, "originals/notes.md")));
 
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
         var download = await client.GetAsync($"/share/{result.ShareId}/documents/doc-1/download-original");
         Assert.Equal(HttpStatusCode.OK, download.StatusCode);
         Assert.Equal(originalBytes, await download.Content.ReadAsByteArrayAsync());
@@ -201,7 +202,7 @@ public sealed class DownloadPermissionTests
 
         Assert.True(result.Manifest.AllowPdfDownload);
 
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
         var download = await client.GetAsync($"/share/{result.ShareId}/documents/doc-1/download-pdf");
         Assert.Equal(HttpStatusCode.OK, download.StatusCode);
         Assert.Equal("application/pdf", download.Content.Headers.ContentType?.MediaType);
@@ -221,7 +222,7 @@ public sealed class DownloadPermissionTests
                 PdfBytes: Encoding.UTF8.GetBytes("%PDF member"))
         });
 
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
 
         // Permission is ON but the ID is not a share member: 404, never bytes.
         Assert.Equal(HttpStatusCode.NotFound,
@@ -264,7 +265,7 @@ public sealed class DownloadPermissionTests
 
     private Share NewShare(bool allowOriginal, bool allowPdf)
     {
-        return new Share
+        var share = new Share
         {
             Id = $"shr07-{Guid.NewGuid():N}",
             Mode = ShareMode.Snapshot,
@@ -272,6 +273,9 @@ public sealed class DownloadPermissionTests
             AllowOriginalDownload = allowOriginal,
             AllowPdfDownload = allowPdf
         };
+        // B2: owner-issued token; the publisher writes the matching access policy.
+        _token = ShareHostTestSupport.IssueTokenFor(_tokens, share);
+        return share;
     }
 
     private SnapshotPublishResult PublishTracked(

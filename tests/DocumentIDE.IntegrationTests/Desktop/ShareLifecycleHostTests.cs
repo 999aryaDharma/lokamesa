@@ -117,6 +117,52 @@ public sealed class ShareLifecycleHostTests : IDisposable
     }
 
     [Fact]
+    public async Task StopRevokeRegenerate_UpdateTheOnDiskAccessPolicy()
+    {
+        // B3: ShareHost is a separate process that only reads the share package,
+        // so every lifecycle transition must rewrite the on-disk access policy or
+        // a stopped/revoked link would keep serving.
+        var (db, _) = await SeedAsync("share body");
+        await using var host = await StartHostAsync(db);
+        using var client = AuthorizedClient(host);
+        var policyStore = new ShareTokenService(_sharesRoot);
+
+        var shareId = await CreateSnapshotAsync(client);
+
+        var afterCreate = policyStore.ReadAccessPolicy(shareId);
+        Assert.NotNull(afterCreate);
+        Assert.False(string.IsNullOrWhiteSpace(afterCreate!.TokenHash));
+        Assert.Null(afterCreate.ExpiresAt);
+
+        using (var stopped = await client.PostAsJsonAsync($"/api/shares/{shareId}/stop", new { }))
+        {
+            Assert.Equal(HttpStatusCode.OK, stopped.StatusCode);
+        }
+        var afterStop = policyStore.ReadAccessPolicy(shareId);
+        Assert.NotNull(afterStop);
+        Assert.NotNull(afterStop!.ExpiresAt);
+        Assert.True(DateTimeOffset.Parse(afterStop.ExpiresAt!) <= DateTimeOffset.UtcNow);
+
+        using (var regenerated = await client.PostAsJsonAsync($"/api/shares/{shareId}/regenerate", new { }))
+        {
+            Assert.Equal(HttpStatusCode.OK, regenerated.StatusCode);
+        }
+        var afterRegen = policyStore.ReadAccessPolicy(shareId);
+        Assert.NotNull(afterRegen);
+        Assert.Null(afterRegen!.ExpiresAt);
+        Assert.False(string.IsNullOrWhiteSpace(afterRegen.TokenHash));
+        Assert.NotEqual(afterStop.TokenHash, afterRegen.TokenHash);
+
+        using (var revoked = await client.PostAsJsonAsync($"/api/shares/{shareId}/revoke", new { }))
+        {
+            Assert.Equal(HttpStatusCode.OK, revoked.StatusCode);
+        }
+        var afterRevoke = policyStore.ReadAccessPolicy(shareId);
+        Assert.NotNull(afterRevoke);
+        Assert.True(string.IsNullOrEmpty(afterRevoke!.TokenHash));
+    }
+
+    [Fact]
     public async Task List_ReturnsCreatedShares()
     {
         var (db, _) = await SeedAsync("share body");

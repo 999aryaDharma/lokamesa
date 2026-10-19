@@ -118,4 +118,135 @@ public class ShareTokenServiceTests
             }
         }
     }
+
+    // B2/B3: the share package carries the token hash + expiry so the separate
+    // ShareHost process can authenticate requests and enforce stop/revoke
+    // without any privileged DB access. Verification is fail-closed.
+
+    [Fact]
+    public void WriteAccessPolicy_ThenReadAccessPolicy_RoundTrips()
+    {
+        var tempBase = NewTempBase();
+        try
+        {
+            var service = new ShareTokenService(tempBase);
+            var policy = new ShareAccessPolicy
+            {
+                ShareId = "share-roundtrip",
+                TokenHash = service.ComputeHash("token-abc"),
+            };
+
+            service.WriteAccessPolicy(policy);
+            var read = service.ReadAccessPolicy("share-roundtrip");
+
+            Assert.NotNull(read);
+            Assert.Equal("share-roundtrip", read!.ShareId);
+            Assert.Equal(policy.TokenHash, read.TokenHash);
+            Assert.Null(read.ExpiresAt);
+        }
+        finally { Cleanup(tempBase); }
+    }
+
+    [Fact]
+    public void IsAccessGranted_WithMatchingToken_IsTrue()
+    {
+        var tempBase = NewTempBase();
+        try
+        {
+            var service = new ShareTokenService(tempBase);
+            var token = "matching-token-123";
+            service.WriteAccessPolicy(new ShareAccessPolicy
+            {
+                ShareId = "share-ok",
+                TokenHash = service.ComputeHash(token),
+            });
+
+            Assert.True(service.IsAccessGranted("share-ok", token));
+        }
+        finally { Cleanup(tempBase); }
+    }
+
+    [Fact]
+    public void IsAccessGranted_WithoutPolicy_FailsClosed()
+    {
+        var tempBase = NewTempBase();
+        try
+        {
+            var service = new ShareTokenService(tempBase);
+            // No access.json was written for this share: deny even a guessable token.
+            Assert.False(service.IsAccessGranted("share-no-policy", "any-token"));
+        }
+        finally { Cleanup(tempBase); }
+    }
+
+    [Fact]
+    public void IsAccessGranted_WithWrongOrMissingToken_IsFalse()
+    {
+        var tempBase = NewTempBase();
+        try
+        {
+            var service = new ShareTokenService(tempBase);
+            service.WriteAccessPolicy(new ShareAccessPolicy
+            {
+                ShareId = "share-wrong",
+                TokenHash = service.ComputeHash("the-right-token"),
+            });
+
+            Assert.False(service.IsAccessGranted("share-wrong", "the-wrong-token"));
+            Assert.False(service.IsAccessGranted("share-wrong", null));
+            Assert.False(service.IsAccessGranted("share-wrong", string.Empty));
+        }
+        finally { Cleanup(tempBase); }
+    }
+
+    [Fact]
+    public void IsAccessGranted_AfterStop_PastExpiry_IsFalse()
+    {
+        var tempBase = NewTempBase();
+        try
+        {
+            var service = new ShareTokenService(tempBase);
+            var token = "stopped-token";
+            service.WriteAccessPolicy(new ShareAccessPolicy
+            {
+                ShareId = "share-stop",
+                TokenHash = service.ComputeHash(token),
+                ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(-1).ToString("O"),
+            });
+
+            Assert.False(service.IsAccessGranted("share-stop", token));
+        }
+        finally { Cleanup(tempBase); }
+    }
+
+    [Fact]
+    public void IsAccessGranted_AfterRevoke_EmptyHash_IsFalse()
+    {
+        var tempBase = NewTempBase();
+        try
+        {
+            var service = new ShareTokenService(tempBase);
+            service.WriteAccessPolicy(new ShareAccessPolicy
+            {
+                ShareId = "share-revoke",
+                TokenHash = string.Empty,
+                ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(-1).ToString("O"),
+            });
+
+            // Even the original secret must not verify once the hash is cleared.
+            Assert.False(service.IsAccessGranted("share-revoke", "original-token"));
+        }
+        finally { Cleanup(tempBase); }
+    }
+
+    private static string NewTempBase() =>
+        Path.Combine(Path.GetTempPath(), $"docide_shares_test_{Guid.NewGuid():N}");
+
+    private static void Cleanup(string tempBase)
+    {
+        if (Directory.Exists(tempBase))
+        {
+            try { Directory.Delete(tempBase, true); } catch { }
+        }
+    }
 }

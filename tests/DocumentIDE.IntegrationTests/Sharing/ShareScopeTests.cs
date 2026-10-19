@@ -21,6 +21,7 @@ public sealed class ShareScopeTests
     private readonly WebApplicationFactory<ShareHostApp::Program> _factory;
     private readonly ShareTokenService _tokens = new();
     private readonly List<string> _createdShareRoots = new();
+    private string? _token;
 
     public ShareScopeTests(WebApplicationFactory<ShareHostApp::Program> factory)
     {
@@ -55,7 +56,7 @@ public sealed class ShareScopeTests
         // that was never an explicit share member) must stay invisible.
         WritePreview(root, "doc-stranger", "<h1>Stranger</h1><p>ZebraSecret hidden body</p>");
 
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
 
         var stranger = await client.GetAsync($"/share/{shareId}/search?q=ZebraSecret");
         Assert.Equal(HttpStatusCode.OK, stranger.StatusCode);
@@ -71,12 +72,14 @@ public sealed class ShareScopeTests
     }
 
     [Fact]
-    public async Task Search_UnknownShare_ReturnsNotFound_WithoutLeakingPaths()
+    public async Task Search_UnknownShare_ReturnsUnauthorized_WithoutLeakingPaths()
     {
         using var client = _factory.CreateClient();
         var response = await client.GetAsync($"/share/shr06-unknown-{Guid.NewGuid():N}/search?q=hello");
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        // B2 fail-closed: an unknown share has no access policy, so the gate
+        // denies before the route runs — this also avoids leaking existence.
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         var body = await response.Content.ReadAsStringAsync();
         Assert.DoesNotContain("LocalApplicationData", body, StringComparison.OrdinalIgnoreCase);
     }
@@ -89,7 +92,7 @@ public sealed class ShareScopeTests
         WriteManifest(shareId, root, new[] { ("doc-1", "member-notes.md") });
         WritePreview(root, "doc-1", "<p>SunshineMember alpha body</p>");
 
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
         foreach (var url in new[]
                  {
                      $"/share/{shareId}/search",
@@ -111,7 +114,7 @@ public sealed class ShareScopeTests
         WriteManifest(shareId, root, new[] { ("doc-1", "member-notes.md") });
         WritePreview(root, "doc-1", "<p>SunshineMember alpha body</p>");
 
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
         var search = await client.GetAsync($"/share/{shareId}/search?q=SunshineMember");
         Assert.Equal(HttpStatusCode.OK, search.StatusCode);
 
@@ -144,7 +147,7 @@ public sealed class ShareScopeTests
             new { sourceDocumentId = "doc-private", targetDocumentId = "doc-b", relationType = "Wikilink", relationOrigin = "Explicit" },
         }));
 
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
         var response = await client.GetAsync($"/share/{shareId}/graph");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadAsStringAsync();
@@ -170,7 +173,7 @@ public sealed class ShareScopeTests
         var root = EnsureShareRoot(shareId);
         WriteManifest(shareId, root, new[] { ("doc-a", "alpha.md") });
 
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
         var response = await client.GetAsync($"/share/{shareId}/graph");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -181,12 +184,12 @@ public sealed class ShareScopeTests
     }
 
     [Fact]
-    public async Task Graph_UnknownShare_ReturnsNotFound_WithoutLeakingPaths()
+    public async Task Graph_UnknownShare_ReturnsUnauthorized_WithoutLeakingPaths()
     {
         using var client = _factory.CreateClient();
         var response = await client.GetAsync($"/share/shr06-unknown-{Guid.NewGuid():N}/graph");
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         var body = await response.Content.ReadAsStringAsync();
         Assert.DoesNotContain("LocalApplicationData", body, StringComparison.OrdinalIgnoreCase);
     }
@@ -208,7 +211,7 @@ public sealed class ShareScopeTests
             new { sourceDocumentId = "doc-a", targetDocumentId = "doc-b", relationType = "MarkdownLink", relationOrigin = "Explicit" },
         }));
 
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
         var bodies = new[]
         {
             await (await client.GetAsync($"/share/{shareId}/manifest")).Content.ReadAsStringAsync(),
@@ -233,7 +236,7 @@ public sealed class ShareScopeTests
         return root;
     }
 
-    private static void WriteManifest(string shareId, string root, (string id, string name)[] members)
+    private void WriteManifest(string shareId, string root, (string id, string name)[] members)
     {
         var manifest = new ShareManifest
         {
@@ -250,6 +253,8 @@ public sealed class ShareScopeTests
             }).ToList(),
         };
         File.WriteAllText(Path.Combine(root, "manifest.json"), JsonSerializer.Serialize(manifest));
+        // B2: register the access policy so the ShareHost can authorize the viewer.
+        _token = ShareHostTestSupport.IssueToken(_tokens, shareId);
     }
 
     private static void WritePreview(string root, string documentId, string html)

@@ -127,6 +127,10 @@ public sealed class ShareLifecycleService(
 
         share.ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(-1).ToString("O");
         await shares.UpdateAsync(share);
+        // B3: rewrite the on-disk policy so the separate ShareHost process sees
+        // the stop immediately (a past ExpiresAt denies every token).
+        tokens.WriteAccessPolicy(
+            ShareTokenService.PolicyFor(share.Id, share.TokenHash, share.ExpiresAt));
         return share;
     }
 
@@ -140,6 +144,9 @@ public sealed class ShareLifecycleService(
         share.TokenHash = string.Empty;
         share.ExpiresAt ??= DateTimeOffset.UtcNow.AddSeconds(-1).ToString("O");
         await shares.UpdateAsync(share);
+        // B3: an emptied hash denies every token, including the previously valid one.
+        tokens.WriteAccessPolicy(
+            ShareTokenService.PolicyFor(share.Id, share.TokenHash, share.ExpiresAt));
         return share;
     }
 
@@ -152,6 +159,10 @@ public sealed class ShareLifecycleService(
         share.TokenHash = tokens.ComputeHash(rawToken);
         share.ExpiresAt = null;
         await shares.UpdateAsync(share);
+        // B3: rotate the on-disk hash and clear the expiry so the new token works
+        // and the old one no longer does.
+        tokens.WriteAccessPolicy(
+            ShareTokenService.PolicyFor(share.Id, share.TokenHash, share.ExpiresAt));
         return new ShareLifecycleResult(share, rawToken);
     }
 

@@ -27,6 +27,7 @@ public sealed class ShareWebSecurityTests : IClassFixture<WebApplicationFactory<
     private readonly WebApplicationFactory<ShareHostApp::Program> _factory;
     private readonly ShareTokenService _tokenService = new();
     private readonly List<string> _createdShareRoots = new();
+    private string? _token;
 
     public ShareWebSecurityTests(WebApplicationFactory<ShareHostApp::Program> factory)
     {
@@ -62,7 +63,7 @@ public sealed class ShareWebSecurityTests : IClassFixture<WebApplicationFactory<
             "<img src=\"x\" onerror=\"window.__pwned = 2\">";
         File.WriteAllText(Path.Combine(shareRoot, "preview.html"), payload);
 
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
         var response = await client.GetAsync($"/share/{shareId}/artifacts/preview.html");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -79,7 +80,7 @@ public sealed class ShareWebSecurityTests : IClassFixture<WebApplicationFactory<
         var shareRoot = EnsureShareRoot(shareId);
         File.WriteAllText(Path.Combine(shareRoot, "preview.html"), "<h1>ok</h1>");
 
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
         var response = await client.GetAsync($"/share/{shareId}/artifacts/preview.html");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -110,7 +111,7 @@ public sealed class ShareWebSecurityTests : IClassFixture<WebApplicationFactory<
     {
         var shareId = CreateShareWithManifest();
         var clientIp = NewClientIp();
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
 
         // Default general budget is 120 reads/minute/IP.
         for (var i = 0; i < 120; i++)
@@ -140,7 +141,7 @@ public sealed class ShareWebSecurityTests : IClassFixture<WebApplicationFactory<
     {
         var shareId = CreateShareWithManifest();
         var clientIp = NewClientIp();
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
 
         // Share-scoped search route (GET /share/{token}/search); the default budget is
         // 30/minute/IP. Since SHR-06 landed, the route is implemented server-side and a
@@ -164,7 +165,7 @@ public sealed class ShareWebSecurityTests : IClassFixture<WebApplicationFactory<
         Directory.CreateDirectory(Path.Combine(root, "originals"));
         File.WriteAllText(Path.Combine(root, "originals", "doc.md"), "hello");
         var clientIp = NewClientIp();
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
 
         var url = $"/share/{shareId}/documents/doc-1/download-original";
 
@@ -187,7 +188,7 @@ public sealed class ShareWebSecurityTests : IClassFixture<WebApplicationFactory<
         Directory.CreateDirectory(Path.Combine(root, "originals"));
         CreateSparseFile(Path.Combine(root, "originals", "doc.md"), 64L * 1024 * 1024);
         var clientIp = NewClientIp();
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
 
         var url = $"/share/{shareId}/documents/doc-1/download-original";
 
@@ -218,7 +219,7 @@ public sealed class ShareWebSecurityTests : IClassFixture<WebApplicationFactory<
         CreateSparseFile(Path.Combine(root, "originals", "doc.md"), 64L * 1024 * 1024);
         File.WriteAllText(Path.Combine(root, "other.html"), "<h1>other</h1>");
 
-        using var client = factory.CreateClient();
+        using var client = factory.CreateClient().WithShareToken(_token!);
 
         var held = await SendAsync(
             client,
@@ -242,7 +243,7 @@ public sealed class ShareWebSecurityTests : IClassFixture<WebApplicationFactory<
         var root = _tokenService.GetShareRootPath(shareId);
         Directory.CreateDirectory(Path.Combine(root, "originals"));
         File.WriteAllText(Path.Combine(root, "originals", "doc.md"), "hello");
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
         var url = $"/share/{shareId}/documents/doc-1/download-original";
 
         var busyIp = NewClientIp();
@@ -272,7 +273,7 @@ public sealed class ShareWebSecurityTests : IClassFixture<WebApplicationFactory<
         var root = EnsureShareRoot(shareId);
         File.WriteAllText(Path.Combine(root, "preview.html"), payload);
 
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
         var response = await client.GetAsync($"/share/{shareId}/artifacts/preview.html");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -288,7 +289,7 @@ public sealed class ShareWebSecurityTests : IClassFixture<WebApplicationFactory<
         var oversized = new byte[ShareHostSecurity.RenderedHtmlSanitizer.MaxHtmlArtifactBytes + 1];
         File.WriteAllBytes(Path.Combine(shareRoot, "huge.html"), oversized);
 
-        using var client = _factory.CreateClient();
+        using var client = _factory.CreateClient().WithShareToken(_token!);
         var response = await client.GetAsync($"/share/{shareId}/artifacts/huge.html");
 
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
@@ -355,6 +356,8 @@ public sealed class ShareWebSecurityTests : IClassFixture<WebApplicationFactory<
     {
         var root = _tokenService.EnsureShareRootExists(shareId);
         _createdShareRoots.Add(root);
+        // B2: register the access policy so the fail-closed gate authorizes the viewer.
+        _token = ShareHostTestSupport.IssueToken(_tokenService, shareId);
         return root;
     }
 
