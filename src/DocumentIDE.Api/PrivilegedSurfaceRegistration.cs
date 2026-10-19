@@ -3,6 +3,7 @@ using DocumentIDE.Core.Batch.Operations;
 using DocumentIDE.Core.Context;
 using DocumentIDE.Core.Domain.Repositories;
 using DocumentIDE.Core.Filesystem;
+using DocumentIDE.Core.Graph;
 using DocumentIDE.Core.History;
 using DocumentIDE.Core.Indexing;
 using DocumentIDE.Core.Markdown;
@@ -79,6 +80,9 @@ public static class PrivilegedSurfaceRegistration
         services.TryAddScoped<IMarkdownStructureParser, MarkdownStructureParser>();
         services.TryAddScoped<IDocxStructureParser, DocxStructureParser>();
         services.TryAddScoped<IncrementalIndexCoordinator>();
+        // GR-01/GR-03 — derives explicit relations from Markdown so the graph
+        // view returns real edges. Consumed by reconciliation and the save path.
+        services.TryAddScoped<MarkdownRelationIndexer>();
         services.TryAddScoped<IFuzzySearchService, FuzzySearchService>();
         services.TryAddScoped<IDocumentSearchService, DocumentSearchService>();
 
