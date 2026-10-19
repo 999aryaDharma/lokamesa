@@ -127,6 +127,17 @@ public static class PrivilegedSurfaceRegistration
         services.TryAddScoped<IShareRepository, ShareRepository>();
         services.TryAddScoped<ShareLifecycleService>();
 
+        // B5 — the missing public path: launch the separate ShareHost process and
+        // tunnel it. Previously neither a ShareHost launcher, a concrete ngrok
+        // runner, nor an IShareTransport registration existed anywhere in the
+        // product, so "Copy link" could never produce a reachable URL.
+        services.TryAddSingleton<DocumentIDE.Core.Security.ISecretStore>(
+            _ => new DocumentIDE.Infrastructure.Security.WindowsSecretStore());
+        services.TryAddSingleton<INgrokProcessRunner, NgrokProcessRunner>();
+        services.TryAddSingleton<IShareTransport, NgrokTransport>();
+        services.TryAddSingleton<IShareHostProcess, ShareHostProcess>();
+        services.TryAddSingleton<ShareLinkService>();
+
         return services;
     }
 }

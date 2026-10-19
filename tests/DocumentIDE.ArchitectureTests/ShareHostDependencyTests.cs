@@ -185,13 +185,19 @@ public class ShareHostDependencyTests : IClassFixture<WebApplicationFactory<Prog
 
         try
         {
-            // Attempt path traversal via relative dots
+            // Attempt path traversal via relative dots. HttpClient normalizes
+            // the URI, so this resolves to /share/secret.txt: a share ID the
+            // owner never registered. The fail-closed gate (B2) denies 401 for
+            // any unknown share, so the traversal can never reach an artifact
+            // handler — 200/exposure is what actually matters here.
             var response = await client.GetAsync($"/share/{shareId}/artifacts/../../secret.txt");
 
             // Must NOT return 200 OK or expose system files
             Assert.True(
-                response.StatusCode == HttpStatusCode.Forbidden || response.StatusCode == HttpStatusCode.NotFound,
-                $"Expected Forbidden or NotFound for path traversal, got {response.StatusCode}"
+                response.StatusCode is HttpStatusCode.Forbidden
+                    or HttpStatusCode.NotFound
+                    or HttpStatusCode.Unauthorized,
+                $"Expected Forbidden/NotFound/Unauthorized for path traversal, got {response.StatusCode}"
             );
         }
         finally

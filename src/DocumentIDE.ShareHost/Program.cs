@@ -15,10 +15,21 @@ var builder = WebApplication.CreateBuilder(args);
 // Process separation isolates public HTTP endpoints from privileged mutation & Word automation services.
 // This is a risk reduction boundary and is not claimed as a full OS sandbox until OS-level isolation (SHR-10) is applied.
 
-// Bind exclusively to loopback interface for local ngrok tunnel exposure
+// Bind exclusively to loopback interface for local ngrok tunnel exposure.
+// The owner process reserves a free loopback port and passes it via
+// DOCUMENTIDE_SHAREHOST_PORT so it knows the base URL to tunnel (B5); without
+// that the host falls back to an OS-assigned ephemeral port.
+var configuredPort = Environment.GetEnvironmentVariable("DOCUMENTIDE_SHAREHOST_PORT");
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.Listen(System.Net.IPAddress.Loopback, 0);
+    if (int.TryParse(configuredPort, out var port) && port > 0)
+    {
+        options.Listen(System.Net.IPAddress.Loopback, port);
+    }
+    else
+    {
+        options.Listen(System.Net.IPAddress.Loopback, 0);
+    }
 });
 
 builder.Services.AddSingleton<ShareTokenService>();
@@ -37,6 +48,31 @@ app.UseRateLimiter();
 app.UseMiddleware<ShareTokenMiddleware>();
 
 app.MapGet("/", () => Results.Ok(new { status = "DocumentIDE ShareHost Active", service = "ShareHost" }));
+
+// B5: the read-only viewer index the owner "Copy link" URL opens. Without this
+// route the copied /share/{shareId} link 404'd even for a valid token. The
+// ShareTokenMiddleware gates it exactly like every other share-scoped route.
+app.MapGet("/share/{shareId}", (string shareId, ShareTokenService tokenService) =>
+{
+    try
+    {
+        var manifest = LoadShareManifest(tokenService, shareId);
+        if (manifest == null)
+        {
+            return Results.NotFound(new { error = "Share not found or invalid" });
+        }
+
+        return Results.Text(ViewerIndexPage.Render(shareId, manifest), "text/html", Encoding.UTF8);
+    }
+    catch (InvalidOperationException)
+    {
+        return Results.Problem(statusCode: 403, detail: "Access denied: invalid share identifier");
+    }
+    catch (Exception)
+    {
+        return Results.NotFound(new { error = "Share not found or invalid" });
+    }
+});
 
 // Manifest endpoint
 app.MapGet("/share/{shareId}/manifest", (string shareId, ShareTokenService tokenService) =>

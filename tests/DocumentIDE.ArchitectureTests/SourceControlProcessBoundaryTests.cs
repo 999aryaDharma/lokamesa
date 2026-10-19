@@ -72,6 +72,12 @@ public sealed class SourceControlProcessBoundaryTests
         {
             "src/DocumentIDE.Infrastructure/SourceControl/",
             "src/DocumentIDE.Infrastructure/Word/WordDesktopLauncher.cs",
+            // B5 — the public-share path needs its own documented process
+            // boundary: it launches the separate DocumentIDE.ShareHost viewer
+            // host and the ngrok tunnel. Neither is Git spawning or a
+            // general-purpose exec surface; both are named, single-purpose files.
+            "src/DocumentIDE.Infrastructure/Sharing/NgrokProcessRunner.cs",
+            "src/DocumentIDE.Infrastructure/Sharing/ShareHostProcess.cs",
         };
 
         var violations = new List<string>();

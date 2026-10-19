@@ -279,6 +279,11 @@ public sealed class ShareLifecycleHostTests : IDisposable
             // Isolate share artifacts under a temp root so the test never writes
             // into the real %LOCALAPPDATA%\DocumentIDE\shares store.
             services.AddSingleton(new ShareTokenService(_sharesRoot));
+            // B5: creating a share now also starts the public path (ShareHost
+            // process + ngrok). This lane pins lifecycle semantics, so it stubs
+            // both seams instead of spawning a child process / real tunnel.
+            services.AddSingleton<IShareHostProcess>(new StubShareHostProcess());
+            services.AddSingleton<IShareTransport>(new StubTransport());
         });
 
     private async Task<string> CreateSnapshotAsync(HttpClient client)
@@ -321,5 +326,21 @@ public sealed class ShareLifecycleHostTests : IDisposable
     private static void TryDelete(string path)
     {
         try { if (Directory.Exists(path)) Directory.Delete(path, recursive: true); } catch { /* best effort */ }
+    }
+
+    private sealed class StubShareHostProcess : IShareHostProcess
+    {
+        private const string Url = "http://127.0.0.1:45998";
+        public string? LocalBaseUrl => Url;
+        public Task<string> EnsureStartedAsync(CancellationToken cancellationToken = default) => Task.FromResult(Url);
+        public Task StopAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class StubTransport : IShareTransport
+    {
+        public Task<PublicEndpoint> StartAsync(string localUrl, string secretToken, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new PublicEndpoint { BaseUrl = localUrl, SecretPath = string.Empty });
+        public Task StopAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public TransportStatus GetStatus() => new() { State = TransportStatusState.Running };
     }
 }
