@@ -1,7 +1,12 @@
 using System;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
+using DocumentIDE.Api.Lifecycle;
+using DocumentIDE.Core.Diagnostics;
 using DocumentIDE.Desktop.WebView;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Web.WebView2.Core;
 
 namespace DocumentIDE.Desktop;
@@ -10,6 +15,8 @@ public partial class MainWindow : Window
 {
     private WebAppHost? _appHost;
     private LocalSessionBridge? _sessionBridge;
+    private RestartCoordinator? _restartCoordinator;
+    private RuntimeHandshake? _runtimeHandshake;
 
     public MainWindow()
     {
@@ -22,7 +29,11 @@ public partial class MainWindow : Window
     {
         try
         {
-            _appHost = await WebAppHost.StartAsync();
+            var restartCoordinator = new RestartCoordinator();
+            _restartCoordinator = restartCoordinator;
+            _appHost = await WebAppHost.StartAsync(configureServices: services =>
+                services.AddSingleton<IRestartFlushBridge>(restartCoordinator));
+            _appHost.ShutdownRequested += OnShutdownRequested;
 
             // WebView2 must not use its default profile location (next to the
             // executable): the app lives in Program Files, which a standard user
@@ -65,6 +76,19 @@ public partial class MainWindow : Window
             // "Failed to fetch" (the packaged origin has no /api route).
             await _sessionBridge.AttachToWebViewAsync(WebView.CoreWebView2, _appHost.ApiUrl);
 
+            // DEV-UPD: the page-side save bridge and the one-run handshake the
+            // local watcher reads before it stops this process.
+            restartCoordinator.FlushAsync = FlushViaWebViewAsync;
+            BuildInfo buildInfo = BuildInfo.Load(AppContext.BaseDirectory);
+            _runtimeHandshake = RuntimeHandshake.Write(
+                RuntimeHandshake.DefaultPath,
+                new RuntimeHandshakePayload(
+                    Environment.ProcessId,
+                    _appHost.Port,
+                    buildInfo.Version,
+                    buildInfo.Sha,
+                    _appHost.ControlToken));
+
             WebView.NavigationStarting += (s, args) =>
             {
                 if (Uri.TryCreate(args.Uri, UriKind.Absolute, out var targetUri))
@@ -98,8 +122,57 @@ public partial class MainWindow : Window
     {
         if (_appHost != null)
         {
+            _appHost.ShutdownRequested -= OnShutdownRequested;
             await _appHost.DisposeAsync();
             _appHost = null;
+        }
+
+        _runtimeHandshake?.Dispose();
+        _runtimeHandshake = null;
+    }
+
+    private void OnShutdownRequested()
+    {
+        Dispatcher.BeginInvoke(new Action(() => Application.Current.Shutdown()));
+    }
+
+    private Task<RestartFlushResult> FlushViaWebViewAsync(CancellationToken cancellationToken) =>
+        Dispatcher.InvokeAsync(() => FlushViaWebViewCoreAsync(cancellationToken)).Task.Unwrap();
+
+    private async Task<RestartFlushResult> FlushViaWebViewCoreAsync(CancellationToken cancellationToken)
+    {
+        CoreWebView2? core = WebView.CoreWebView2;
+        if (core is null)
+        {
+            return new RestartFlushResult(false, "webview-unavailable");
+        }
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(15));
+
+        try
+        {
+            await core.ExecuteScriptAsync(RestartCoordinator.StartScript);
+
+            while (true)
+            {
+                string raw = await core.ExecuteScriptAsync(RestartCoordinator.PollScript);
+                RestartFlushResult? result = RestartCoordinator.ParsePollResult(raw);
+                if (result is not null)
+                {
+                    return result;
+                }
+
+                await Task.Delay(TimeSpan.FromMilliseconds(100), timeout.Token);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return new RestartFlushResult(false, "flush-timeout");
+        }
+        catch (Exception ex)
+        {
+            return new RestartFlushResult(false, ex.Message);
         }
     }
 

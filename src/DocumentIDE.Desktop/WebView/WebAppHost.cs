@@ -38,6 +38,9 @@ public class WebAppHost : IAsyncDisposable, IDisposable
     public string ControlToken { get; private set; } = string.Empty;
     public bool IsRunning => _host != null;
 
+    /// <summary>Raised when the privileged API host is stopping (e.g. after <c>POST /api/app/quit</c>).</summary>
+    public event Action? ShutdownRequested;
+
     public static async Task<WebAppHost> StartAsync(
         int preferredPort = 0,
         AppDb? database = null,
@@ -123,6 +126,7 @@ public class WebAppHost : IAsyncDisposable, IDisposable
         await app.StartAsync();
 
         _host = app;
+        app.Lifetime.ApplicationStopping.Register(() => ShutdownRequested?.Invoke());
 
         var server = app.Services.GetRequiredService<IServer>();
         var addressesFeature = server.Features.Get<IServerAddressesFeature>();
