@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Xml.Linq;
 using DocumentIDE.Core.Security;
@@ -43,13 +44,33 @@ public class InstallerTests
         Assert.Contains("DocumentIDE.Desktop.exe", wxsContent);
         Assert.Contains("DocumentIDE.ShareHost.exe", wxsContent);
         Assert.Contains("wwwroot", wxsContent);
-        Assert.Contains("ProgramFiles64Folder", wxsContent);
+        Assert.Contains("Scope=\"perUser\"", wxsContent);
+        Assert.Contains("LocalAppDataFolder", wxsContent);
+        Assert.DoesNotContain("ProgramFiles64Folder", wxsContent);
+        Assert.Contains("Version=\"1.0.2.0\"", wxsContent);
 
         // Check Start Menu shortcut
         Assert.Contains("Shortcut", wxsContent);
 
         // Check WebView2 Evergreen prerequisite check
         Assert.Contains("F3017226-FE2A-4295-8BDF-00C3A9A7E4C5", wxsContent);
+    }
+
+    [Fact]
+    public void App_and_installer_versions_agree()
+    {
+        string repoRoot = GetRepoRoot();
+        string wxsContent = File.ReadAllText(Path.Combine(repoRoot, "installer", "DocumentIDE.wxs"));
+
+        XDocument csproj = XDocument.Load(
+            Path.Combine(repoRoot, "src", "DocumentIDE.Desktop", "DocumentIDE.Desktop.csproj"));
+        string? version = csproj
+            .Descendants()
+            .FirstOrDefault(element => element.Name.LocalName == "Version")
+            ?.Value;
+
+        Assert.Equal("1.0.2.0", version);
+        Assert.Contains($"Version=\"{version}\"", wxsContent);
     }
 
     [Fact]
@@ -90,7 +111,7 @@ public class InstallerTests
         Assert.True(File.Exists(scriptPath), $"Script must exist at {scriptPath}");
         string scriptContent = File.ReadAllText(scriptPath);
 
-        Assert.Contains("DocumentIDE.ShareHost.csproj", scriptContent);
+        Assert.Contains("publish-payload.ps1", scriptContent);
         Assert.Contains("DocumentIDE.wxs", scriptContent);
         Assert.Contains("wix build", scriptContent);
 

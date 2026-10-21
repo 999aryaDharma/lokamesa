@@ -1,9 +1,9 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package Name="Document IDE"
            Manufacturer="Document IDE"
-           Version="1.0.0.0"
+           Version="1.0.2.0"
            UpgradeCode="C3B24F81-99A1-4E12-B8E5-77981A6498B1"
-           Scope="perMachine">
+           Scope="perUser">
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of Document IDE is already installed." />
     <MediaTemplate EmbedCab="yes" />
@@ -18,8 +18,16 @@
                       Bitness="always32" />
     </Property>
 
-    <StandardDirectory Id="ProgramFiles64Folder">
-      <Directory Id="INSTALLFOLDER" Name="Document IDE" />
+    <!--
+      Per-user install under %LOCALAPPDATA%\Programs\Document IDE: the local
+      auto-updater swaps this directory without elevation. A per-machine
+      1.0.0.0 install cannot be upgraded across installation contexts; see
+      docs/releases/v1.0.2.md for the one-time migration.
+    -->
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsFolder" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="Document IDE" />
+      </Directory>
     </StandardDirectory>
 
     <StandardDirectory Id="ProgramMenuFolder">
