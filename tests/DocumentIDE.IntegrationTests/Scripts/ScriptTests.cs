@@ -58,9 +58,15 @@ public class ScriptTests
         Assert.True(File.Exists(scriptPath), $"Script should exist at {scriptPath}");
 
         string scriptContent = File.ReadAllText(scriptPath);
-        Assert.Contains("npm run build", scriptContent);
-        Assert.Contains("dotnet publish", scriptContent);
+        Assert.Contains("publish-payload.ps1", scriptContent);
         Assert.Contains("artifacts", scriptContent);
+
+        string publisherPath = Path.Combine(repoRoot, "scripts", "publish-payload.ps1");
+        Assert.True(File.Exists(publisherPath), $"Publisher should exist at {publisherPath}");
+
+        string publisherContent = File.ReadAllText(publisherPath);
+        Assert.Contains("npm run build", publisherContent);
+        Assert.Contains("dotnet publish", publisherContent);
 
         string artifactsDesktopDir = Path.Combine(repoRoot, "artifacts", "desktop");
         string exePath = Path.Combine(artifactsDesktopDir, "DocumentIDE.Desktop.exe");
