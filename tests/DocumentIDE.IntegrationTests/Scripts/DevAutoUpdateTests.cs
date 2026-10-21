@@ -57,6 +57,18 @@ public sealed class DevAutoUpdateTests
         Assert.True(process.ExitCode == 0, output);
     }
 
+    [Fact]
+    public void Task_installer_registers_a_per_user_logon_task()
+    {
+        string script = File.ReadAllText(
+            Path.Combine(GetRepoRoot(), "scripts", "install-dev-autoupdate.ps1"));
+
+        Assert.Contains("Register-ScheduledTask", script);
+        Assert.Contains("AtLogOn", script);
+        Assert.Contains("DocumentIDE Dev Auto-Update", script);
+        Assert.Contains("-Uninstall", script);
+    }
+
     private static string GetRepoRoot()
     {
         string dir = AppContext.BaseDirectory;
