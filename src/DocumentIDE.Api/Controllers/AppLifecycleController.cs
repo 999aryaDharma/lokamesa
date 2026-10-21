@@ -1,0 +1,78 @@
+using DocumentIDE.Api.Lifecycle;
+using DocumentIDE.Core.Activity;
+using DocumentIDE.Core.Diagnostics;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Hosting;
+
+namespace DocumentIDE.Api.Controllers;
+
+/// <summary>
+/// DEV-UPD — control surface for the local dev auto-updater.
+///
+///   GET  /api/app/status            -> { version, sha, busy, reasons, startedAtUtc }
+///   POST /api/app/prepare-restart   -> { ok, reason? } after the UI saves dirty buffers
+///   POST /api/app/quit              -> 202, then the process stops
+///
+/// Every route is loopback-only and requires the per-run control token (or the
+/// UI session token) through <c>PrivilegedRequestGuard</c>. The control token is
+/// never accepted on document or mutation routes.
+/// </summary>
+[ApiController]
+[Route("api/app")]
+public sealed class AppLifecycleController(
+    ActivityGate activity,
+    IRestartFlushBridge restartFlush,
+    IHostApplicationLifetime lifetime,
+    BuildInfo buildInfo,
+    AppLifecycleState state) : ControllerBase
+{
+    private static readonly TimeSpan FlushTimeout = TimeSpan.FromSeconds(20);
+
+    [HttpGet("status")]
+    public IActionResult Status() => Ok(new
+    {
+        version = buildInfo.Version,
+        sha = buildInfo.Sha,
+        busy = activity.IsBusy,
+        reasons = activity.ActiveReasons,
+        startedAtUtc = state.StartedAtUtc,
+    });
+
+    [HttpPost("prepare-restart")]
+    public async Task<IActionResult> PrepareRestart(CancellationToken cancellationToken)
+    {
+        // A restart never interrupts a backend mutation. The watcher polls
+        // status first, and this check closes the race between that poll and
+        // the flush request.
+        if (activity.IsBusy)
+        {
+            return Ok(new { ok = false, reason = "busy" });
+        }
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(FlushTimeout);
+
+        try
+        {
+            var result = await restartFlush.PrepareRestartAsync(timeout.Token);
+            return Ok(new { ok = result.Ok, reason = result.Reason });
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return Ok(new { ok = false, reason = "flush-timeout" });
+        }
+    }
+
+    [HttpPost("quit")]
+    public IActionResult Quit()
+    {
+        // Let the 202 response reach the watcher before the host stops.
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
+            lifetime.StopApplication();
+        });
+
+        return Accepted(new { ok = true });
+    }
+}

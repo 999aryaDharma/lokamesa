@@ -1,6 +1,9 @@
+using DocumentIDE.Api.Lifecycle;
+using DocumentIDE.Core.Activity;
 using DocumentIDE.Core.Batch;
 using DocumentIDE.Core.Batch.Operations;
 using DocumentIDE.Core.Context;
+using DocumentIDE.Core.Diagnostics;
 using DocumentIDE.Core.Domain.Repositories;
 using DocumentIDE.Core.Filesystem;
 using DocumentIDE.Core.Graph;
@@ -137,6 +140,15 @@ public static class PrivilegedSurfaceRegistration
         services.TryAddSingleton<IShareTransport, NgrokTransport>();
         services.TryAddSingleton<IShareHostProcess, ShareHostProcess>();
         services.TryAddSingleton<ShareLinkService>();
+
+        // DEV-UPD — local auto-update control surface. ActivityGate is the
+        // single source of truth for "a backend mutation is in flight";
+        // BuildInfo is the running commit identity; the restart bridge is a
+        // no-op in the API host and replaced by the desktop WebView bridge.
+        services.TryAddSingleton<ActivityGate>();
+        services.TryAddSingleton<AppLifecycleState>();
+        services.TryAddSingleton(BuildInfo.Load(AppContext.BaseDirectory));
+        services.TryAddSingleton<IRestartFlushBridge, NoopRestartFlushBridge>();
 
         return services;
     }

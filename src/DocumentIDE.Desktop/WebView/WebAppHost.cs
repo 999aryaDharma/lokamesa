@@ -34,6 +34,8 @@ public class WebAppHost : IAsyncDisposable, IDisposable
     public string ApiUrl { get; private set; } = string.Empty;
     public int Port { get; private set; }
     public string SessionToken { get; private set; } = string.Empty;
+    /// <summary>Per-run token accepted only on <c>/api/app/*</c>.</summary>
+    public string ControlToken { get; private set; } = string.Empty;
     public bool IsRunning => _host != null;
 
     public static async Task<WebAppHost> StartAsync(
@@ -139,6 +141,7 @@ public class WebAppHost : IAsyncDisposable, IDisposable
 
         var tokenProvider = app.Services.GetRequiredService<ISessionTokenProvider>();
         SessionToken = tokenProvider.SessionToken;
+        ControlToken = tokenProvider.ControlToken;
     }
 
     public async Task StopAsync()
@@ -203,6 +206,9 @@ public class WebAppHost : IAsyncDisposable, IDisposable
             // resource card.
             typeof(ContextPackController),
             typeof(DocumentReferenceController),
+            // DEV-UPD: loopback-only status/prepare-restart/quit surface used
+            // by the local auto-updater.
+            typeof(AppLifecycleController),
         };
 
         protected override bool IsController(TypeInfo typeInfo) => Array.IndexOf(AllowedControllers, typeInfo.AsType()) >= 0;
