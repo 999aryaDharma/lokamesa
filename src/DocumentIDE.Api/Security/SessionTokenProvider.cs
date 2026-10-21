@@ -7,29 +7,40 @@ namespace DocumentIDE.Api.Security;
 public class SessionTokenProvider : ISessionTokenProvider
 {
     public string SessionToken { get; }
+    public string ControlToken { get; }
 
     public SessionTokenProvider()
     {
-        byte[] bytes = new byte[32];
-        RandomNumberGenerator.Fill(bytes);
-        SessionToken = Convert.ToBase64String(bytes);
+        SessionToken = GenerateToken();
+        ControlToken = GenerateToken();
     }
 
-    public bool ValidateToken(string? token)
+    public bool ValidateToken(string? token) => ConstantTimeEquals(token, SessionToken);
+
+    public bool ValidateControlToken(string? token) => ConstantTimeEquals(token, ControlToken);
+
+    private static string GenerateToken()
     {
-        if (string.IsNullOrEmpty(token))
+        byte[] bytes = new byte[32];
+        RandomNumberGenerator.Fill(bytes);
+        return Convert.ToBase64String(bytes);
+    }
+
+    private static bool ConstantTimeEquals(string? candidate, string expected)
+    {
+        if (string.IsNullOrEmpty(candidate))
         {
             return false;
         }
 
-        byte[] tokenBytes = Encoding.UTF8.GetBytes(token);
-        byte[] expectedBytes = Encoding.UTF8.GetBytes(SessionToken);
+        byte[] candidateBytes = Encoding.UTF8.GetBytes(candidate);
+        byte[] expectedBytes = Encoding.UTF8.GetBytes(expected);
 
-        if (tokenBytes.Length != expectedBytes.Length)
+        if (candidateBytes.Length != expectedBytes.Length)
         {
             return false;
         }
 
-        return CryptographicOperations.FixedTimeEquals(tokenBytes, expectedBytes);
+        return CryptographicOperations.FixedTimeEquals(candidateBytes, expectedBytes);
     }
 }

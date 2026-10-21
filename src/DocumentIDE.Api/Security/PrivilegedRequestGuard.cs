@@ -78,7 +78,9 @@ public class PrivilegedRequestGuard
             return;
         }
 
-        // 4. Session Token Authorization Header Check
+        // 4. Token Authorization. The session token authorizes every privileged
+        // route. The per-run control token authorizes only the loopback
+        // auto-updater surface (/api/app/*), never document or mutation routes.
         string? token = context.Request.Headers["X-DocumentIDE-Session-Token"].FirstOrDefault();
         if (string.IsNullOrEmpty(token))
         {
@@ -89,7 +91,14 @@ public class PrivilegedRequestGuard
             }
         }
 
-        if (!sessionTokenProvider.ValidateToken(token))
+        bool authorized = sessionTokenProvider.ValidateToken(token);
+        if (!authorized && IsControlPath(context.Request.Path))
+        {
+            string? controlToken = context.Request.Headers["X-DocumentIDE-Control-Token"].FirstOrDefault();
+            authorized = sessionTokenProvider.ValidateControlToken(controlToken);
+        }
+
+        if (!authorized)
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             await context.Response.WriteAsync("Unauthorized: Missing or invalid session token.");
@@ -132,6 +141,9 @@ public class PrivilegedRequestGuard
 
         return rawHost;
     }
+
+    private static bool IsControlPath(PathString path) =>
+        path.StartsWithSegments("/api/app", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsAllowedOrigin(string origin)
     {
