@@ -129,15 +129,18 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Closed(object? sender, EventArgs e)
     {
+        // Delete the handshake before the first await. WPF shutdown does not
+        // wait for this async void handler, so a slow host disposal could
+        // otherwise leave runtime.json behind for the next process.
+        _runtimeHandshake?.Dispose();
+        _runtimeHandshake = null;
+
         if (_appHost != null)
         {
             _appHost.ShutdownRequested -= OnShutdownRequested;
             await _appHost.DisposeAsync();
             _appHost = null;
         }
-
-        _runtimeHandshake?.Dispose();
-        _runtimeHandshake = null;
     }
 
     private void OnShutdownRequested()
