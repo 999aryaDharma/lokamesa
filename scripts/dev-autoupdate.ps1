@@ -33,6 +33,7 @@ $script:LastBuiltPath = Join-Path $script:DataRoot "last-built.sha"
 $script:BadShasPath = Join-Path $script:DataRoot "bad-shas.txt"
 $script:LockPath = Join-Path $script:DataRoot "updater.lock"
 $script:MissingInstallLogged = $false
+$script:LastInstalledSha = $null
 $script:StagingRoot = Join-Path $script:DataRoot "staging"
 $script:InstallDir = Join-Path $env:LOCALAPPDATA "Programs\Document IDE"
 
@@ -118,8 +119,16 @@ function Add-BadSha {
     )
 
     if (Test-BadSha -Path $Path -Sha $Sha) { return }
-    New-Item -ItemType Directory -Path (Split-Path -Parent $Path) -Force | Out-Null
-    Add-Content -LiteralPath $Path -Value $Sha -Encoding ASCII
+
+    try {
+        New-Item -ItemType Directory -Path (Split-Path -Parent $Path) -Force | Out-Null
+        Add-Content -LiteralPath $Path -Value $Sha -Encoding ASCII -ErrorAction Stop
+    }
+    catch {
+        # Recording the SHA is best effort: a full/read-only state directory
+        # must never skip the restore/relaunch that follows.
+        Write-Log "could not record bad SHA $Sha in $Path : $($_.Exception.Message)" "ERROR"
+    }
 }
 
 function Remove-BadSha {
@@ -130,15 +139,20 @@ function Remove-BadSha {
 
     if (-not (Test-Path -LiteralPath $Path)) { return }
 
-    $remaining = @(Get-Content -LiteralPath $Path |
-        ForEach-Object { $_.Trim() } |
-        Where-Object { $_ -and $_ -ne $Sha })
+    try {
+        $remaining = @(Get-Content -LiteralPath $Path |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_ -and $_ -ne $Sha })
 
-    if ($remaining.Count -eq 0) {
-        Remove-Item -LiteralPath $Path -Force
+        if ($remaining.Count -eq 0) {
+            Remove-Item -LiteralPath $Path -Force -ErrorAction Stop
+        }
+        else {
+            Set-Content -LiteralPath $Path -Value $remaining -Encoding ASCII -ErrorAction Stop
+        }
     }
-    else {
-        Set-Content -LiteralPath $Path -Value $remaining -Encoding ASCII
+    catch {
+        Write-Log "could not clear bad SHA $Sha from $Path : $($_.Exception.Message)" "ERROR"
     }
 }
 
@@ -419,6 +433,29 @@ function Invoke-Swap {
     return $null
 }
 
+function Start-PreviousBuild {
+    param(
+        [string]$Directory = "",
+        [switch]$NoLaunch
+    )
+
+    if ($NoLaunch -or [string]::IsNullOrWhiteSpace($Directory)) { return }
+
+    $exe = Join-Path $Directory "DocumentIDE.Desktop.exe"
+    if (-not (Test-Path -LiteralPath $exe)) {
+        Write-Log "no runnable previous executable under $Directory; manual recovery required" "ERROR"
+        return
+    }
+
+    try {
+        $null = Start-Process -FilePath $exe -WorkingDirectory $Directory -PassThru
+        Write-Log "started the previous build from $Directory" "WARN"
+    }
+    catch {
+        Write-Log "could not start the previous build from ${Directory}: $($_.Exception.Message)" "ERROR"
+    }
+}
+
 function Invoke-Rollback {
     param(
         [Parameter(Mandatory)][string]$InstallDir,
@@ -469,6 +506,7 @@ function Invoke-Rollback {
 
     if (Test-Path -LiteralPath $InstallDir) {
         Write-Log "rollback: could not clear the new install at $InstallDir" "ERROR"
+        Start-PreviousBuild -Directory $OldDir -NoLaunch:$NoLaunch
         return
     }
 
@@ -478,6 +516,7 @@ function Invoke-Rollback {
     }
     catch {
         Write-Log "rollback: could not restore $OldDir to $InstallDir : $($_.Exception.Message)" "ERROR"
+        Start-PreviousBuild -Directory $OldDir -NoLaunch:$NoLaunch
         return
     }
 
@@ -619,6 +658,15 @@ function Invoke-UpdateCycle {
     }
 
     $sha = Get-MasterSha -Worktree $Worktree
+
+    # The last-built state file can be unwritable (full/read-only profile).
+    # Remember the SHA in-process so a successful install is not repeated every
+    # interval; a new master SHA still updates normally.
+    if ($sha -eq $script:LastInstalledSha) {
+        Write-Log "master $sha was installed in this run but last-built.sha is unwritable; not reinstalling" "WARN"
+        return
+    }
+
     if (-not (Test-NewBuild -Sha $sha -LastBuiltPath $LastBuiltPath -BadShasPath $BadShasPath -ForceBuild:([bool]$ForceBuild))) {
         if (Test-BadSha -Path $BadShasPath -Sha $sha) {
             Write-Log "master $sha is marked bad; waiting for a new SHA (or -Force)" "WARN"
@@ -781,7 +829,16 @@ function Invoke-UpdateCycle {
         Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
     Remove-BadSha -Path $BadShasPath -Sha $sha
-    Set-Content -LiteralPath $LastBuiltPath -Value $sha -Encoding ASCII
+
+    try {
+        Set-Content -LiteralPath $LastBuiltPath -Value $sha -Encoding ASCII -ErrorAction Stop
+    }
+    catch {
+        # Keep the in-process guard: the install succeeded, so do not reinstall
+        # it every interval just because the state file cannot be written.
+        Write-Log "installed master $sha but could not persist last-built.sha: $($_.Exception.Message)" "ERROR"
+    }
+    $script:LastInstalledSha = $sha
     Write-Log "installed master $sha (version $Version)"
 
     Get-ChildItem -LiteralPath $StagingRoot -Directory -ErrorAction SilentlyContinue |
@@ -858,6 +915,17 @@ function Invoke-SelfTest {
         Remove-BadSha -Path $badShas -Sha "bad1"
         if (Test-BadSha -Path $badShas -Sha "bad1") {
             $failures.Add("Remove-BadSha did not forget the SHA")
+        }
+
+        # A state-file write failure must not throw: the caller still has to
+        # restore/relaunch after a failed swap.
+        $blockedParent = Join-Path $Root "not-a-directory"
+        [System.IO.File]::WriteAllText($blockedParent, "x")
+        try {
+            Add-BadSha -Path (Join-Path $blockedParent "bad-shas.txt") -Sha "unwritable"
+        }
+        catch {
+            $failures.Add("Add-BadSha threw on an unwritable path")
         }
 
         # 3. Swap replaces install/ and leaves sibling data directories alone.

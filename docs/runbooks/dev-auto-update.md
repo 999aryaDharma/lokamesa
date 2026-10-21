@@ -86,9 +86,11 @@ The second command performs one manual cycle. Check:
 - Poll interval: 60 s (`-IntervalSeconds`, minimum 10).
 - Log: `%LOCALAPPDATA%\DocumentIDE\logs\autoupdate.log`.
 - Installed-SHA state: `%LOCALAPPDATA%\DocumentIDE\last-built.sha`.
-- Failed SHAs: `%LOCALAPPDATA%\DocumentIDE\bad-shas.txt` (build, relaunch or
-  health failure). A new master SHA clears the block automatically; `-Force`
-  retries the current SHA once.
+- Failed SHAs: `%LOCALAPPDATA%\DocumentIDE\bad-shas.txt` (build, swap,
+  relaunch or health failure). A new master SHA clears the block automatically;
+  `-Force` retries the current SHA once. If the state directory itself is
+  unwritable, the watcher still restores/relaunches and suppresses a repeat
+  install of the same SHA for the current run.
 - Single instance: `%LOCALAPPDATA%\DocumentIDE\updater.lock` plus the task's
   `IgnoreNew` policy.
 - Deferred restart: the staged payload stays under
@@ -125,8 +127,9 @@ Automatic:
   quit/relaunch loop; fix the lock/ACL cause and run `-Force` to retry.
 - A failing health check asks the new build to flush and quit gracefully, then
   restores `%LOCALAPPDATA%\Programs\Document IDE.old-<suffix>`, relaunches the old
-  app and leaves `last-built.sha` unchanged. The SHA is marked bad even if the
-  rollback itself fails.
+  app (from the restored install, or from the `.old-*` directory when the restore
+  itself is blocked) and leaves `last-built.sha` unchanged. The SHA is marked bad
+  even if the rollback itself fails.
 - If a crash interrupts a swap, the next run detects the missing install
   directory and restores the newest `.old-*` sibling.
 
