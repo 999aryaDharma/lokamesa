@@ -1,11 +1,16 @@
 param(
     [string]$RepoRoot = "",
-    [switch]$Uninstall
+    [switch]$Uninstall,
+    [ValidateSet("Auto", "ScheduledTask", "Startup")]
+    [string]$Mode = "Auto",
+    [string]$StartupFolder = ""
 )
 
-# DEV-UPD — registers the local auto-update watcher as a per-user logon task.
-# No administrator rights are required: the task runs as the current user at
-# the limited run level and only touches %LOCALAPPDATA%.
+# DEV-UPD — registers the local auto-update watcher as a per-user logon entry.
+# No administrator rights are required. The default tries Task Scheduler and,
+# when the machine denies non-admin task creation, falls back to a shortcut in
+# the current user's Startup folder. Both run as the current user at the
+# limited run level and only touch %LOCALAPPDATA%.
 #
 # Run this only after the auto-update branch is merged to master. The installed
 # app must already have the /api/app/* control surface and runtime.json
@@ -13,23 +18,44 @@ param(
 
 $ErrorActionPreference = "Stop"
 $taskName = "DocumentIDE Dev Auto-Update"
+$startup = if ([string]::IsNullOrWhiteSpace($StartupFolder)) {
+    [Environment]::GetFolderPath("Startup")
+}
+else {
+    $StartupFolder
+}
+$shortcutPath = Join-Path $startup "$taskName.lnk"
+
+function Remove-StartupEntry {
+    if (Test-Path -LiteralPath $shortcutPath) {
+        Remove-Item -LiteralPath $shortcutPath -Force
+        Write-Host "Removed Startup shortcut '$shortcutPath'."
+    }
+}
 
 if ($Uninstall) {
-    $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-    if ($null -eq $task) {
-        Write-Host "Task '$taskName' is not registered."
-        exit 0
+    if ($Mode -ne "Startup") {
+        $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+        if ($null -ne $task) {
+            try {
+                Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+            }
+            catch {
+                # Not running, or already stopped.
+            }
+
+            Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
+            Write-Host "Removed scheduled task '$taskName'."
+        }
+        elseif ($Mode -eq "ScheduledTask") {
+            Write-Host "Task '$taskName' is not registered."
+        }
     }
 
-    try {
-        Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-    }
-    catch {
-        # Not running, or already stopped.
+    if ($Mode -ne "ScheduledTask") {
+        Remove-StartupEntry
     }
 
-    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
-    Write-Host "Removed scheduled task '$taskName'."
     exit 0
 }
 
@@ -52,38 +78,81 @@ if ([string]::IsNullOrWhiteSpace($pwsh)) {
 
 $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 
-$action = New-ScheduledTaskAction `
-    -Execute $pwsh `
-    -Argument "-NoProfile -WindowStyle Hidden -File `"$watcher`"" `
-    -WorkingDirectory $repo
+function Install-StartupEntry {
+    New-Item -ItemType Directory -Path $startup -Force | Out-Null
 
-$trigger = New-ScheduledTaskTrigger -AtLogOn
+    $shell = New-Object -ComObject WScript.Shell
+    try {
+        $shortcut = $shell.CreateShortcut($shortcutPath)
+        $shortcut.TargetPath = $pwsh
+        $shortcut.Arguments = "-NoProfile -WindowStyle Hidden -File `"$watcher`""
+        $shortcut.WorkingDirectory = $repo
+        $shortcut.WindowStyle = 7
+        $shortcut.Description = "Rebuilds and restarts Document IDE when origin/master advances (developer machine only)."
+        $shortcut.Save()
+    }
+    finally {
+        [void][Runtime.InteropServices.Marshal]::ReleaseComObject($shell)
+    }
 
-# Unlimited runtime; never start a second watcher (the script also holds
-# updater.lock as a second line of defense).
-$settings = New-ScheduledTaskSettingsSet `
-    -AllowStartIfOnBatteries `
-    -DontStopIfGoingOnBatteries `
-    -StartWhenAvailable `
-    -ExecutionTimeLimit ([TimeSpan]::Zero) `
-    -MultipleInstances IgnoreNew
+    Write-Host "Registered per-user Startup shortcut '$shortcutPath' for $identity."
+    Write-Host "  watcher: $watcher"
+    Write-Host "  log:     $env:LOCALAPPDATA\DocumentIDE\logs\autoupdate.log"
+    Write-Host "  remove:  scripts\install-dev-autoupdate.ps1 -Uninstall"
+}
 
-$principal = New-ScheduledTaskPrincipal `
-    -UserId $identity `
-    -LogonType Interactive `
-    -RunLevel Limited
+if ($Mode -ne "Startup") {
+    $action = New-ScheduledTaskAction `
+        -Execute $pwsh `
+        -Argument "-NoProfile -WindowStyle Hidden -File `"$watcher`"" `
+        -WorkingDirectory $repo
 
-Register-ScheduledTask `
-    -TaskName $taskName `
-    -Action $action `
-    -Trigger $trigger `
-    -Settings $settings `
-    -Principal $principal `
-    -Description "Rebuilds and restarts Document IDE when origin/master advances (developer machine only)." `
-    -Force | Out-Null
+    $trigger = New-ScheduledTaskTrigger -AtLogOn
 
-Write-Host "Registered scheduled task '$taskName' for $identity."
-Write-Host "  watcher: $watcher"
-Write-Host "  log:     $env:LOCALAPPDATA\DocumentIDE\logs\autoupdate.log"
-Write-Host "  remove:  scripts\install-dev-autoupdate.ps1 -Uninstall"
+    # Unlimited runtime; never start a second watcher (the script also holds
+    # updater.lock as a second line of defense).
+    $settings = New-ScheduledTaskSettingsSet `
+        -AllowStartIfOnBatteries `
+        -DontStopIfGoingOnBatteries `
+        -StartWhenAvailable `
+        -ExecutionTimeLimit ([TimeSpan]::Zero) `
+        -MultipleInstances IgnoreNew
+
+    $principal = New-ScheduledTaskPrincipal `
+        -UserId $identity `
+        -LogonType Interactive `
+        -RunLevel Limited
+
+    try {
+        Register-ScheduledTask `
+            -TaskName $taskName `
+            -Action $action `
+            -Trigger $trigger `
+            -Settings $settings `
+            -Principal $principal `
+            -Description "Rebuilds and restarts Document IDE when origin/master advances (developer machine only)." `
+            -Force `
+            -ErrorAction Stop | Out-Null
+
+        if ($Mode -eq "Auto") {
+            Remove-StartupEntry
+        }
+
+        Write-Host "Registered scheduled task '$taskName' for $identity."
+        Write-Host "  watcher: $watcher"
+        Write-Host "  log:     $env:LOCALAPPDATA\DocumentIDE\logs\autoupdate.log"
+        Write-Host "  remove:  scripts\install-dev-autoupdate.ps1 -Uninstall"
+        exit 0
+    }
+    catch {
+        if ($Mode -eq "ScheduledTask") {
+            throw
+        }
+
+        Write-Warning "Scheduled task registration failed: $($_.Exception.Message)"
+        Write-Warning "Falling back to the per-user Startup folder (no administrator rights required)."
+    }
+}
+
+Install-StartupEntry
 exit 0

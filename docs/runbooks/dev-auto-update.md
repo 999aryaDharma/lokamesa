@@ -6,7 +6,7 @@ deployment.
 
 ## What it does
 
-`scripts/dev-autoupdate.ps1` runs as a per-user logon task and repeats:
+`scripts/dev-autoupdate.ps1` starts at logon as the current user and repeats:
 
 1. `git fetch origin master` in the dedicated worktree `D:\document-ide-master`
    and compare `origin/master` with `%LOCALAPPDATA%\DocumentIDE\last-built.sha`.
@@ -42,7 +42,7 @@ not running, the payload is swapped but the app is not launched.
 
 - Windows 10/11 with PowerShell 7 (`pwsh`) and Git.
 - .NET SDK **10.0.302** and Node **22** + npm on the user `PATH` (the watcher's
-  logon-task environment uses the user environment, not this shell's extras).
+  logon environment uses the user environment, not this shell's extras).
 - WiX v7 (`wix.exe`, usually `%USERPROFILE%\.dotnet\tools\wix.exe`) only for
   release MSI builds; the auto-updater never builds an MSI.
 - `gh` is optional.
@@ -62,7 +62,7 @@ A per-machine install cannot be upgraded in place to a **per-user** product
 4. Launch the app once and confirm that
    `%LOCALAPPDATA%\DocumentIDE\runtime.json` appears while it is running.
 5. Confirm the branch with the control surface is on `master` before enabling
-   the task.
+   the logon entry.
 
 Documents, the database, history and the WebView profile under
 `%LOCALAPPDATA%\DocumentIDE` are not moved or deleted by this migration.
@@ -74,6 +74,12 @@ pwsh -NoProfile -File scripts/install-dev-autoupdate.ps1
 pwsh -NoProfile -File scripts/dev-autoupdate.ps1 -Once
 ```
 
+The installer tries Task Scheduler first. If the machine denies non-admin task
+creation (`Access is denied`), it falls back to a shortcut named
+**DocumentIDE Dev Auto-Update** in the current user's Startup folder. Both start
+at logon, run hidden and need no elevation. Use `-Mode ScheduledTask` or
+`-Mode Startup` to force one mechanism; the default is `-Mode Auto`.
+
 The second command performs one manual cycle. Check:
 
 - `%LOCALAPPDATA%\DocumentIDE\logs\autoupdate.log`
@@ -82,7 +88,8 @@ The second command performs one manual cycle. Check:
 
 ## Day-to-day
 
-- The task **DocumentIDE Dev Auto-Update** starts at logon and runs hidden.
+- The **DocumentIDE Dev Auto-Update** scheduled task (or Startup shortcut, when
+  Task Scheduler is locked down) starts at logon and runs hidden.
 - Poll interval: 60 s (`-IntervalSeconds`, minimum 10).
 - Log: `%LOCALAPPDATA%\DocumentIDE\logs\autoupdate.log`.
 - Installed-SHA state: `%LOCALAPPDATA%\DocumentIDE\last-built.sha`.
@@ -92,7 +99,7 @@ The second command performs one manual cycle. Check:
   unwritable, the watcher still restores/relaunches and suppresses a repeat
   install of the same SHA for the current run.
 - Single instance: `%LOCALAPPDATA%\DocumentIDE\updater.lock` plus the task's
-  `IgnoreNew` policy.
+  `IgnoreNew` policy (the Startup shortcut relies on the lock).
 - Deferred restart: the staged payload stays under
   `%LOCALAPPDATA%\DocumentIDE\staging\<sha>` and is reused on the next poll; the
   build is not repeated.
@@ -103,8 +110,9 @@ The second command performs one manual cycle. Check:
 pwsh -NoProfile -File scripts/install-dev-autoupdate.ps1 -Uninstall
 ```
 
-This stops the task if it is running and unregisters it. It does not uninstall
-the app or delete data.
+This stops and unregisters the scheduled task, or removes the Startup shortcut,
+depending on what the installer created. It does not uninstall the app or delete
+data. In the default `-Mode Auto` mode it removes both if present.
 
 ## Manual rebuild
 
@@ -160,12 +168,12 @@ already lives under the per-user `%LOCALAPPDATA%` profile.
 
 | Symptom | Check | Fix |
 | --- | --- | --- |
-| Push to `master` does nothing | `last-built.sha` equals `origin/master`; `bad-shas.txt`; task state | Push a new commit; retry a marked SHA with `-Force`; `Get-ScheduledTask "DocumentIDE Dev Auto-Update"` |
+| Push to `master` does nothing | `last-built.sha` equals `origin/master`; `bad-shas.txt`; logon-entry state | Push a new commit; retry a marked SHA with `-Force`; check `Get-ScheduledTask "DocumentIDE Dev Auto-Update"` and the Startup shortcut (`shell:startup`) |
 | Build fails | `autoupdate.log`; run `publish-payload.ps1` manually in the worktree | Fix the build; the old app keeps running; the SHA is marked bad until a new commit or `-Force` |
 | App never restarts | `runtime.json` missing or stale; installed app version | Install the 1.0.2 per-user build with the handshake; merge the branch |
 | `prepare-restart` refused | log reason `busy` or a save error | Wait for the mutation or fix the save; the update retries |
 | Repeated rollback | health check details in the log; run the new exe manually | Fix health; the old install stays until the next attempt |
-| Two watchers | `updater.lock`; task instances | Uninstall/re-register the task; the lock is exclusive |
+| Two watchers | `updater.lock`; task/Startup instances | Uninstall/re-register the logon entry; the lock is exclusive |
 
 ## Verification
 

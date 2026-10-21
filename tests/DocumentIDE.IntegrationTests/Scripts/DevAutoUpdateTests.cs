@@ -77,6 +77,66 @@ public sealed class DevAutoUpdateTests
         Assert.Contains("AtLogOn", script);
         Assert.Contains("DocumentIDE Dev Auto-Update", script);
         Assert.Contains("-Uninstall", script);
+        Assert.Contains("StartupFolder", script);
+        Assert.Contains("CreateShortcut", script);
+    }
+
+    [Fact]
+    public void Task_installer_startup_fallback_creates_and_removes_a_per_user_shortcut()
+    {
+        string startup = Directory.CreateTempSubdirectory("documentide-startup-").FullName;
+        string shortcutPath = Path.Combine(startup, "DocumentIDE Dev Auto-Update.lnk");
+
+        try
+        {
+            var install = RunInstaller($"-Mode Startup -StartupFolder \"{startup}\"");
+            Assert.True(install.ExitCode == 0, install.Output);
+            Assert.True(File.Exists(shortcutPath), install.Output);
+
+            Type? shellType = Type.GetTypeFromProgID("WScript.Shell");
+            Assert.NotNull(shellType);
+            dynamic shell = Activator.CreateInstance(shellType!)!;
+            dynamic shortcut = shell.CreateShortcut(shortcutPath);
+
+            Assert.EndsWith("pwsh.exe", (string)shortcut.TargetPath, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("dev-autoupdate.ps1", (string)shortcut.Arguments, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("-WindowStyle Hidden", (string)shortcut.Arguments, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(GetRepoRoot(), (string)shortcut.WorkingDirectory, ignoreCase: true);
+
+            var uninstall = RunInstaller($"-Mode Startup -Uninstall -StartupFolder \"{startup}\"");
+            Assert.True(uninstall.ExitCode == 0, uninstall.Output);
+            Assert.False(File.Exists(shortcutPath), uninstall.Output);
+        }
+        finally
+        {
+            if (Directory.Exists(startup))
+            {
+                Directory.Delete(startup, recursive: true);
+            }
+        }
+    }
+
+    private static (int ExitCode, string Output) RunInstaller(string arguments)
+    {
+        var psi = new ProcessStartInfo(
+            "pwsh",
+            $"-NoProfile -File scripts/install-dev-autoupdate.ps1 {arguments}")
+        {
+            WorkingDirectory = GetRepoRoot(),
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+
+        using var process = Process.Start(psi)!;
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+
+        bool exited = process.WaitForExit(120_000);
+        string output = stdout.GetAwaiter().GetResult() + stderr.GetAwaiter().GetResult();
+
+        Assert.True(exited, "installer timed out: " + output);
+        return (process.ExitCode, output);
     }
 
     private static string GetRepoRoot()
