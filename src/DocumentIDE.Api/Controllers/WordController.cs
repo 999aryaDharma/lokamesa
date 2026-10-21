@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using DocumentIDE.Core.Activity;
 using DocumentIDE.Core.Word;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -11,10 +12,12 @@ public record OpenWordDocumentRequest(string DocumentId);
 public class WordController : ControllerBase
 {
     private readonly IWordDesktopLauncher _wordLauncher;
+    private readonly ActivityGate _activity;
 
-    public WordController(IWordDesktopLauncher wordLauncher)
+    public WordController(IWordDesktopLauncher wordLauncher, ActivityGate activity)
     {
         _wordLauncher = wordLauncher;
+        _activity = activity;
     }
 
     [HttpPost("api/word/open")]
@@ -41,6 +44,7 @@ public class WordController : ControllerBase
 
     private async Task<IActionResult> HandleOpenResultAsync(string documentId)
     {
+        using var lease = _activity.Enter("word-open");
         var result = await _wordLauncher.OpenDocumentAsync(documentId);
 
         if (result.Success)

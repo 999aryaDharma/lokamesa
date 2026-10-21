@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using DocumentIDE.Core.Activity;
 using DocumentIDE.Core.Domain.Repositories;
 using DocumentIDE.Core.History;
 using DocumentIDE.Core.SourceControl;
@@ -363,6 +364,7 @@ public sealed class SourceControlController : ControllerBase
     private readonly IDocumentRepository _documents;
     private readonly IWorkSessionService _workSessions;
     private readonly GitConflictService _conflicts;
+    private readonly ActivityGate _activity;
 
     public SourceControlController(
         GitRepositoryService repositories,
@@ -375,7 +377,8 @@ public sealed class SourceControlController : ControllerBase
         IDocumentRepository documents,
         IWorkSessionService workSessions,
         GitPullService pulls,
-        GitConflictService conflicts)
+        GitConflictService conflicts,
+        ActivityGate activity)
     {
         _repositories = repositories ?? throw new ArgumentNullException(nameof(repositories));
         _stages = stages ?? throw new ArgumentNullException(nameof(stages));
@@ -388,6 +391,7 @@ public sealed class SourceControlController : ControllerBase
         _workSessions = workSessions ?? throw new ArgumentNullException(nameof(workSessions));
         _pulls = pulls ?? throw new ArgumentNullException(nameof(pulls));
         _conflicts = conflicts ?? throw new ArgumentNullException(nameof(conflicts));
+        _activity = activity ?? throw new ArgumentNullException(nameof(activity));
     }
 
     /// <summary>
@@ -537,6 +541,7 @@ public sealed class SourceControlController : ControllerBase
         GitCommitFlow flow,
         CancellationToken cancellationToken)
     {
+        using var lease = _activity.Enter("git");
         if (request is null || string.IsNullOrWhiteSpace(request.Path))
         {
             return PathRequiredBadRequest("request field");
@@ -653,6 +658,7 @@ public sealed class SourceControlController : ControllerBase
         [FromBody] SourceControlFetchRequest? request,
         CancellationToken cancellationToken)
     {
+        using var lease = _activity.Enter("git");
         if (request is null || string.IsNullOrWhiteSpace(request.Path))
         {
             return PathRequiredBadRequest("request field");
@@ -743,6 +749,7 @@ public sealed class SourceControlController : ControllerBase
         bool stage,
         CancellationToken cancellationToken)
     {
+        using var lease = _activity.Enter("git");
         if (request is null || string.IsNullOrWhiteSpace(request.Path))
         {
             return PathRequiredBadRequest("request field");
@@ -759,6 +766,7 @@ public sealed class SourceControlController : ControllerBase
         bool stage,
         CancellationToken cancellationToken)
     {
+        using var lease = _activity.Enter("git");
         if (request is null || string.IsNullOrWhiteSpace(request.Path))
         {
             return PathRequiredBadRequest("request field");
@@ -1119,6 +1127,7 @@ public sealed class SourceControlController : ControllerBase
         [FromBody] SourceControlPushRequest? request,
         CancellationToken cancellationToken)
     {
+        using var lease = _activity.Enter("git");
         if (request is null || string.IsNullOrWhiteSpace(request.Path))
         {
             return PathRequiredBadRequest("request field");
@@ -1168,6 +1177,7 @@ public sealed class SourceControlController : ControllerBase
         [FromBody] SourceControlPullRequest? request,
         CancellationToken cancellationToken)
     {
+        using var lease = _activity.Enter("git");
         if (request is null || string.IsNullOrWhiteSpace(request.Path))
         {
             return PathRequiredBadRequest("request field");
@@ -1442,6 +1452,7 @@ public sealed class SourceControlController : ControllerBase
         GitRestoreMode mode,
         CancellationToken cancellationToken)
     {
+        using var lease = _activity.Enter("git");
         if (request is null || string.IsNullOrWhiteSpace(request.Path))
         {
             return PathRequiredBadRequest("request field");
@@ -1704,6 +1715,7 @@ public sealed class SourceControlController : ControllerBase
         [FromServices] IGitWorktreeService worktrees,
         CancellationToken cancellationToken)
     {
+        using var lease = _activity.Enter("git");
         GitWorktreeOpenResult result = await worktrees.OpenWorktreeAsync(
             new GitWorktreeOpenRequest(
                 request?.WorkspaceId ?? string.Empty,
@@ -1748,6 +1760,7 @@ public sealed class SourceControlController : ControllerBase
         [FromServices] IGitWorktreeMutationService worktrees,
         CancellationToken cancellationToken)
     {
+        using var lease = _activity.Enter("git");
         GitWorktreeCreateResult result = await worktrees.CreateWorktreeAsync(
             new GitWorktreeCreateRequest(
                 request?.WorkingDirectory ?? string.Empty,
@@ -1784,6 +1797,7 @@ public sealed class SourceControlController : ControllerBase
         [FromServices] IGitWorktreeMutationService worktrees,
         CancellationToken cancellationToken)
     {
+        using var lease = _activity.Enter("git");
         GitWorktreeRemoveResult result = await worktrees.RemoveWorktreeAsync(
             new GitWorktreeRemoveRequest(
                 request?.WorkingDirectory ?? string.Empty,
@@ -1821,6 +1835,7 @@ public sealed class SourceControlController : ControllerBase
         [FromServices] IGitWorktreeMutationService worktrees,
         CancellationToken cancellationToken)
     {
+        using var lease = _activity.Enter("git");
         if (request is null || string.IsNullOrWhiteSpace(request.Path))
         {
             return PathRequiredBadRequest("request field");

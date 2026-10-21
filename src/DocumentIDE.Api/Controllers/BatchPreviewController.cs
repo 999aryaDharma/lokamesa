@@ -1,3 +1,4 @@
+using DocumentIDE.Core.Activity;
 using DocumentIDE.Core.Batch;
 using DocumentIDE.Core.History;
 using DocumentIDE.Infrastructure.Batch;
@@ -15,7 +16,8 @@ public sealed class BatchPreviewController(
     BatchApplyCoordinator applies,
     UndoService undo,
     JsonlHistoryStore history,
-    AppDb db) : ControllerBase
+    AppDb db,
+    ActivityGate activity) : ControllerBase
 {
     [HttpGet("workspaces")]
     public async Task<IActionResult> Workspaces() => Ok((await new WorkspaceRepository(db).GetAllAsync()).Select(w => new { w.Id, w.Name }));
@@ -57,6 +59,7 @@ public sealed class BatchPreviewController(
     [HttpPost("{planId}/apply")]
     public async Task<IActionResult> Apply(string planId, CancellationToken cancellationToken)
     {
+        using var lease = activity.Enter("batch-apply");
         try
         {
             var result = await applies.ApplyAsync(planId, cancellationToken);
@@ -85,6 +88,7 @@ public sealed class BatchPreviewController(
     [HttpPost("{planId}/undo")]
     public async Task<IActionResult> Undo(string planId, CancellationToken cancellationToken)
     {
+        using var lease = activity.Enter("batch-undo");
         try
         {
             var result = await undo.UndoAsync(planId, cancellationToken);

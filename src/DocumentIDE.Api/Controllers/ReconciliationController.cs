@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using DocumentIDE.Core.Activity;
 using DocumentIDE.Core.Filesystem;
 using DocumentIDE.Core.Graph;
 using DocumentIDE.Core.Indexing;
@@ -13,15 +14,18 @@ public class ReconciliationController : ControllerBase
     private readonly IStartupReconciler _reconciler;
     private readonly IncrementalIndexCoordinator _indexCoordinator;
     private readonly MarkdownRelationIndexer _relationIndexer;
+    private readonly ActivityGate _activity;
 
     public ReconciliationController(
         IStartupReconciler reconciler,
         IncrementalIndexCoordinator indexCoordinator,
-        MarkdownRelationIndexer relationIndexer)
+        MarkdownRelationIndexer relationIndexer,
+        ActivityGate activity)
     {
         _reconciler = reconciler;
         _indexCoordinator = indexCoordinator;
         _relationIndexer = relationIndexer;
+        _activity = activity;
     }
 
     /// <summary>
@@ -37,6 +41,7 @@ public class ReconciliationController : ControllerBase
     [HttpPost("reconcile")]
     public async Task<IActionResult> StartReconciliation(string workspaceId)
     {
+        using var lease = _activity.Enter("reconcile");
         var result = await _reconciler.ReconcileWorkspaceAsync(workspaceId);
         await _indexCoordinator.ReindexWorkspaceAsync(workspaceId);
         await _relationIndexer.ReindexWorkspaceAsync(workspaceId);
