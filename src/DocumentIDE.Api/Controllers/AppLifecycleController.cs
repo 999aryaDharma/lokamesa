@@ -76,11 +76,22 @@ public sealed class AppLifecycleController(
             return Conflict(new { ok = false, reason = "busy" });
         }
 
-        // Let the 202 response reach the watcher before the host stops.
-        _ = Task.Run(async () =>
+        // Stop only after the 202 has been written, and give a mutation that
+        // entered the gate between the check and the response time to finish.
+        // The watcher waits for the process; if the gate stays busy, the host
+        // stays alive and the next poll defers instead of interrupting work.
+        Response.OnCompleted(async () =>
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(100));
-            lifetime.StopApplication();
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (activity.IsBusy && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(50));
+            }
+
+            if (!activity.IsBusy)
+            {
+                lifetime.StopApplication();
+            }
         });
 
         return Accepted(new { ok = true });

@@ -298,9 +298,10 @@ function Read-Runtime {
         return $null
     }
 
-    # A crash can leave runtime.json behind. Reject it when the PID is gone or
-    # when the file predates this process by more than the allowed skew.
-    if ($fileTime -lt $processStart.AddMinutes(-5)) { return $null }
+    # A crash can leave runtime.json behind. runtime.json is written after the
+    # process starts, so allow only a tiny clock skew: a crash artifact from an
+    # earlier process with a reused PID must never contribute its port or token.
+    if ($fileTime -lt $processStart.AddSeconds(-2)) { return $null }
 
     return [pscustomobject]@{
         pid = $pidValue
@@ -471,11 +472,22 @@ function Invoke-Rollback {
         return
     }
 
-    Move-Item -LiteralPath $OldDir -Destination $InstallDir
-    Write-Log "rollback: restored the previous install at $InstallDir" "WARN"
+    try {
+        Move-Item -LiteralPath $OldDir -Destination $InstallDir -ErrorAction Stop
+        Write-Log "rollback: restored the previous install at $InstallDir" "WARN"
+    }
+    catch {
+        Write-Log "rollback: could not restore $OldDir to $InstallDir : $($_.Exception.Message)" "ERROR"
+        return
+    }
 
     if (-not $NoLaunch -and -not [string]::IsNullOrWhiteSpace($DesktopExe) -and (Test-Path -LiteralPath $DesktopExe)) {
-        $null = Start-Process -FilePath $DesktopExe -WorkingDirectory $InstallDir -PassThru
+        try {
+            $null = Start-Process -FilePath $DesktopExe -WorkingDirectory $InstallDir -PassThru
+        }
+        catch {
+            Write-Log "rollback: could not relaunch $DesktopExe : $($_.Exception.Message)" "ERROR"
+        }
     }
 }
 
@@ -531,8 +543,15 @@ function Restore-InterruptedSwap {
         Select-Object -First 1
 
     if ($null -ne $old) {
-        Move-Item -LiteralPath $old.FullName -Destination $InstallDir
-        Write-Log "recovered an interrupted swap from $($old.FullName)" "WARN"
+        try {
+            Move-Item -LiteralPath $old.FullName -Destination $InstallDir -ErrorAction Stop
+            Write-Log "recovered an interrupted swap from $($old.FullName)" "WARN"
+        }
+        catch {
+            # Recovery is best effort; the caller still needs to try a relaunch
+            # from the .old-* sibling.
+            Write-Log "could not recover the interrupted swap from $($old.FullName): $($_.Exception.Message)" "ERROR"
+        }
     }
 }
 
@@ -683,13 +702,27 @@ function Invoke-UpdateCycle {
         $oldDir = Invoke-Swap -InstallDir $InstallDir -StagingDir $stagingDir
     }
     catch {
-        Write-Log "swap failed: $($_.Exception.Message)" "ERROR"
+        Write-Log "swap failed: $($_.Exception.Message); marked $sha bad (fix the lock, then use -Force)" "ERROR"
+        Add-BadSha -Path $BadShasPath -Sha $sha
 
         # The app was stopped before the swap. Restore an interrupted rename and
         # relaunch the previous build so a failed swap never leaves it closed.
         if ($wasRunning -and -not $NoLaunchApp) {
             Restore-InterruptedSwap -InstallDir $InstallDir
             $previousExe = Join-Path $InstallDir "DocumentIDE.Desktop.exe"
+
+            if (-not (Test-Path -LiteralPath $previousExe)) {
+                $leaf = Split-Path -Leaf $InstallDir
+                $oldCandidate = Get-ChildItem -LiteralPath (Split-Path -Parent $InstallDir) `
+                    -Directory -Filter "$leaf.old-*" -ErrorAction SilentlyContinue |
+                    Sort-Object LastWriteTimeUtc -Descending |
+                    Select-Object -First 1
+
+                if ($null -ne $oldCandidate) {
+                    $previousExe = Join-Path $oldCandidate.FullName "DocumentIDE.Desktop.exe"
+                }
+            }
+
             if (Test-Path -LiteralPath $previousExe) {
                 try {
                     $null = Start-App -ExePath $previousExe
@@ -698,6 +731,9 @@ function Invoke-UpdateCycle {
                 catch {
                     Write-Log "relaunch after the failed swap failed: $($_.Exception.Message)" "ERROR"
                 }
+            }
+            else {
+                Write-Log "no previous executable found after the failed swap; manual relaunch required" "ERROR"
             }
         }
         return
@@ -712,8 +748,8 @@ function Invoke-UpdateCycle {
         }
         catch {
             Write-Log "relaunch failed: $($_.Exception.Message)" "ERROR"
-            Invoke-Rollback -InstallDir $InstallDir -OldDir $oldDir -DesktopExe (Join-Path $InstallDir "DocumentIDE.Desktop.exe")
             Add-BadSha -Path $BadShasPath -Sha $sha
+            Invoke-Rollback -InstallDir $InstallDir -OldDir $oldDir -DesktopExe (Join-Path $InstallDir "DocumentIDE.Desktop.exe")
             Write-Log "marked $sha bad; waiting for a new master SHA" "ERROR"
             return
         }
@@ -721,13 +757,13 @@ function Invoke-UpdateCycle {
         $healthy = Test-Health -ExpectedProcessId $newProcess.Id -RuntimePath $RuntimePath -ExpectedSha $sha
         if (-not $healthy) {
             Write-Log "new build $sha failed its health check; rolling back" "ERROR"
+            Add-BadSha -Path $BadShasPath -Sha $sha
             Invoke-Rollback `
                 -InstallDir $InstallDir `
                 -OldDir $oldDir `
                 -NewProcessId $newProcess.Id `
                 -DesktopExe (Join-Path $InstallDir "DocumentIDE.Desktop.exe") `
                 -RuntimePath $RuntimePath
-            Add-BadSha -Path $BadShasPath -Sha $sha
             Write-Log "marked $sha bad; waiting for a new master SHA" "ERROR"
             return
         }

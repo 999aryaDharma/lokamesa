@@ -26,16 +26,17 @@ deployment.
    error) defers the restart. The save queue serializes the flush behind any
    manual save or autosave already in flight.
 5. `POST /api/app/quit` (409 `{ "ok": false, "reason": "busy" }` re-checks the
-   gate after the flush), wait for the process to exit, swap the install
-   directory, relaunch, then health-check the new process through
+   gate after the flush; the host also waits up to 10 s for a late lease before
+   stopping), wait for the process to exit, swap the install directory,
+   relaunch, then health-check the new process through
    `GET /api/app/status` with the new control token.
 6. Record `last-built.sha` only after a successful swap and health check.
 
 A failed swap rolls the rename back and relaunches the previous app. A failed
-build, failed relaunch or failing health check restores the previous install and
-appends the SHA to `bad-shas.txt`; that SHA is not retried until a new master
-SHA arrives or the operator passes `-Force`. If the app was not running, the
-payload is swapped but the app is not launched.
+build, failed swap, failed relaunch or failing health check restores the
+previous install and appends the SHA to `bad-shas.txt`; that SHA is not retried
+until a new master SHA arrives or the operator passes `-Force`. If the app was
+not running, the payload is swapped but the app is not launched.
 
 ## Prerequisites
 
@@ -119,11 +120,13 @@ the relaunch (useful when inspecting a staged payload).
 Automatic:
 
 - A failed swap restores the original `install/` before returning and relaunches
-  the previous app if it had been running. The swap failure is not marked bad;
-  the next poll retries it.
+  the previous app (from the install directory, or from the newest `.old-*`
+  sibling if the restore itself was blocked). The SHA is marked bad to prevent a
+  quit/relaunch loop; fix the lock/ACL cause and run `-Force` to retry.
 - A failing health check asks the new build to flush and quit gracefully, then
   restores `%LOCALAPPDATA%\Programs\Document IDE.old-<suffix>`, relaunches the old
-  app and leaves `last-built.sha` unchanged. The SHA is marked bad.
+  app and leaves `last-built.sha` unchanged. The SHA is marked bad even if the
+  rollback itself fails.
 - If a crash interrupts a swap, the next run detects the missing install
   directory and restores the newest `.old-*` sibling.
 

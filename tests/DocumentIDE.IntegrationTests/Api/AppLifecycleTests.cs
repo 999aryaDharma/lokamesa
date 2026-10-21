@@ -152,6 +152,22 @@ public sealed class AppLifecycleTests : IDisposable
     }
 
     [Fact]
+    public async Task Quit_requests_shutdown_after_accepting()
+    {
+        var db = await NewDbAsync();
+        await using var host = await WebAppHost.StartAsync(database: db);
+        using var client = Authed(host);
+        var shutdown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        host.ShutdownRequested += () => shutdown.TrySetResult();
+
+        var response = await client.PostAsync("/api/app/quit", content: null);
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var completed = await Task.WhenAny(shutdown.Task, Task.Delay(TimeSpan.FromSeconds(5)));
+        Assert.Same(shutdown.Task, completed);
+    }
+
+    [Fact]
     public async Task Quit_requires_authorization()
     {
         var db = await NewDbAsync();

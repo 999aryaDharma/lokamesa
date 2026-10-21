@@ -155,7 +155,8 @@ On startup the app writes `%LOCALAPPDATA%\DocumentIDE\runtime.json`:
 { "pid": 1234, "port": 51234, "version": "1.0.2.0", "sha": "abc123...", "controlToken": "..." }
 ```
 
-- The file is ACL-restricted to the current user and is deleted on clean exit.
+- The file is ACL-restricted to the current user on a best-effort basis and is
+  deleted on clean exit.
 - The watcher treats `runtime.json` as valid only when the recorded PID is alive **and**
   the file was written by that PID for the current run; stale files left by a crash are
   ignored and cleaned up.
