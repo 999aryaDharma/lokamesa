@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MarkdownEditor } from './MarkdownEditor';
+import { flushForRestart } from './markdownRestartFlush';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -117,5 +118,46 @@ describe('MarkdownEditor Component', () => {
     // Inert text only — the raw source is escaped, never executed as HTML.
     expect(preview.textContent).toContain('<script>alert(1)</script>');
     expect(preview.querySelector('script')).toBeNull();
+  });
+
+  it('flushes a dirty editor through the safe-write API before a restart', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ documentId: 'doc-6', source: 'v1' }))
+      .mockResolvedValue(jsonResponse({ documentId: 'doc-6', savedAt: 'now' }));
+
+    render(<MarkdownEditor documentId="doc-6" />);
+    await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue('v1'));
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'v2' } });
+
+    const result = await act(async () => flushForRestart());
+
+    expect(result).toEqual({ ok: true });
+
+    const putCall = fetchMock.mock.calls.find(([, init]) => (init as RequestInit)?.method === 'PUT');
+    expect(putCall).toBeDefined();
+    expect(JSON.parse((putCall![1] as RequestInit).body as string)).toEqual({ source: 'v2' });
+    await waitFor(() =>
+      expect(screen.getByTestId('markdown-status')).toHaveTextContent('Saved'),
+    );
+  });
+
+  it('reports a failed restart flush and keeps the unsaved source', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ documentId: 'doc-7', source: 'v1' }))
+      .mockResolvedValue(jsonResponse({ error: 'disk full' }, false));
+
+    render(<MarkdownEditor documentId="doc-7" />);
+    await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue('v1'));
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'v2' } });
+
+    const result = await act(async () => flushForRestart());
+
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('disk full');
+    expect(screen.getByRole('textbox')).toHaveValue('v2');
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
   });
 });

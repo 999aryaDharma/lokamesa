@@ -10,6 +10,7 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { loadMarkdown, saveMarkdown } from './markdownApi';
+import { registerRestartFlush } from './markdownRestartFlush';
 
 export type MarkdownEditorMode = 'edit' | 'preview' | 'split';
 
@@ -41,6 +42,24 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loadToken = useRef(0);
+
+  // Latest values for the restart handler, which is registered once per
+  // document and must not capture a stale keystroke.
+  const sourceRef = useRef(source);
+  const savedSourceRef = useRef(savedSource);
+  const documentIdRef = useRef(documentId);
+
+  useEffect(() => {
+    sourceRef.current = source;
+  }, [source]);
+
+  useEffect(() => {
+    savedSourceRef.current = savedSource;
+  }, [savedSource]);
+
+  useEffect(() => {
+    documentIdRef.current = documentId;
+  }, [documentId]);
 
   const isDirty = source !== savedSource;
 
@@ -104,6 +123,32 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     }, autoSaveDelayMs);
     return () => clearTimeout(timer);
   }, [autoSave, autoSaveDelayMs, documentId, isDirty, source, handleSave]);
+
+  // DEV-UPD: a restart waits for this save. A dirty buffer is written through
+  // the same safe-write endpoint as Ctrl+S; a failure keeps the process alive.
+  useEffect(() => {
+    if (!documentId) return;
+
+    return registerRestartFlush(async () => {
+      const id = documentIdRef.current;
+      if (!id) return { ok: true };
+
+      const snapshot = sourceRef.current;
+      if (snapshot === savedSourceRef.current) return { ok: true };
+
+      try {
+        await saveMarkdown(id, snapshot);
+        savedSourceRef.current = snapshot;
+        setSavedSource(snapshot);
+        onSaved?.(id);
+        return { ok: true };
+      } catch (err: unknown) {
+        const reason = err instanceof Error ? err.message : 'Failed to save Markdown document.';
+        setError(reason);
+        return { ok: false, reason };
+      }
+    });
+  }, [documentId, onSaved]);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setSource(e.target.value);
