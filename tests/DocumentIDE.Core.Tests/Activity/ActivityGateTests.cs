@@ -78,4 +78,21 @@ public class ActivityGateTests
         public List<string> Reasons { get; } = new();
         public void Entered(string reason) => Reasons.Add(reason);
     }
+
+    [Fact]
+    public void A_throwing_observer_does_not_leave_a_lease_behind()
+    {
+        var gate = new ActivityGate(new ThrowingObserver());
+
+        Assert.Throws<InvalidOperationException>(() => gate.Enter("batch-apply"));
+
+        Assert.False(gate.IsBusy);
+        Assert.Equal(0, gate.ActiveCount);
+        Assert.Empty(gate.ActiveReasons);
+    }
+
+    private sealed class ThrowingObserver : IActivityObserver
+    {
+        public void Entered(string reason) => throw new InvalidOperationException("observer failed");
+    }
 }

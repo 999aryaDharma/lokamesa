@@ -66,7 +66,7 @@ public class PrivilegedRequestGuard
 
             // Set CORS headers for valid origin
             context.Response.Headers["Access-Control-Allow-Origin"] = origin;
-            context.Response.Headers["Access-Control-Allow-Headers"] = "X-DocumentIDE-Session-Token, Content-Type, Authorization";
+            context.Response.Headers["Access-Control-Allow-Headers"] = "X-DocumentIDE-Session-Token, X-DocumentIDE-Control-Token, Content-Type, Authorization";
             context.Response.Headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS";
             context.Response.Headers["Vary"] = "Origin";
         }
@@ -91,6 +91,9 @@ public class PrivilegedRequestGuard
             }
         }
 
+        // The per-run control token is header-only by design: it is used by the
+        // PowerShell watcher, never by a browser, and it is accepted only on
+        // /api/app/*. Session tokens keep the Authorization: Bearer fallback.
         bool authorized = sessionTokenProvider.ValidateToken(token);
         if (!authorized && IsControlPath(context.Request.Path))
         {

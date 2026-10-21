@@ -143,6 +143,58 @@ describe('MarkdownEditor Component', () => {
     );
   });
 
+  it('serializes a restart flush behind an in-flight save', async () => {
+    let resolveSave: ((value: Response) => void) | undefined;
+    const pendingSave = new Promise<Response>((resolve) => {
+      resolveSave = resolve;
+    });
+
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ documentId: 'doc-8', source: 'v1' }))
+      .mockReturnValueOnce(pendingSave)
+      .mockResolvedValue(jsonResponse({ documentId: 'doc-8', savedAt: 'now' }));
+
+    render(<MarkdownEditor documentId="doc-8" />);
+    await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue('v1'));
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'v2' } });
+    fireEvent.keyDown(window, { key: 's', ctrlKey: true });
+
+    await waitFor(() => {
+      const putCalls = fetchMock.mock.calls.filter(
+        ([, init]) => (init as RequestInit)?.method === 'PUT',
+      );
+      expect(putCalls).toHaveLength(1);
+    });
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'v3' } });
+
+    const flushPromise = flushForRestart();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // The restart write must queue behind the save that is still in flight.
+    const putsBefore = fetchMock.mock.calls.filter(
+      ([, init]) => (init as RequestInit)?.method === 'PUT',
+    );
+    expect(putsBefore).toHaveLength(1);
+
+    resolveSave!(jsonResponse({ documentId: 'doc-8' }));
+    const result = await act(async () => flushPromise);
+
+    expect(result).toEqual({ ok: true });
+
+    const putsAfter = fetchMock.mock.calls.filter(
+      ([, init]) => (init as RequestInit)?.method === 'PUT',
+    );
+    expect(putsAfter).toHaveLength(2);
+    expect(JSON.parse((putsAfter[1][1] as RequestInit).body as string)).toEqual({
+      source: 'v3',
+    });
+  });
+
   it('reports a failed restart flush and keeps the unsaved source', async () => {
     vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(jsonResponse({ documentId: 'doc-7', source: 'v1' }))

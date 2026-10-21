@@ -41,7 +41,8 @@ public sealed class PublishPayloadTests
             Path.Combine(GetRepoRoot(), "scripts", "build-release.ps1"));
 
         Assert.Contains("publish-payload.ps1", script);
-        Assert.Contains("-Version \"1.0.2.0\"", script);
+        Assert.Contains("DocumentIDE.Desktop.csproj", script);
+        Assert.Contains("-Version $version", script);
     }
 
     private static string GetRepoRoot()

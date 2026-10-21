@@ -60,6 +60,8 @@ public class ScriptTests
         string scriptContent = File.ReadAllText(scriptPath);
         Assert.Contains("publish-payload.ps1", scriptContent);
         Assert.Contains("artifacts", scriptContent);
+        Assert.Contains("DocumentIDE.Desktop.csproj", scriptContent);
+        Assert.Contains("-Version $version", scriptContent);
 
         string publisherPath = Path.Combine(repoRoot, "scripts", "publish-payload.ps1");
         Assert.True(File.Exists(publisherPath), $"Publisher should exist at {publisherPath}");

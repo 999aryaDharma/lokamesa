@@ -25,13 +25,14 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$script:Version = "1.0.2.0"
 $script:DataRoot = Join-Path $env:LOCALAPPDATA "DocumentIDE"
 $script:LogDir = Join-Path $script:DataRoot "logs"
 $script:LogPath = Join-Path $script:LogDir "autoupdate.log"
 $script:RuntimePath = Join-Path $script:DataRoot "runtime.json"
 $script:LastBuiltPath = Join-Path $script:DataRoot "last-built.sha"
+$script:BadShasPath = Join-Path $script:DataRoot "bad-shas.txt"
 $script:LockPath = Join-Path $script:DataRoot "updater.lock"
+$script:MissingInstallLogged = $false
 $script:StagingRoot = Join-Path $script:DataRoot "staging"
 $script:InstallDir = Join-Path $env:LOCALAPPDATA "Programs\Document IDE"
 
@@ -84,18 +85,105 @@ function Get-MasterSha {
     return $sha
 }
 
+function Get-RepoVersion {
+    param([Parameter(Mandatory)][string]$RepoRoot)
+
+    $csprojPath = Join-Path $RepoRoot "src\DocumentIDE.Desktop\DocumentIDE.Desktop.csproj"
+    if (-not (Test-Path -LiteralPath $csprojPath)) { throw "Project file missing: $csprojPath" }
+
+    [xml]$project = Get-Content -LiteralPath $csprojPath -Raw
+    $versionNode = @($project.Project.PropertyGroup.Version) |
+        Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } |
+        Select-Object -First 1
+
+    if ($null -eq $versionNode) { throw "No <Version> element in $csprojPath" }
+    return ([string]$versionNode).Trim()
+}
+
+function Test-BadSha {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Sha
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) { return $false }
+    $lines = @(Get-Content -LiteralPath $Path | ForEach-Object { $_.Trim() })
+    return $lines -contains $Sha
+}
+
+function Add-BadSha {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Sha
+    )
+
+    if (Test-BadSha -Path $Path -Sha $Sha) { return }
+    New-Item -ItemType Directory -Path (Split-Path -Parent $Path) -Force | Out-Null
+    Add-Content -LiteralPath $Path -Value $Sha -Encoding ASCII
+}
+
+function Remove-BadSha {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Sha
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+
+    $remaining = @(Get-Content -LiteralPath $Path |
+        ForEach-Object { $_.Trim() } |
+        Where-Object { $_ -and $_ -ne $Sha })
+
+    if ($remaining.Count -eq 0) {
+        Remove-Item -LiteralPath $Path -Force
+    }
+    else {
+        Set-Content -LiteralPath $Path -Value $remaining -Encoding ASCII
+    }
+}
+
 function Test-NewBuild {
     param(
         [Parameter(Mandatory)][string]$Sha,
         [Parameter(Mandatory)][string]$LastBuiltPath,
+        [string]$BadShasPath = "",
         [switch]$ForceBuild
     )
 
     if ($ForceBuild) { return $true }
+
+    # A SHA whose build or health check already failed is not retried until a
+    # new master SHA arrives or the operator passes -Force.
+    if (-not [string]::IsNullOrWhiteSpace($BadShasPath) -and
+        (Test-BadSha -Path $BadShasPath -Sha $Sha)) {
+        return $false
+    }
+
     if (-not (Test-Path -LiteralPath $LastBuiltPath)) { return $true }
 
-    $last = (Get-Content -LiteralPath $LastBuiltPath -Raw).Trim()
-    return $last -ne $Sha
+    $raw = Get-Content -LiteralPath $LastBuiltPath -Raw
+    if ([string]::IsNullOrWhiteSpace($raw)) { return $true }
+    return $raw.Trim() -ne $Sha
+}
+
+function Test-AppProcessRunning {
+    param([Parameter(Mandatory)][string]$InstallDir)
+
+    $prefix = $InstallDir.TrimEnd('\') + '\'
+
+    foreach ($process in @(Get-Process -Name "DocumentIDE.Desktop" -ErrorAction SilentlyContinue)) {
+        try {
+            if (-not [string]::IsNullOrWhiteSpace($process.Path) -and
+                $process.Path.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
+                return $true
+            }
+        }
+        catch {
+            # Access to Path is best effort; another process is not our app.
+        }
+    }
+
+    return $false
 }
 
 function Test-StagedPayload {
@@ -127,19 +215,30 @@ function Invoke-Build {
         [Parameter(Mandatory)][string]$Worktree,
         [Parameter(Mandatory)][string]$Sha,
         [Parameter(Mandatory)][string]$StagingDir,
-        [Parameter(Mandatory)][string]$Version,
-        [Parameter(Mandatory)][string]$PublisherPath
+        [string]$Version = "",
+        [Parameter(Mandatory)][string]$PublisherPath,
+        [switch]$SkipGit
     )
 
-    & git -C $Worktree reset --hard origin/master --quiet
-    if ($LASTEXITCODE -ne 0) { throw "git reset --hard origin/master failed in $Worktree" }
+    if (-not $SkipGit) {
+        & git -C $Worktree reset --hard origin/master --quiet
+        if ($LASTEXITCODE -ne 0) { throw "git reset --hard origin/master failed in $Worktree" }
+    }
+
+    # Read the version after the checkout matches origin/master: a version bump
+    # in the commit being installed must be part of that build.
+    if ([string]::IsNullOrWhiteSpace($Version)) {
+        $Version = Get-RepoVersion -RepoRoot $Worktree
+    }
 
     if (Test-Path -LiteralPath $StagingDir) {
         Remove-Item -LiteralPath $StagingDir -Recurse -Force
     }
     New-Item -ItemType Directory -Path $StagingDir -Force | Out-Null
 
-    & $PublisherPath -RepoRoot $Worktree -OutputDir $StagingDir -Version $Version -Sha $Sha
+    # The publisher emits native build output on the success stream. Capture it
+    # so Invoke-Build returns exactly one value: the staging path.
+    $null = & $PublisherPath -RepoRoot $Worktree -OutputDir $StagingDir -Version $Version -Sha $Sha
     if ($LASTEXITCODE -ne 0) { throw "publish-payload.ps1 failed for $Sha" }
 
     $manifest = [ordered]@{
@@ -186,6 +285,10 @@ function Read-Runtime {
     }
 
     if ($null -eq $process -or $process.HasExited) { return $null }
+
+    # PID reuse must not point the watcher (and its control token) at an
+    # unrelated process.
+    if ($process.ProcessName -ne "DocumentIDE.Desktop") { return $null }
 
     try {
         $fileTime = (Get-Item -LiteralPath $Path).LastWriteTimeUtc
@@ -321,14 +424,31 @@ function Invoke-Rollback {
         [string]$OldDir = "",
         [int]$NewProcessId = 0,
         [string]$DesktopExe = "",
+        [string]$RuntimePath = "",
         [switch]$NoLaunch
     )
 
     if ($NewProcessId -gt 0) {
-        $process = Get-Process -Id $NewProcessId -ErrorAction SilentlyContinue
-        if ($null -ne $process) {
-            Stop-Process -Id $NewProcessId -Force -ErrorAction SilentlyContinue
-            $null = $process.WaitForExit(10000)
+        $graceful = $false
+        if (-not [string]::IsNullOrWhiteSpace($RuntimePath)) {
+            $runtime = Read-Runtime -Path $RuntimePath
+            if ($null -ne $runtime -and $runtime.pid -eq $NewProcessId) {
+                $prepared = Request-PrepareRestart -Port $runtime.port -ControlToken $runtime.controlToken
+                if ($prepared.ok) {
+                    $graceful = Request-Quit -Port $runtime.port -ControlToken $runtime.controlToken -ProcessId $NewProcessId
+                }
+                else {
+                    Write-Log "rollback: the new build could not flush ($($prepared.reason)); stopping it" "WARN"
+                }
+            }
+        }
+
+        if (-not $graceful) {
+            $process = Get-Process -Id $NewProcessId -ErrorAction SilentlyContinue
+            if ($null -ne $process) {
+                Stop-Process -Id $NewProcessId -Force -ErrorAction SilentlyContinue
+                $null = $process.WaitForExit(10000)
+            }
         }
     }
 
@@ -429,6 +549,7 @@ function Initialize-Worktree {
         return
     }
 
+    & git -C $Repo worktree prune
     & git -C $Repo fetch origin master --quiet
     if ($LASTEXITCODE -ne 0) { throw "git fetch origin master failed in $Repo" }
 
@@ -462,7 +583,8 @@ function Invoke-UpdateCycle {
         [Parameter(Mandatory)][string]$StagingRoot,
         [Parameter(Mandatory)][string]$RuntimePath,
         [Parameter(Mandatory)][string]$LastBuiltPath,
-        [Parameter(Mandatory)][string]$Version,
+        [Parameter(Mandatory)][string]$BadShasPath,
+        [string]$Version = "",
         [switch]$ForceBuild,
         [switch]$NoLaunchApp
     )
@@ -470,13 +592,21 @@ function Invoke-UpdateCycle {
     Restore-InterruptedSwap -InstallDir $InstallDir
 
     if (-not (Test-Path -LiteralPath $InstallDir)) {
-        Write-Log "install directory missing at $InstallDir; install the per-user MSI once" "ERROR"
+        if (-not $script:MissingInstallLogged) {
+            Write-Log "install directory missing at $InstallDir; install the per-user MSI once" "WARN"
+            $script:MissingInstallLogged = $true
+        }
         return
     }
 
     $sha = Get-MasterSha -Worktree $Worktree
-    if (-not (Test-NewBuild -Sha $sha -LastBuiltPath $LastBuiltPath -ForceBuild:([bool]$ForceBuild))) {
-        Write-Log "master $sha is already installed"
+    if (-not (Test-NewBuild -Sha $sha -LastBuiltPath $LastBuiltPath -BadShasPath $BadShasPath -ForceBuild:([bool]$ForceBuild))) {
+        if (Test-BadSha -Path $BadShasPath -Sha $sha) {
+            Write-Log "master $sha is marked bad; waiting for a new SHA (or -Force)" "WARN"
+        }
+        else {
+            Write-Log "master $sha is already installed"
+        }
         return
     }
 
@@ -484,17 +614,49 @@ function Invoke-UpdateCycle {
     $stagingDir = Join-Path $StagingRoot $sha
     if (-not (Test-StagedPayload -StagingDir $stagingDir -Sha $sha)) {
         Write-Log "building master $sha in $Worktree"
-        $publisher = Join-Path $Repo "scripts\publish-payload.ps1"
+
+        $publisher = Join-Path $Worktree "scripts\publish-payload.ps1"
+        if (-not (Test-Path -LiteralPath $publisher)) {
+            $publisher = Join-Path $Repo "scripts\publish-payload.ps1"
+        }
         if (-not (Test-Path -LiteralPath $publisher)) {
             throw "publisher missing: $publisher"
         }
-        $stagingDir = Invoke-Build -Worktree $Worktree -Sha $sha -StagingDir $stagingDir -Version $Version -PublisherPath $publisher
+
+        try {
+            $stagingDir = Invoke-Build -Worktree $Worktree -Sha $sha -StagingDir $stagingDir -Version $Version -PublisherPath $publisher
+        }
+        catch {
+            Add-BadSha -Path $BadShasPath -Sha $sha
+            Write-Log "build failed for $sha; marked bad (use -Force to retry): $($_.Exception.Message)" "ERROR"
+            return
+        }
     }
     else {
         Write-Log "reusing the staged payload for $sha"
     }
 
+    # The payload is the source of truth for the version, fresh or reused.
+    $buildInfoPath = Join-Path $stagingDir "build-info.json"
+    if (Test-Path -LiteralPath $buildInfoPath) {
+        try {
+            $Version = [string](Get-Content -LiteralPath $buildInfoPath -Raw | ConvertFrom-Json).version
+        }
+        catch {
+            # Keep the derived version for the log.
+        }
+    }
+
     $runtime = Read-Runtime -Path $RuntimePath
+
+    # A live installed process without a usable runtime.json cannot be stopped
+    # safely; never swap its files. This is also what happens with a pre-1.0.2
+    # install that predates the handshake.
+    if ($null -eq $runtime -and (Test-AppProcessRunning -InstallDir $InstallDir)) {
+        Write-Log "DocumentIDE is running without a usable runtime.json; update deferred" "WARN"
+        return
+    }
+
     $wasRunning = $null -ne $runtime
 
     if ($wasRunning) {
@@ -522,6 +684,22 @@ function Invoke-UpdateCycle {
     }
     catch {
         Write-Log "swap failed: $($_.Exception.Message)" "ERROR"
+
+        # The app was stopped before the swap. Restore an interrupted rename and
+        # relaunch the previous build so a failed swap never leaves it closed.
+        if ($wasRunning -and -not $NoLaunchApp) {
+            Restore-InterruptedSwap -InstallDir $InstallDir
+            $previousExe = Join-Path $InstallDir "DocumentIDE.Desktop.exe"
+            if (Test-Path -LiteralPath $previousExe) {
+                try {
+                    $null = Start-App -ExePath $previousExe
+                    Write-Log "relaunched the previous build after the failed swap" "WARN"
+                }
+                catch {
+                    Write-Log "relaunch after the failed swap failed: $($_.Exception.Message)" "ERROR"
+                }
+            }
+        }
         return
     }
 
@@ -535,6 +713,8 @@ function Invoke-UpdateCycle {
         catch {
             Write-Log "relaunch failed: $($_.Exception.Message)" "ERROR"
             Invoke-Rollback -InstallDir $InstallDir -OldDir $oldDir -DesktopExe (Join-Path $InstallDir "DocumentIDE.Desktop.exe")
+            Add-BadSha -Path $BadShasPath -Sha $sha
+            Write-Log "marked $sha bad; waiting for a new master SHA" "ERROR"
             return
         }
 
@@ -545,7 +725,10 @@ function Invoke-UpdateCycle {
                 -InstallDir $InstallDir `
                 -OldDir $oldDir `
                 -NewProcessId $newProcess.Id `
-                -DesktopExe (Join-Path $InstallDir "DocumentIDE.Desktop.exe")
+                -DesktopExe (Join-Path $InstallDir "DocumentIDE.Desktop.exe") `
+                -RuntimePath $RuntimePath
+            Add-BadSha -Path $BadShasPath -Sha $sha
+            Write-Log "marked $sha bad; waiting for a new master SHA" "ERROR"
             return
         }
     }
@@ -561,6 +744,7 @@ function Invoke-UpdateCycle {
     Get-ChildItem -LiteralPath $installParent -Directory -Filter "$installLeaf.old-*" -ErrorAction SilentlyContinue |
         Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
+    Remove-BadSha -Path $BadShasPath -Sha $sha
     Set-Content -LiteralPath $LastBuiltPath -Value $sha -Encoding ASCII
     Write-Log "installed master $sha (version $Version)"
 
@@ -596,7 +780,7 @@ function Invoke-SelfTest {
             $failures.Add("Read-Runtime accepted a dead PID")
         }
 
-        # A live PID with a fresh file is accepted.
+        # A live PID that is not DocumentIDE.Desktop is rejected (PID identity).
         $live = [ordered]@{
             pid = $PID
             port = 51234
@@ -605,9 +789,8 @@ function Invoke-SelfTest {
             controlToken = "not-logged"
         } | ConvertTo-Json -Compress
         [System.IO.File]::WriteAllText($runtimePath, $live, (New-Object System.Text.UTF8Encoding($false)))
-        $liveRuntime = Read-Runtime -Path $runtimePath
-        if ($null -eq $liveRuntime -or $liveRuntime.pid -ne $PID) {
-            $failures.Add("Read-Runtime rejected a live PID")
+        if ($null -ne (Read-Runtime -Path $runtimePath)) {
+            $failures.Add("Read-Runtime accepted a non-Desktop process")
         }
 
         # 2. Build detection compares the SHA.
@@ -617,6 +800,28 @@ function Invoke-SelfTest {
         }
         if (Test-NewBuild -Sha "aaaa" -LastBuiltPath $lastBuilt) {
             $failures.Add("Test-NewBuild rebuilt the same SHA")
+        }
+
+        [System.IO.File]::WriteAllText($lastBuilt, "", (New-Object System.Text.UTF8Encoding($false)))
+        if (-not (Test-NewBuild -Sha "cccc" -LastBuiltPath $lastBuilt)) {
+            $failures.Add("Test-NewBuild failed on an empty last-built file")
+        }
+
+        # A SHA marked bad is not retried unless -Force is passed.
+        $badShas = Join-Path $Root "bad-shas.txt"
+        Add-BadSha -Path $badShas -Sha "bad1"
+        if (-not (Test-BadSha -Path $badShas -Sha "bad1")) {
+            $failures.Add("Add-BadSha did not persist the SHA")
+        }
+        if (Test-NewBuild -Sha "bad1" -LastBuiltPath $lastBuilt -BadShasPath $badShas) {
+            $failures.Add("Test-NewBuild retried a bad SHA")
+        }
+        if (-not (Test-NewBuild -Sha "bad1" -LastBuiltPath $lastBuilt -BadShasPath $badShas -ForceBuild)) {
+            $failures.Add("-Force did not bypass the bad SHA list")
+        }
+        Remove-BadSha -Path $badShas -Sha "bad1"
+        if (Test-BadSha -Path $badShas -Sha "bad1") {
+            $failures.Add("Remove-BadSha did not forget the SHA")
         }
 
         # 3. Swap replaces install/ and leaves sibling data directories alone.
@@ -673,6 +878,66 @@ function Invoke-SelfTest {
             (Get-Content -LiteralPath (Join-Path $install "version.txt") -Raw).Trim() -ne $beforeRollback) {
             $failures.Add("rollback did not restore the previous install")
         }
+
+        # 6. An interrupted swap (install missing, .old-* sibling present) is
+        #    recovered on the next run.
+        $recoverInstall = Join-Path $Root "recover-install"
+        $recoverOld = Join-Path $Root "recover-install.old-deadbeef"
+        New-Item -ItemType Directory -Path $recoverOld -Force | Out-Null
+        [System.IO.File]::WriteAllText((Join-Path $recoverOld "version.txt"), "recovered")
+        Restore-InterruptedSwap -InstallDir $recoverInstall
+        if (-not (Test-Path -LiteralPath (Join-Path $recoverInstall "version.txt")) -or
+            (Get-Content -LiteralPath (Join-Path $recoverInstall "version.txt") -Raw).Trim() -ne "recovered") {
+            $failures.Add("Restore-InterruptedSwap did not restore the .old-* directory")
+        }
+
+        # 7. Invoke-Build returns exactly one value even when the publisher
+        #    writes native build output. This guards the first-install path.
+        $fakePublisher = Join-Path $Root "fake-publisher.ps1"
+        $fakePublisherScript = @'
+param(
+    [string]$RepoRoot,
+    [string]$OutputDir,
+    [string]$Version,
+    [string]$Sha
+)
+Write-Output "fake publish line one"
+Write-Output "fake publish line two"
+New-Item -ItemType Directory -Path (Join-Path $OutputDir "wwwroot") -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $OutputDir "DocumentIDE.Desktop.exe") -Value "x"
+Set-Content -LiteralPath (Join-Path $OutputDir "DocumentIDE.ShareHost.exe") -Value "x"
+Set-Content -LiteralPath (Join-Path $OutputDir "wwwroot\index.html") -Value "<html></html>"
+Set-Content -LiteralPath (Join-Path $OutputDir "version.txt") -Value $Version
+exit 0
+'@
+        [System.IO.File]::WriteAllText($fakePublisher, $fakePublisherScript, (New-Object System.Text.UTF8Encoding($false)))
+
+        # The version is derived after the checkout, so the fake worktree has a
+        # project file but no git history (SkipGit).
+        $fakeProjectDir = Join-Path $Root "src\DocumentIDE.Desktop"
+        New-Item -ItemType Directory -Path $fakeProjectDir -Force | Out-Null
+        [System.IO.File]::WriteAllText(
+            (Join-Path $fakeProjectDir "DocumentIDE.Desktop.csproj"),
+            '<Project><PropertyGroup><Version>9.9.9.9</Version></PropertyGroup></Project>')
+
+        $buildSha = "0123456789abcdef0123456789abcdef01234567"
+        $buildStaging = Join-Path $Root "build-staging"
+        $built = Invoke-Build -Worktree $Root -Sha $buildSha -StagingDir $buildStaging -Version "" -PublisherPath $fakePublisher -SkipGit
+
+        if ($built -isnot [string]) {
+            $failures.Add("Invoke-Build returned a collection instead of one staging path")
+        }
+        if ([string]$built -ne $buildStaging) {
+            $failures.Add("Invoke-Build returned '$built' instead of '$buildStaging'")
+        }
+        if (-not (Test-StagedPayload -StagingDir $buildStaging -Sha $buildSha)) {
+            $failures.Add("Invoke-Build did not stage a valid payload")
+        }
+        $builtVersionPath = Join-Path $buildStaging "version.txt"
+        if (-not (Test-Path -LiteralPath $builtVersionPath) -or
+            (Get-Content -LiteralPath $builtVersionPath -Raw).Trim() -ne "9.9.9.9") {
+            $failures.Add("Invoke-Build did not derive the version from the checkout")
+        }
     }
     finally {
         if (-not $providedRoot) {
@@ -726,11 +991,14 @@ if ($null -eq $lock) {
 $cycleFailed = $false
 $forceNext = [bool]$Force
 try {
-    Write-Log "watcher started (repo $repo, worktree $worktree, version $($script:Version))"
-    Initialize-Worktree -Repo $repo -Worktree $worktree
+    Write-Log "watcher started (repo $repo, worktree $worktree)"
 
     while ($true) {
         try {
+            # Initialization is retried with the cycle: a transient fetch or a
+            # pruned worktree must not kill the watcher until the next logon.
+            Initialize-Worktree -Repo $repo -Worktree $worktree
+
             Invoke-UpdateCycle `
                 -Repo $repo `
                 -Worktree $worktree `
@@ -738,7 +1006,7 @@ try {
                 -StagingRoot $script:StagingRoot `
                 -RuntimePath $script:RuntimePath `
                 -LastBuiltPath $script:LastBuiltPath `
-                -Version $script:Version `
+                -BadShasPath $script:BadShasPath `
                 -ForceBuild:$forceNext `
                 -NoLaunchApp:([bool]$NoLaunch)
         }

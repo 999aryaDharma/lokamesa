@@ -30,10 +30,23 @@ New-Item -ItemType Directory -Path $artifactsInstallerDir | Out-Null
 
 # 3. Publish the shared payload (web bundle + Desktop + ShareHost + build-info)
 Write-Host "`n[2/3] Publishing the shared payload..." -ForegroundColor Yellow
+
+# One version source: the Desktop project. The watcher derives the same value
+# from master, so a release and an auto-update cannot disagree.
+$projectPath = Join-Path $repoRoot "src\DocumentIDE.Desktop\DocumentIDE.Desktop.csproj"
+[xml]$project = Get-Content -LiteralPath $projectPath -Raw
+$version = ([string](@($project.Project.PropertyGroup.Version) |
+    Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } |
+    Select-Object -First 1)).Trim()
+if ([string]::IsNullOrWhiteSpace($version)) {
+    Write-Host "[FAIL] No <Version> in $projectPath" -ForegroundColor Red
+    exit 1
+}
+
 & (Join-Path $PSScriptRoot "publish-payload.ps1") `
     -RepoRoot $repoRoot `
     -OutputDir $artifactsDesktopDir `
-    -Version "1.0.2.0"
+    -Version $version
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[FAIL] publish-payload.ps1 failed" -ForegroundColor Red
     exit 1

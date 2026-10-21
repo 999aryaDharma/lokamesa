@@ -43,6 +43,15 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   const [error, setError] = useState<string | null>(null);
   const loadToken = useRef(0);
 
+  // Every write goes through one chain: a restart flush must never overtake an
+  // autosave/manual save that is still in flight with older text.
+  const saveQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const enqueueSave = useCallback((id: string, text: string): Promise<unknown> => {
+    const next = saveQueue.current.then(() => saveMarkdown(id, text));
+    saveQueue.current = next.catch(() => undefined);
+    return next;
+  }, []);
+
   // Latest values for the restart handler, which is registered once per
   // document and must not capture a stale keystroke.
   const sourceRef = useRef(source);
@@ -93,7 +102,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     setIsSaving(true);
     setError(null);
     try {
-      await saveMarkdown(documentId, source);
+      await enqueueSave(documentId, source);
       setSavedSource(source);
       onSaved?.(documentId);
     } catch (err: unknown) {
@@ -101,7 +110,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     } finally {
       setIsSaving(false);
     }
-  }, [documentId, isDirty, isSaving, source, onSaved]);
+  }, [documentId, isDirty, isSaving, source, onSaved, enqueueSave]);
 
   // Ctrl+S / Cmd+S manual save.
   useEffect(() => {
@@ -137,7 +146,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
       if (snapshot === savedSourceRef.current) return { ok: true };
 
       try {
-        await saveMarkdown(id, snapshot);
+        await enqueueSave(id, snapshot);
         savedSourceRef.current = snapshot;
         setSavedSource(snapshot);
         onSaved?.(id);
@@ -148,7 +157,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
         return { ok: false, reason };
       }
     });
-  }, [documentId, onSaved]);
+  }, [documentId, onSaved, enqueueSave]);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setSource(e.target.value);

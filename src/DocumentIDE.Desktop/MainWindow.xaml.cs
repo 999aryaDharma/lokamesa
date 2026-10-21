@@ -15,7 +15,6 @@ public partial class MainWindow : Window
 {
     private WebAppHost? _appHost;
     private LocalSessionBridge? _sessionBridge;
-    private RestartCoordinator? _restartCoordinator;
     private RuntimeHandshake? _runtimeHandshake;
 
     public MainWindow()
@@ -30,7 +29,6 @@ public partial class MainWindow : Window
         try
         {
             var restartCoordinator = new RestartCoordinator();
-            _restartCoordinator = restartCoordinator;
             _appHost = await WebAppHost.StartAsync(configureServices: services =>
                 services.AddSingleton<IRestartFlushBridge>(restartCoordinator));
             _appHost.ShutdownRequested += OnShutdownRequested;
@@ -80,14 +78,25 @@ public partial class MainWindow : Window
             // local watcher reads before it stops this process.
             restartCoordinator.FlushAsync = FlushViaWebViewAsync;
             BuildInfo buildInfo = BuildInfo.Load(AppContext.BaseDirectory);
-            _runtimeHandshake = RuntimeHandshake.Write(
-                RuntimeHandshake.DefaultPath,
-                new RuntimeHandshakePayload(
-                    Environment.ProcessId,
-                    _appHost.Port,
-                    buildInfo.Version,
-                    buildInfo.Sha,
-                    _appHost.ControlToken));
+            try
+            {
+                _runtimeHandshake = RuntimeHandshake.Write(
+                    RuntimeHandshake.DefaultPath,
+                    new RuntimeHandshakePayload(
+                        Environment.ProcessId,
+                        _appHost.Port,
+                        buildInfo.Version,
+                        buildInfo.Sha,
+                        _appHost.ControlToken));
+            }
+            catch (Exception ex)
+            {
+                // The handshake only enables the local dev auto-updater. A
+                // locked or unwritable runtime.json must never stop the editor
+                // from opening.
+                System.Diagnostics.Debug.WriteLine(
+                    $"DEV-UPD runtime handshake unavailable: {ex.Message}");
+            }
 
             WebView.NavigationStarting += (s, args) =>
             {

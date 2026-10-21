@@ -11,7 +11,7 @@ namespace DocumentIDE.Api.Controllers;
 ///
 ///   GET  /api/app/status            -> { version, sha, busy, reasons, startedAtUtc }
 ///   POST /api/app/prepare-restart   -> { ok, reason? } after the UI saves dirty buffers
-///   POST /api/app/quit              -> 202, then the process stops
+///   POST /api/app/quit              -> 202 after the flush, or 409 { ok:false, reason:"busy" }
 ///
 /// Every route is loopback-only and requires the per-run control token (or the
 /// UI session token) through <c>PrivilegedRequestGuard</c>. The control token is
@@ -41,6 +41,9 @@ public sealed class AppLifecycleController(
     [HttpPost("prepare-restart")]
     public async Task<IActionResult> PrepareRestart(CancellationToken cancellationToken)
     {
+        // Contract: a refused flush is HTTP 200 with { ok: false, reason }.
+        // It is a control result, not an HTTP error; the watcher treats any
+        // non-ok result (busy, flush-timeout, save failure) as "defer".
         // A restart never interrupts a backend mutation. The watcher polls
         // status first, and this check closes the race between that poll and
         // the flush request.
@@ -66,6 +69,13 @@ public sealed class AppLifecycleController(
     [HttpPost("quit")]
     public IActionResult Quit()
     {
+        // prepare-restart checked the gate before the flush; a mutation can
+        // begin during the flush, so quit closes the flush-to-quit race.
+        if (activity.IsBusy)
+        {
+            return Conflict(new { ok = false, reason = "busy" });
+        }
+
         // Let the 202 response reach the watcher before the host stops.
         _ = Task.Run(async () =>
         {

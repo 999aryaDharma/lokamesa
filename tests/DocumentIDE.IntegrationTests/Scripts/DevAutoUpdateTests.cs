@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using Xunit;
 
 namespace DocumentIDE.IntegrationTests.Scripts;
@@ -24,6 +25,7 @@ public sealed class DevAutoUpdateTests
                  {
                      "origin/master",
                      "last-built.sha",
+                     "bad-shas.txt",
                      "runtime.json",
                      "prepare-restart",
                      "/quit",
@@ -32,6 +34,14 @@ public sealed class DevAutoUpdateTests
                  })
         {
             Assert.Contains(token, script);
+        }
+
+        // The per-run control token must never be written to the audit log.
+        foreach (string logLine in script
+                     .Split('\n')
+                     .Where(line => line.Contains("Write-Log", StringComparison.Ordinal)))
+        {
+            Assert.DoesNotContain("controlToken", logLine, StringComparison.OrdinalIgnoreCase);
         }
     }
 

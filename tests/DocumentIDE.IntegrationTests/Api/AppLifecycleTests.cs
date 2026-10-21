@@ -126,6 +126,32 @@ public sealed class AppLifecycleTests : IDisposable
     }
 
     [Fact]
+    public async Task Quit_refuses_while_a_mutation_is_in_flight()
+    {
+        var db = await NewDbAsync();
+        var gate = new ActivityGate();
+        await using var host = await WebAppHost.StartAsync(
+            database: db,
+            configureServices: services => services.AddSingleton(gate));
+        using var client = Authed(host);
+
+        using (gate.Enter("batch-apply"))
+        {
+            var response = await client.PostAsync("/api/app/quit", content: null);
+            var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+            Assert.False(json.GetProperty("ok").GetBoolean());
+            Assert.Equal("busy", json.GetProperty("reason").GetString());
+        }
+
+        // The refused quit must not stop the host after the gate is released.
+        await Task.Delay(300);
+        var status = await client.GetAsync("/api/app/status");
+        Assert.Equal(HttpStatusCode.OK, status.StatusCode);
+    }
+
+    [Fact]
     public async Task Quit_requires_authorization()
     {
         var db = await NewDbAsync();
@@ -151,6 +177,15 @@ public sealed class AppLifecycleTests : IDisposable
         var documents = new HttpRequestMessage(HttpMethod.Get, "/api/documents/x/markdown");
         documents.Headers.Add("X-DocumentIDE-Control-Token", host.ControlToken);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.SendAsync(documents)).StatusCode);
+
+        // The control token never authorizes a mutation, even on the same
+        // document surface the SPA uses.
+        var mutation = new HttpRequestMessage(HttpMethod.Put, "/api/documents/x/markdown")
+        {
+            Content = JsonContent.Create(new { source = "# changed" }),
+        };
+        mutation.Headers.Add("X-DocumentIDE-Control-Token", host.ControlToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.SendAsync(mutation)).StatusCode);
     }
 
     private async Task<AppDb> NewDbAsync()

@@ -100,7 +100,12 @@ public sealed class RuntimeHandshake : IDisposable
                 AccessControlType.Allow));
             new FileInfo(path).SetAccessControl(security);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+        catch (Exception ex) when (ex is IOException
+            or UnauthorizedAccessException
+            or PlatformNotSupportedException
+            or System.Security.SecurityException
+            or PrivilegeNotHeldException
+            or InvalidOperationException)
         {
             // Best effort: the file already lives under the per-user LOCALAPPDATA.
         }

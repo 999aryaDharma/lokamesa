@@ -84,8 +84,17 @@ public sealed class ActivityGate
         }
 
         // Notified outside the lock so an observer may block or call back into
-        // the gate (tests use this to pause an action deterministically).
-        _observer?.Entered(reason);
+        // the gate (tests use this to pause an action deterministically). An
+        // observer failure must not leak the lease it just observed.
+        try
+        {
+            _observer?.Entered(reason);
+        }
+        catch
+        {
+            Exit(reason);
+            throw;
+        }
 
         return new Lease(this, reason);
     }
